@@ -267,7 +267,7 @@ function Builder({ chart }: { chart: Chart }) {
           <ChartView chart={chart} />
         </div>
       </div>
-      <FormatPanel chart={chart} ranked={ranked.map((p) => p.id)} onType={(t) => (setAutoType(false), upd((c) => ({ ...c, type: t })))} upd={upd} />
+      <FormatPanel chart={chart} fields={fields} ranked={ranked.map((p) => p.id)} onType={(t) => (setAutoType(false), upd((c) => ({ ...c, type: t })))} upd={upd} />
       {filterFor && <FilterDialog chart={chart} field={filterFor.field} filterId={filterFor.id} measure={filterFor.asMeasure || (fields.find((f) => f.name === filterFor.field)?.role === 'measure' && filterFor.asMeasure !== false)} fields={fields} onClose={() => setFilterFor(null)} />}
       {calcEdit && <CalcDialog dataset={chart.dataset} calc={calcEdit === 'new' ? null : calcEdit} onClose={() => setCalcEdit(null)} onCreated={(c) => {
         const f = fieldDefs(rel?.columns ?? [], [...calcs, c], calcTypes).find((x) => x.name === c.name)
@@ -559,7 +559,7 @@ function FilterPill({ f, chart, onEdit }: { f: ChartFilter; chart: Chart; onEdit
 
 // ---------------------------------------------------------------- type and format
 
-function FormatPanel({ chart, ranked, onType, upd }: { chart: Chart; ranked: string[]; onType: (t: string) => void; upd: (fn: (c: Chart) => Chart) => void }) {
+function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fields: FieldDef[]; ranked: string[]; onType: (t: string) => void; upd: (fn: (c: Chart) => Chart) => void }) {
   const o = chart.options
   const setO = (p: Partial<ChartOptions>) => upd((c) => ({ ...c, options: { ...c.options, ...p } }))
   const best = ranked[0]
@@ -644,6 +644,7 @@ function FormatPanel({ chart, ranked, onType, upd }: { chart: Chart; ranked: str
             <option value="value-asc">Smallest first</option>
           </select>
         </Row>
+        {chart.enc.x[0] && !chart.enc.x[0].agg && <DrillPath chart={chart} fields={fields} setO={setO} />}
         {(cartesian || chart.type === 'scatter') && (
           <div>
             <span className="mb-1 block text-[12px] font-medium text-text-2">Analytics</span>
@@ -658,6 +659,41 @@ function FormatPanel({ chart, ranked, onType, upd }: { chart: Chart; ranked: str
         )}
       </div>
     </aside>
+  )
+}
+
+/** Drill-down: in a dashboard, clicking a mark shows the next field of the path, filtered to the clicked value. */
+function DrillPath({ chart, fields, setO }: { chart: Chart; fields: FieldDef[]; setO: (p: Partial<ChartOptions>) => void }) {
+  const path = chart.options.drill?.length ? chart.options.drill : [chart.enc.x[0]]
+  const options = fields.filter((f) => f.role === 'dim').flatMap((f) => (isDate(f.type) ? GRAINS.filter((g) => g !== 'exact').map((g) => ({ key: `${f.name}|${g}`, label: `${f.name} (${g})`, ref: { field: f.name, grain: g } as FieldRef })) : [{ key: f.name, label: f.name, ref: { field: f.name } as FieldRef }]))
+  return (
+    <div>
+      <span className="mb-1 block text-[12px] font-medium text-text-2">Drill down (dashboards)</span>
+      <div className="flex flex-wrap items-center gap-1 text-[11.5px]" data-testid="drill-path">
+        {path.map((r, i) => (
+          <span key={i} className="flex items-center gap-1">
+            {i > 0 && <span className="text-text-3">›</span>}
+            <span className="rounded bg-hover px-1.5 py-0.5">{fieldTitle(r)}</span>
+            {i > 0 && i === path.length - 1 && (
+              <button aria-label="Remove level" className="text-text-3 hover:text-text" onClick={() => setO({ drill: path.length > 2 ? path.slice(0, -1) : undefined })}>
+                <X className="size-3" />
+              </button>
+            )}
+          </span>
+        ))}
+      </div>
+      <select aria-label="Add a drill-down level" className={cx(inputCls, 'mt-1.5 h-7 text-[12px]')} value="" onChange={(e) => {
+        const o = options.find((x) => x.key === e.target.value)
+        if (o) setO({ drill: [...path, o.ref] })
+      }} data-testid="drill-add">
+        <option value="">Add a level…</option>
+        {options.map((o) => (
+          <option key={o.key} value={o.key}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
   )
 }
 

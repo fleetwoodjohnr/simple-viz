@@ -114,7 +114,7 @@ function checkSource(x: unknown): Source {
 }
 
 async function resolveSource(s: Source, settings: Settings): Promise<ResolvedSource> {
-  const base: ResolvedSource = { id: s.id, kind: s.kind, tables: s.tables, mode: 'extract', timeoutSec: settings.refreshTimeoutSec }
+  const base: ResolvedSource = { id: s.id, kind: s.kind, tables: s.tables, mode: 'extract', timeoutSec: settings.refreshTimeoutSec, onOpen: s.refresh?.onOpen !== false }
   if (s.kind === 'file') return { ...base, format: s.format, path: path.resolve(s.path), header: s.header }
   return {
     ...base,

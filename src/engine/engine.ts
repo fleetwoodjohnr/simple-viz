@@ -82,10 +82,27 @@ export class Engine {
 
   /** Bumped by every boot; work started under an older generation is abandoned quietly (no errors recorded). */
   private gen = 0
+  private openedProject: string | null = null
+
+  /**
+   * Sources to refresh right after a boot. Opening a project: those set to refresh on open (and any never extracted).
+   * Reconfiguring the open project (a source or dataset added): only sources with tables not extracted yet.
+   */
+  bootRefreshIds(): string[] {
+    const cfg = this.config!
+    const first = this.openedProject !== cfg.projectId
+    this.openedProject = cfg.projectId
+    const missing = (s: ResolvedSource) => s.tables.some((t) => !this.metaCache.has(extractName(s.id, t.ref)))
+    // Sources in error are retried on every boot (a fixed password, path or host takes effect at once).
+    return cfg.sources.filter((s) => (first && s.onOpen !== false) || this.status.get(s.id)?.state === 'error' || (s.mode === 'extract' || s.kind === 'file' ? missing(s) : first)).map((s) => s.id)
+  }
 
   private async bootInner(config: EngineConfig): Promise<void> {
     this.gen++
     this.refreshAgain = null
+    // Another project: forget the previous one's source states.
+    if (this.config?.projectId !== config.projectId) this.status.clear()
+    for (const id of [...this.status.keys()]) if (!config.sources.some((s) => s.id === id)) this.status.delete(id)
     const running = this.refreshing
     await this.close()
     // A refresh of the previous configuration stops at its next step (its connections were interrupted).
@@ -141,7 +158,7 @@ export class Engine {
           await this.attachPostgres(c, s)
         } catch (e) {
           this.attachFailed.add(s.id)
-          this.setStatus(s.id, { state: 'error', error: explainError(e, s) })
+          this.setStatus(s.id, { state: 'error', error: explainError(e, s), auth: isAuthError(e) })
         }
       } else if (s.kind === 'sqlite' && s.path) {
         await c.run(`ATTACH ${lit(s.path)} AS ${ident(`db_${s.id}`)} (TYPE sqlite, READ_ONLY)`).catch((e) => {
@@ -160,7 +177,6 @@ export class Engine {
     await c.run('SET enable_external_access = false')
     await c.run('SET lock_configuration = true')
 
-    for (const s of config.sources) if (!this.status.has(s.id)) this.status.set(s.id, { id: s.id, state: 'stale', refreshedAt: null })
     await this.loadMeta()
     await this.syncViews()
   }
@@ -405,8 +421,9 @@ export class Engine {
       const metas = s.tables.map((t) => this.metaCache.get(extractName(s.id, t.ref)))
       const at = metas.every(Boolean) ? Math.min(...metas.map((m) => m!.refreshedAt)) : null
       const prev = this.status.get(s.id)
-      if (prev?.state !== 'error') this.status.set(s.id, { id: s.id, state: 'stale', refreshedAt: at, rows: metas.reduce((n, m) => n + (m?.rows ?? 0), 0) })
-      else prev.refreshedAt = at
+      // A reboot of the same project keeps each source's state; a new one starts from the cache, marked stale.
+      if (!prev) this.status.set(s.id, { id: s.id, state: 'stale', refreshedAt: at, rows: metas.reduce((n, m) => n + (m?.rows ?? 0), 0) })
+      else prev.refreshedAt ??= at
     }
   }
 
@@ -424,6 +441,11 @@ export class Engine {
    * A source that fails keeps its last good extract and is marked with the error.
    */
   async refresh(ids?: string[], force = false): Promise<SourceStatus[]> {
+    // Wait for any boot in progress, including one that starts while we wait.
+    for (let w = this.bootWait; ; w = this.bootWait) {
+      await w
+      if (w === this.bootWait) break
+    }
     if (this.refreshing) {
       const prev = this.refreshAgain
       // Queue one more round covering what was asked for (undefined ids: every source).
@@ -512,12 +534,12 @@ export class Engine {
         this.busy.delete(conn)
         conn.closeSync()
       }
-      this.setStatus(s.id, { state: 'ok', changed, rows, refreshedAt: Date.now(), error: undefined })
+      this.setStatus(s.id, { state: 'ok', changed, rows, refreshedAt: Date.now(), error: undefined, auth: undefined })
       return changed
     } catch (e) {
       if (gen !== this.gen) return false
       this.onLog('error', `Refresh of ${s.id} failed: ${(e as Error).message}`)
-      this.setStatus(s.id, { state: 'error', error: explainError(e, s) })
+      this.setStatus(s.id, { state: 'error', error: explainError(e, s), auth: isAuthError(e) })
       return false
     }
   }
@@ -586,6 +608,8 @@ function castExpr(col: string, ty: string): string | null {
   if (t === 'DATE_DMY') return `coalesce(TRY_CAST(${ident(col)} AS DATE), CAST(TRY_STRPTIME(CAST(${ident(col)} AS VARCHAR), '%d/%m/%Y') AS DATE))`
   return isSafeType(t) ? `TRY_CAST(${ident(col)} AS ${t})` : null
 }
+
+const isAuthError = (e: unknown) => /password authentication failed|no password supplied|authentication failed|password is required/i.test(String((e as Error)?.message ?? e))
 
 function splitRef(ref: string | undefined, kind: string): [string | null, string] {
   const r = ref ?? ''

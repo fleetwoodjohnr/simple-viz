@@ -4,6 +4,7 @@ export function explainError(raw: unknown, ctx: { host?: string; port?: number; 
   const m = String((raw as Error)?.message ?? raw ?? '')
   const where = ctx.host ? `${ctx.host}${ctx.port ? `:${ctx.port}` : ''}` : 'the server'
   if (/password authentication failed|authentication failed|Access denied for user/i.test(m)) return 'The server rejected the user name or password.'
+  if (/no password supplied|password is required/i.test(m)) return 'The server needs a password.'
   if (/Connection refused|could not connect|ECONNREFUSED/i.test(m)) return `Can’t reach ${where}. Check that the database is running and the host and port are right.`
   if (/could not translate host name|Name or service not known|ENOTFOUND|nodename nor servname/i.test(m)) return `The host name ${ctx.host ?? ''} couldn’t be found. Check the spelling, or your network.`.replace('  ', ' ')
   if (/timeout expired|timed out|ETIMEDOUT|statement timeout|canceling statement due to statement timeout/i.test(m)) return `The connection to ${where} timed out. The server may be busy or unreachable.`

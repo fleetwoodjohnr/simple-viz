@@ -28,7 +28,11 @@ async function control(m: ControlMessage): Promise<unknown> {
       extensionsDir = m.config.extensionsDir
       await engine.boot(m.config)
       // Draw from the cache now; bring sources up to date in the background.
-      void engine.refresh().catch((e) => engine.onLog('error', (e as Error).message))
+      {
+        const ids = engine.bootRefreshIds()
+        if (ids.length) void engine.refresh(ids).catch((e) => engine.onLog('error', (e as Error).message))
+        else engine.onStatus(engine.statuses())
+      }
       return engine.statuses()
     case 'refresh':
       return engine.refresh(m.sourceIds, m.force)

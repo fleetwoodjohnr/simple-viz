@@ -59,6 +59,8 @@ export interface ResolvedSource {
   tables: { alias: string; ref?: string; types?: Record<string, string> }[]
   mode: 'extract' | 'live'
   timeoutSec: number
+  /** Refresh when the project opens (otherwise the cached extract is used until a manual or other refresh). */
+  onOpen?: boolean
   host?: string
   port?: number
   database?: string
@@ -85,6 +87,8 @@ export interface SourceStatus {
   changed?: boolean
   rows?: number
   error?: string
+  /** The server refused the login: the user can enter the password again. */
+  auth?: boolean
 }
 
 /** main → engine */

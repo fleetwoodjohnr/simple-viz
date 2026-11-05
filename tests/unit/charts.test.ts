@@ -63,3 +63,44 @@ describe('chart plugins', () => {
     expect(recommend({ dims: [], measures: 1 })[0].id).toBe('kpi')
   })
 })
+
+import { findSlot, align, distribute, tileFilters, toggleMark, dynamicText } from '@/core/dashboard'
+import type { Dashboard, DashItem } from '@/shared/dashboards'
+
+describe('dashboard layout', () => {
+  const it0 = (id: string, x: number, y: number, w: number, h: number): DashItem => ({ id, kind: 'chart', x, y, w, h })
+  it('places new objects in free space, never on top of others', () => {
+    const items = [it0('a', 16, 16, 560, 320)]
+    const r = findSlot(items, 560, 320, 1366, 768)
+    expect(r.x).toBeGreaterThanOrEqual(16 + 560 + 16)
+    expect(r.y).toBe(16)
+    const full = [it0('a', 0, 0, 1366, 768)]
+    expect(findSlot(full, 560, 320, 1366, 768)).toEqual({ x: 16, y: 16, w: 560, h: 320 })
+  })
+  it('aligns and distributes on the grid', () => {
+    const items = [it0('a', 10, 10, 100, 50), it0('b', 200, 40, 100, 80), it0('c', 600, 25, 100, 30)]
+    expect(align(items, 'top').map((i) => i.y)).toEqual([10, 10, 10])
+    expect(align(items, 'right').map((i) => i.x + i.w)).toEqual([700, 700, 700])
+    const dist = distribute(items, 'h')
+    expect(dist[1].x - (dist[0].x + dist[0].w)).toBeCloseTo(dist[2].x - (dist[1].x + dist[1].w), -1)
+  })
+})
+
+describe('dashboard filtering', () => {
+  const d: Dashboard = { id: 'd', name: 'D', size: { mode: 'fit', w: 1366, h: 768 }, items: [], actions: [{ id: 'a', kind: 'filter', source: '*', target: '*' }], updatedAt: 0 }
+  const fields = (id: string) => new Set(id === 'map' ? ['region', 'sales'] : id === 'kpi' ? ['region', 'profit'] : ['product'])
+  it('filter controls reach every chart with the field; clicked marks filter the other charts', () => {
+    const sel = { region: { values: ['Virginia'] } }
+    expect(tileFilters(d, 'kpi', fields, sel, [])).toEqual([{ id: 'dash:region', field: 'region', op: 'in', values: ['Virginia'] }])
+    expect(tileFilters(d, 'other', fields, sel, [])).toEqual([])
+    const marks = [{ item: 'map', values: { region: 'Virginia' } }]
+    expect(tileFilters(d, 'kpi', fields, {}, marks)).toEqual([{ id: 'mark:map:region', field: 'region', op: 'in', values: ['Virginia'] }])
+    expect(tileFilters(d, 'map', fields, {}, marks)).toEqual([]) // the clicked chart is not filtered by itself
+  })
+  it('clicking the same mark again clears it; dynamic titles show the selection', () => {
+    const m = { item: 'map', values: { region: 'Virginia' } }
+    expect(toggleMark(toggleMark([], m), m)).toEqual([])
+    expect(dynamicText('Sales in {region}', {}, [m])).toBe('Sales in Virginia')
+    expect(dynamicText('Sales in {region}', {}, [])).toBe('Sales in All')
+  })
+})

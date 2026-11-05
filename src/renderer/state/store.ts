@@ -17,7 +17,7 @@ export type Dialog =
   | { kind: 'sheet-picker'; path: string; sourceId?: string }
   | { kind: 'relink'; sourceId: string }
   | { kind: 'message'; title: string; body: string }
-  | { kind: 'prompt'; title: string; label: string; value: string; resolve: (v: string | null) => void }
+  | { kind: 'prompt'; title: string; label: string; value: string; secret?: boolean; resolve: (v: string | null) => void }
 
 export interface Toast {
   id: number

@@ -1,7 +1,8 @@
 # Implementation status
 
-_Last updated: 2026-11-04 · M0 complete, M1 nearly complete; M2–M9 not started · version 0.1.0 (unreleased) ·
-verified with automated tests on Linux (Fedora 44); Windows and macOS: see CI._
+_Last updated: 2026-11-05 · M0–M3 complete (with the limits listed), M1 has items pending tests; M4–M9 not started ·
+version 0.1.0 (unreleased) · verified with automated tests on Linux (Fedora 44); CI builds, packages and tests on
+Linux, Windows and macOS._
 
 "Done" means implemented **and** covered by a passing automated test. A button existing in the UI does not count.
 
@@ -10,11 +11,12 @@ verified with automated tests on Linux (Fedora 44); Windows and macOS: see CI._
 | Suite | Result |
 |---|---|
 | `npm run typecheck` | ✅ clean |
-| `npm test` (unit) | ✅ 43 tests |
-| `npm run test:integration` (real DuckDB, files, PostgreSQL 17 in podman) | ✅ 50 tests |
-| `npm run e2e:headless` (the real app) | ✅ smoke, data workflow, PostgreSQL, updater (packaged only) |
+| `npm test` (unit) | ✅ 62 tests |
+| `npm run test:integration` (real DuckDB, files, PostgreSQL 17 in podman) | ✅ 62 tests |
+| `npm run e2e:headless` (the real app) | ✅ acceptance (24 steps), charts, dashboards, data, PostgreSQL, smoke; updater (packaged only) |
 | Packaged Linux build (`electron-builder --linux dir`) + e2e | ✅ |
-| Windows, macOS | ⏳ CI (`.github/workflows/ci.yml`) |
+| CI: Linux, Windows, macOS (arm64; Intel under Rosetta) build, test, package, test the packaged app; deb/rpm install on Ubuntu 22.04/24.04, Debian 12, Fedora 44; npm audit; CodeQL | ✅ |
+| PostgreSQL tests on Windows and macOS CI | ⏭ skipped (no podman there); the acceptance test uses a CSV for customers and says so |
 
 ## M0 — Scaffold ✅
 
@@ -25,7 +27,7 @@ verified with automated tests on Linux (Fedora 44); Windows and macOS: see CI._
 | DuckDB lockdown and SQL gate | integration `sandbox` (19 attacks on the gate, 6 on the lockdown alone) |
 | DuckDB extensions bundled per platform, SHA-256 pinned | packaged e2e `postgres` loads the postgres extension |
 | Icon and accent in the Simple suite template | `npm run icons` |
-| CI on Linux, Windows, macOS; deb/rpm install checks; security job | ⏳ first CI run |
+| CI on Linux, Windows, macOS; deb/rpm install checks; security job | CI run for commit 9741835 |
 
 ## M1 — Data and SQL (in progress)
 
@@ -56,6 +58,53 @@ verified with automated tests on Linux (Fedora 44); Windows and macOS: see CI._
 - SQL editor completion, formatting, history, saved queries, plan, export: implemented, manual check; tests pending.
 - Crash recovery for projects: implemented (shell), test pending.
 
+## M2 — Charts and calculations ✅
+
+### Done
+
+| Feature | Test |
+|---|---|
+| Chart → SQL compiler: dimensions, aggregations (sum, average, median, count distinct, percentiles…), date grains | integration `charts` (values against hand-written SQL) |
+| Filters: values (include/exclude), ranges, measure (HAVING), top N, context filters | integration `charts`, e2e `charts` |
+| Calculated fields: DuckDB SQL + `[Field]`, Tableau `IF … ELSEIF … END`, Tableau function names (ZN, IIF, COUNTD, DATEADD…) | unit `calc`, integration `charts`, e2e `charts` |
+| Level of detail: FIXED (before dimension filters, after context filters), INCLUDE, EXCLUDE; aggregated over one row per view × LOD combination, as Tableau documents | integration `charts` (5 LOD cases) |
+| Table calculations: RUNNING_*, WINDOW_*, RANK*, LOOKUP, INDEX, SIZE, FIRST, LAST, TOTAL; quick calcs (running total, % of total, rank, difference, moving average, year over year) | integration `charts › table calculations` |
+| Chart types: bar (grouped, stacked, 100%, horizontal), line, area, combo/dual axis, pie/donut, scatter/bubble, histogram, box plot, heat map, treemap, KPI card, table, crosstab | unit `charts`, e2e `charts` (bar, line, KPI drawn values = SQL) |
+| Recommended chart type from the fields | unit `charts`, e2e `charts` |
+| Drag and drop onto shelves; the same from each field's menu (keyboard) | e2e `charts` |
+| Number formats, reference lines (average, median, min, max), trend line with R² | unit `charts` (option builders); manual check |
+| Theme-aware charts (CSS tokens), tooltips escape data (no HTML injection) | unit `charts`, e2e `charts` |
+| PNG (3×) / SVG / CSV export of a chart | manual check; tests pending |
+
+### Known limitations
+
+- Tableau's `+` for joining text is not supported (use `||`); no densification of missing marks.
+- Table calculations "compute using" the x-axis dimensions (other dimensions are panes); there is no UI to change it yet.
+- Calculated fields can't reference table calculations.
+
+## M3 — Dashboards, refresh, export ✅
+
+### Done
+
+| Feature | Test |
+|---|---|
+| **Acceptance scenario, all 24 steps** (Excel + PostgreSQL → SQL dataset → charts → dashboard with a region filter → save → workbook changed → reopen with refreshed figures → dark/light → PDF → update check) | e2e `acceptance` |
+| Dashboard canvas: add from the palette (free spot), drag charts in, move, resize (8 handles), 8 px grid snap, undo/redo | e2e `dashboards` |
+| Align, distribute, group, lock, duplicate, delete; keyboard nudging | unit `charts › dashboard layout`; manual check |
+| Layout containers (row/column), text with live values (`{region}`), images, shapes, buttons (reset, refresh, go to dashboard, present) | unit `dynamic titles`, e2e `dashboards` (dynamic text); others manual |
+| Filter controls (list, dropdown, search, number range, date range) affecting every chart with the field | e2e `acceptance` |
+| Cross-filtering by clicking marks, highlight actions, drill-through (go to dashboard with the selection), reset | unit `dashboard filtering`, e2e `dashboards` |
+| Drill-down through a field path (categories or date grains), drill up | e2e `dashboards` |
+| Sizes (desktop, laptop, tablet, phone, A4, Letter), fit-to-window, presentation mode with tabs | manual check |
+| Refresh on open, on file change, on focus, on a timer, per source; per-dashboard timer; status and stale badges; last good data kept | integration `engine`, `postgres`; e2e `acceptance` |
+| Password asked again when the keychain can't keep it or the server refuses it | e2e `acceptance` (CI has no keychain) |
+| PDF export (exact page size, charts as images), PNG export | e2e `acceptance` (PDF, text checked with pdftotext), e2e `dashboards` (PNG) |
+
+### Known limitations
+
+- PNG export captures the dashboard as shown on screen (scaled to fit); PDF is at full size.
+- Saved filter views (`Dashboard.views`) are in the model but have no UI yet.
+
 ## Next
 
-M2 — chart builder and calculated fields.
+M4 — data modeling (relationships, multi-fact), visual transforms, hierarchies.

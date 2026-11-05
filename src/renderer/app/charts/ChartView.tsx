@@ -194,7 +194,6 @@ function Kpi({ data }: { data: ChartData }) {
   const v = main ? row[data.fields.indexOf(main)] : null
   return (
     <div className="flex h-full flex-col justify-center gap-1 px-5 py-3" data-testid="kpi">
-      {data.options.title && <div className="text-[12.5px] font-medium text-text-2">{data.options.title}</div>}
       <div className="truncate text-[34px] font-semibold tabular-nums tracking-tight" data-testid="kpi-value" data-value={typeof v === 'number' ? v : undefined}>
         {fmt(v, main)}
       </div>

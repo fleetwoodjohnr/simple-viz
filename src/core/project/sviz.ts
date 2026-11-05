@@ -66,6 +66,6 @@ function normalize(p: Record<string, unknown>): Project {
     charts: arr(p.charts).filter((c) => c && typeof c.id === 'string' && typeof c.dataset === 'string').map((c) => ({ filters: [], options: {}, ...c, enc: { x: [], y: [], detail: [], tooltip: [], ...(c.enc ?? {}) } })),
     calcs: arr(p.calcs).filter((c) => c && typeof c.name === 'string' && typeof c.formula === 'string'),
     params: arr(p.params).filter((x) => x && typeof x.name === 'string'),
-    dashboards: arr(p.dashboards)
+    dashboards: arr(p.dashboards).filter((d) => d && typeof d.id === 'string').map((d) => ({ size: { mode: 'fit', w: 1366, h: 768 }, actions: [], ...d, items: arr(d.items) }))
   }
 }

@@ -129,6 +129,18 @@ export function onEngineStatus(list: SourceStatus[]) {
 
 onEngineConnected(() => void refreshDescribe())
 
+/** Asks for a database password again (refused login, or no keychain to remember it), then reconnects. */
+export async function enterPassword(sourceId: string) {
+  const src = get().project?.sources.find((s) => s.id === sourceId)
+  if (!src) return
+  const { askText } = await import('../app/Dialogs')
+  const pw = await askText(`Password for ${src.name}`, `Password for ${'user' in src && src.user ? src.user : 'the database user'}`, '', true)
+  if (pw === null) return
+  await api().credentialSet(sourceId, pw)
+  await configureEngine()
+  await refreshSources([sourceId], true)
+}
+
 export async function refreshSources(ids?: string[], force = false) {
   if (!get().project) return
   try {

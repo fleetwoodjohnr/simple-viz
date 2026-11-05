@@ -468,7 +468,7 @@ function rangeSql(e: string, f: ChartFilter, params: Map<string, Parameter>): st
   const max = f.param && f.op === 'lte' ? pv : f.max
   const parts: string[] = []
   if (min !== undefined && min !== null && min !== '') parts.push(`${e} >= ${lit(min as never)}`)
-  if (max !== undefined && max !== null && max !== '') parts.push(`${e} <= ${lit(max as never)}`)
+  if (max !== undefined && max !== null && max !== '') parts.push(`${e} ${f.maxExclusive ? '<' : '<='} ${lit(max as never)}`)
   return parts.length ? `(${parts.join(' AND ')})` : 'TRUE'
 }
 

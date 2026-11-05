@@ -7,8 +7,8 @@ any of them with SQL, build charts and interactive dashboards, and reopen them w
 Your data stays on your computer. Part of the Simple family of apps, with [Simple Docs](https://github.com/fleetwoodjohnr/simple-docs)
 and [Simple Cell](https://github.com/fleetwoodjohnr/simple-cell).
 
-> **Early development.** Data connections, the SQL workspace and automatic refresh work today; charts, dashboards and
-> analytics are being built. See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for exactly what is done and
+> **Early development.** Data connections, SQL, charts, dashboards and automatic refresh work today; statistics,
+> data modeling and more chart types are being built. See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for exactly what is done and
 > tested. Simple Viz does **not** claim Tableau compatibility.
 
 ## What it does
@@ -20,6 +20,9 @@ and [Simple Cell](https://github.com/fleetwoodjohnr/simple-cell).
 - **Always current.** When a project opens, Simple Viz checks every source; edited spreadsheets and changed tables are
   re-read, and everything built on them recalculates. If a source is unavailable you see the last good data, clearly
   marked.
+- **Charts and dashboards.** Drag fields to build charts, with calculated fields that follow Tableau's rules (level of
+  detail, table calculations). Put charts on a dashboard: clicking one filters the others; filters, drill-down, text
+  that shows the current selection; export to PDF or PNG.
 - **Private.** No account, no telemetry. Passwords live in your system keychain, never in project files. Queries only
   read: your files and databases are never changed.
 

@@ -45,6 +45,8 @@ export interface ChartFilter {
   values?: (string | number | boolean | null)[]
   min?: number | string | null
   max?: number | string | null
+  /** between: values must be below max (not equal), e.g. the start of the next period. */
+  maxExclusive?: boolean
   /** relative: last N units up to today (e.g. last 3 months), anchored on the current date. */
   relative?: { n: number; unit: 'day' | 'week' | 'month' | 'quarter' | 'year'; includeCurrent: boolean }
   /** top: keep the N dimension values with the highest (or lowest) `by` measure. */
@@ -86,6 +88,8 @@ export interface ChartOptions {
   rightAxis?: number[]
   /** KPI: compare with the previous period of this date field. */
   compareField?: string
+  /** Drill-down path: the dimensions a click on a mark steps through (the first is the chart's own). */
+  drill?: FieldRef[]
   /** Gauge/bullet target value. */
   target?: number
   min?: number

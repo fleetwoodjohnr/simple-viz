@@ -210,6 +210,8 @@ export function RelinkDialog({ sourceId }: { sourceId: string }) {
   if (!src) return null
   const relink = (path: string) => {
     P.updateSource(src.id, { path })
+    // Read the new file now (the engine restarts with it first).
+    void P.configureEngine().then(() => P.refreshSources([src.id], true))
     close()
     toast(`${src.name} now reads ${path}`, 'success')
   }

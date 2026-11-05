@@ -1,7 +1,7 @@
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useApp } from '../state/store'
-import { refreshSources } from '../state/project'
+import { refreshSources, enterPassword } from '../state/project'
 import { Pop, PopContent, PopTrigger, Btn, cx } from '../ui'
 import type { SourceStatus } from '@/shared/engine-protocol'
 
@@ -55,6 +55,11 @@ export function RefreshStatus() {
                 <SourceBadge s={st} />
               </div>
               {st?.error && <p className="mt-1 text-[11.5px] leading-snug text-danger">{st.error}</p>}
+              {st?.auth && (
+                <Btn size="sm" className="mt-1.5" onClick={() => void enterPassword(src.id)} data-testid="enter-password">
+                  Enter password…
+                </Btn>
+              )}
             </li>
           ))}
         </ul>

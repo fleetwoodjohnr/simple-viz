@@ -1,5 +1,6 @@
 // The Simple Viz project model: what a .sviz file stores (as project.json). Pure data, no credentials, ever.
 import type { CalcField, Chart, Parameter } from './charts'
+import type { Dashboard } from './dashboards'
 
 // Bump PROJECT_SCHEMA_VERSION and add a step to src/core/project/migrate.ts for every incompatible change.
 
@@ -80,7 +81,7 @@ export interface Project {
   charts: Chart[]
   calcs: CalcField[]
   params: Parameter[]
-  dashboards: unknown[]
+  dashboards: Dashboard[]
 }
 
 export const FILE_FORMATS: Record<string, FileFormat> = {
