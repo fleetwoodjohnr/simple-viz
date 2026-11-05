@@ -99,8 +99,12 @@ jobs:
       # The Apple silicon runner also packages the Intel app: it needs DuckDB's x64 binding and x64 extensions.
       - name: macOS Intel engine
         if: runner.os == 'macOS'
+        # npm refuses to install a package for another CPU, so unpack it into place.
         run: |
-          npm i --no-save --os=darwin --cpu=x64 @duckdb/node-bindings-darwin-x64@$(node -p "require('@duckdb/node-bindings/package.json').version")
+          v=$(node -p "require('@duckdb/node-bindings/package.json').version")
+          npm pack "@duckdb/node-bindings-darwin-x64@$v" --pack-destination "$RUNNER_TEMP"
+          mkdir -p node_modules/@duckdb/node-bindings-darwin-x64
+          tar xzf "$RUNNER_TEMP"/duckdb-node-bindings-darwin-x64-*.tgz -C node_modules/@duckdb/node-bindings-darwin-x64 --strip-components 1
           node scripts/fetch-duckdb-extensions.ts mac x64
 
       - name: Installers
