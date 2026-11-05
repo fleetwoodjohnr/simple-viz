@@ -1,0 +1,11 @@
+node_modules/
+out/
+dist/
+release/
+test-results/
+playwright-report/
+*.log
+.DS_Store
+tests/.tmp/
+*.tsbuildinfo
+resources/duckdb-ext/

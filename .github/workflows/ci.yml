@@ -1,0 +1,223 @@
+# Build and test on Linux, Windows and macOS, then install the deb and rpm into clean Ubuntu and Fedora containers.
+# Tags (v*) and manual rebuilds also draft a GitHub release with installers and the latest*.yml files the updater reads
+# (it only sees the release once the draft is published).
+# Builds are unsigned unless signing secrets are configured (see docs/BUILD_AND_RELEASE.md).
+name: CI
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing version tag to rebuild as a release draft (blank runs ordinary CI)'
+        required: false
+        type: string
+
+# A newer push to the same branch cancels the run in progress; tag runs always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
+  cancel-in-progress: ${{ inputs.tag == '' && !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Validate source and release tag
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+      tag: ${{ steps.source.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Resolve the commit and validate its version
+        id: source
+        run: node scripts/release.ts prepare
+        env:
+          RELEASE_TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
+
+  build:
+    name: ${{ matrix.os }}
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            builder-args: --linux --x64
+          - os: windows-latest
+            builder-args: --win --x64
+          - os: macos-latest
+            builder-args: --mac
+    runs-on: ${{ matrix.os }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      # poppler checks exported PDFs; rpm builds the .rpm. PostgreSQL tests use podman on Linux (preinstalled).
+      - name: Test tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb poppler-utils rpm
+      - name: Test tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install poppler
+      - name: Test tools (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          C:\msys64\usr\bin\pacman.exe -S --noconfirm --needed mingw-w64-x86_64-poppler
+          "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      # postinstall downloads this platform's DuckDB extensions (checked against scripts/duckdb-extensions.lock.json).
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Integration tests (real DuckDB; PostgreSQL where podman exists)
+        run: npm run test:integration
+      - run: npm run build
+
+      - name: End-to-end tests
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then xvfb-run -a npx playwright test; else npx playwright test; fi
+
+      # The Apple silicon runner also packages the Intel app: it needs DuckDB's x64 binding and x64 extensions.
+      - name: macOS Intel engine
+        if: runner.os == 'macOS'
+        run: |
+          npm i --no-save --os=darwin --cpu=x64 @duckdb/node-bindings-darwin-x64@$(node -p "require('@duckdb/node-bindings/package.json').version")
+          node scripts/fetch-duckdb-extensions.ts mac x64
+
+      - name: Installers
+        run: npx electron-builder ${{ matrix.builder-args }} --publish never
+
+      - name: End-to-end tests against the packaged app
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux) SV_PACKAGED="$PWD/release/linux-unpacked/simple-viz" xvfb-run -a npx playwright test ;;
+            Windows) SV_PACKAGED="$PWD/release/win-unpacked/Simple Viz.exe" npx playwright test ;;
+            macOS) SV_PACKAGED="$PWD/release/mac-arm64/Simple Viz.app/Contents/MacOS/Simple Viz" npx playwright test ;;
+          esac
+
+      # Rosetta: the Intel build starts and its engine runs a query (loads DuckDB and the postgres extension).
+      - name: macOS Intel smoke test
+        if: runner.os == 'macOS'
+        run: |
+          softwareupdate --install-rosetta --agree-to-license || true
+          SV_PACKAGED="$PWD/release/mac/Simple Viz.app/Contents/MacOS/Simple Viz" npx playwright test tests/e2e/smoke.spec.ts
+
+      - name: Validate platform downloads and update feed
+        run: node scripts/release.ts verify release
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-${{ runner.os }}
+          if-no-files-found: error
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm
+            release/*.exe
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+            release/latest*.yml
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: test-results-${{ runner.os }}
+          path: test-results/
+
+  # The deb and rpm declare their dependencies by hand (electron-builder.yml): every library must resolve on a clean install.
+  linux-install:
+    name: install on ${{ matrix.image }}
+    needs: build
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: ubuntu:22.04
+            install: apt-get update -qq && apt-get install -y -qq ./dist/*.deb
+          - image: ubuntu:24.04
+            install: apt-get update -qq && apt-get install -y -qq ./dist/*.deb
+          - image: debian:12
+            install: apt-get update -qq && apt-get install -y -qq ./dist/*.deb
+          - image: fedora:44
+            install: dnf install -y -q ./dist/*.rpm /usr/bin/ldd
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: installers-Linux
+          path: dist
+      - run: ${{ matrix.install }}
+      - name: Every shared library resolves (app and DuckDB engine)
+        run: |
+          ldd "/opt/Simple Viz/simple-viz" > ldd.txt
+          ldd /opt/Simple\ Viz/resources/app.asar.unpacked/node_modules/@duckdb/node-bindings-linux-x64/duckdb.node >> ldd.txt
+          ! grep "not found" ldd.txt
+
+  # Dependency vulnerabilities in what ships (devDependencies are build tools) and static analysis of the source.
+  security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: npm audit (shipped dependencies)
+        run: npm audit --omit=dev --audit-level=high
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/analyze@v4
+
+  release:
+    if: needs.prepare.outputs.tag != ''
+    needs: [prepare, build, linux-install]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      # Only the manifest parser is used here; do not download Electron or DuckDB extensions again.
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          pattern: installers-*
+          merge-multiple: true
+      - name: Validate all downloads and create or refresh the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: node scripts/release.ts draft dist

@@ -1,0 +1,121 @@
+customer_id,customer_name,region,segment
+1001,Customer 001,Virginia,Corporate
+1002,Customer 002,California,Corporate
+1003,Customer 003,Texas,Small Business
+1004,Customer 004,New York,Small Business
+1005,Customer 005,Florida,Consumer
+1006,Customer 006,Washington,Corporate
+1007,Customer 007,Virginia,Consumer
+1008,Customer 008,California,Corporate
+1009,Customer 009,Texas,Small Business
+1010,Customer 010,New York,Corporate
+1011,Customer 011,Florida,Consumer
+1012,Customer 012,Washington,Small Business
+1013,Customer 013,Virginia,Small Business
+1014,Customer 014,California,Consumer
+1015,Customer 015,Texas,Consumer
+1016,Customer 016,New York,Corporate
+1017,Customer 017,Florida,Small Business
+1018,Customer 018,Washington,Corporate
+1019,Customer 019,Virginia,Consumer
+1020,Customer 020,California,Corporate
+1021,Customer 021,Texas,Small Business
+1022,Customer 022,New York,Consumer
+1023,Customer 023,Florida,Corporate
+1024,Customer 024,Washington,Consumer
+1025,Customer 025,Virginia,Consumer
+1026,Customer 026,California,Consumer
+1027,Customer 027,Texas,Consumer
+1028,Customer 028,New York,Small Business
+1029,Customer 029,Florida,Corporate
+1030,Customer 030,Washington,Consumer
+1031,Customer 031,Virginia,Consumer
+1032,Customer 032,California,Small Business
+1033,Customer 033,Texas,Corporate
+1034,Customer 034,New York,Small Business
+1035,Customer 035,Florida,Consumer
+1036,Customer 036,Washington,Corporate
+1037,Customer 037,Virginia,Consumer
+1038,Customer 038,California,Consumer
+1039,Customer 039,Texas,Corporate
+1040,Customer 040,New York,Corporate
+1041,Customer 041,Florida,Consumer
+1042,Customer 042,Washington,Corporate
+1043,Customer 043,Virginia,Consumer
+1044,Customer 044,California,Consumer
+1045,Customer 045,Texas,Small Business
+1046,Customer 046,New York,Small Business
+1047,Customer 047,Florida,Corporate
+1048,Customer 048,Washington,Consumer
+1049,Customer 049,Virginia,Consumer
+1050,Customer 050,California,Consumer
+1051,Customer 051,Texas,Consumer
+1052,Customer 052,New York,Corporate
+1053,Customer 053,Florida,Small Business
+1054,Customer 054,Washington,Small Business
+1055,Customer 055,Virginia,Small Business
+1056,Customer 056,California,Consumer
+1057,Customer 057,Texas,Small Business
+1058,Customer 058,New York,Corporate
+1059,Customer 059,Florida,Small Business
+1060,Customer 060,Washington,Consumer
+1061,Customer 061,Virginia,Consumer
+1062,Customer 062,California,Consumer
+1063,Customer 063,Texas,Corporate
+1064,Customer 064,New York,Corporate
+1065,Customer 065,Florida,Corporate
+1066,Customer 066,Washington,Small Business
+1067,Customer 067,Virginia,Consumer
+1068,Customer 068,California,Small Business
+1069,Customer 069,Texas,Small Business
+1070,Customer 070,New York,Consumer
+1071,Customer 071,Florida,Small Business
+1072,Customer 072,Washington,Consumer
+1073,Customer 073,Virginia,Corporate
+1074,Customer 074,California,Small Business
+1075,Customer 075,Texas,Consumer
+1076,Customer 076,New York,Small Business
+1077,Customer 077,Florida,Corporate
+1078,Customer 078,Washington,Small Business
+1079,Customer 079,Virginia,Corporate
+1080,Customer 080,California,Corporate
+1081,Customer 081,Texas,Corporate
+1082,Customer 082,New York,Corporate
+1083,Customer 083,Florida,Consumer
+1084,Customer 084,Washington,Small Business
+1085,Customer 085,Virginia,Consumer
+1086,Customer 086,California,Corporate
+1087,Customer 087,Texas,Small Business
+1088,Customer 088,New York,Small Business
+1089,Customer 089,Florida,Small Business
+1090,Customer 090,Washington,Small Business
+1091,Customer 091,Virginia,Corporate
+1092,Customer 092,California,Corporate
+1093,Customer 093,Texas,Consumer
+1094,Customer 094,New York,Consumer
+1095,Customer 095,Florida,Small Business
+1096,Customer 096,Washington,Consumer
+1097,Customer 097,Virginia,Small Business
+1098,Customer 098,California,Small Business
+1099,Customer 099,Texas,Consumer
+1100,Customer 100,New York,Corporate
+1101,Customer 101,Florida,Small Business
+1102,Customer 102,Washington,Consumer
+1103,Customer 103,Virginia,Small Business
+1104,Customer 104,California,Consumer
+1105,Customer 105,Texas,Small Business
+1106,Customer 106,New York,Small Business
+1107,Customer 107,Florida,Consumer
+1108,Customer 108,Washington,Corporate
+1109,Customer 109,Virginia,Consumer
+1110,Customer 110,California,Corporate
+1111,Customer 111,Texas,Corporate
+1112,Customer 112,New York,Consumer
+1113,Customer 113,Florida,Corporate
+1114,Customer 114,Washington,Small Business
+1115,Customer 115,Virginia,Consumer
+1116,Customer 116,California,Small Business
+1117,Customer 117,Texas,Corporate
+1118,Customer 118,New York,Consumer
+1119,Customer 119,Florida,Small Business
+1120,Customer 120,Washington,Corporate

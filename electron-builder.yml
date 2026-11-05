@@ -1,0 +1,72 @@
+appId: app.simpleviz.desktop
+productName: Simple Viz
+copyright: Copyright © Simple Viz contributors
+icon: resources/icon.png
+# Updates: the app reads its releases from here (electron-updater); CI builds with --publish never and the tag job uploads.
+publish:
+  provider: github
+  owner: fleetwoodjohnr
+  repo: simple-viz
+  releaseType: release
+directories:
+  output: release
+  buildResources: resources
+files:
+  - out/**
+  - package.json
+  # the Linux window icon (src/main/index.ts imports it with ?asset); build resources aren't packed unless listed
+  - resources/icon.png
+asar: true
+# DuckDB's native binding (duckdb.node next to libduckdb) must sit on disk, side by side, outside the archive.
+asarUnpack:
+  - node_modules/@duckdb/**
+# DuckDB extensions for this platform (scripts/fetch-duckdb-extensions.ts), loaded from disk: never downloaded at runtime.
+extraResources:
+  - from: resources/duckdb-ext/${os}-${arch}
+    to: duckdb-ext
+fileAssociations:
+  - ext: sviz
+    name: Simple Viz Project
+    role: Editor
+    mimeType: application/vnd.simple-viz.project
+  - ext: xlsx
+    name: Excel Workbook
+    role: Viewer
+  - ext: csv
+    name: CSV
+    role: Viewer
+  - ext: parquet
+    name: Parquet
+    role: Viewer
+linux:
+  # deb and rpm take the maintainer and homepage from package.json; rpm also needs rpmbuild
+  target: [AppImage, deb, rpm]
+  syncDesktopName: true
+  # one PNG per size: the hicolor theme has no 1024x1024 directory, so a lone 1024 px icon is never found
+  icon: resources/icons
+  category: Office
+  mimeTypes:
+    - application/vnd.simple-viz.project
+deb:
+  # electron-builder's default list plus ALSA and GBM, which Electron links against (absent on minimal installs)
+  depends: [libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0, libgbm1, "libasound2t64 | libasound2"]
+rpm:
+  depends: [gtk3, libnotify, nss, libXScrnSaver, "(libXtst or libXtst6)", xdg-utils, at-spi2-core, "(libuuid or libuuid1)", alsa-lib, mesa-libgbm, libsecret]
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  icon: resources/icon-mac.png
+  category: public.app-category.business
+  # Unsigned: Apple Silicon only runs signed code, so sign ad hoc. With a Developer ID certificate, remove both lines.
+  identity: "-"
+  hardenedRuntime: false

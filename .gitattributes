@@ -1,0 +1,16 @@
+# LF everywhere, so goldens and fixtures read the same on Windows checkouts
+* text=auto eol=lf
+*.xlsx binary
+*.xlsm binary
+*.xltx binary
+*.xls binary
+*.xlsb binary
+*.ods binary
+*.pdf binary
+*.png binary
+*.ttf binary
+*.woff2 binary
+*.sviz binary
+*.parquet binary
+*.duckdb binary
+*.sqlite binary
