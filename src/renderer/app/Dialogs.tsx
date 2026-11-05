@@ -30,6 +30,8 @@ export function Dialogs() {
       return <ConnectDialog />
     case 'relink':
       return <RelinkDialog sourceId={d.sourceId} />
+    case 'prompt':
+      return <PromptDialog d={d} />
     case 'message':
       return (
         <Modal open onOpenChange={(o) => !o && close()} title={d.title} width={460} footer={<Btn variant="primary" autoFocus onClick={close}>OK</Btn>}>
@@ -39,6 +41,27 @@ export function Dialogs() {
     default:
       return null
   }
+}
+
+/** Asks for a line of text (Electron has no window.prompt). Resolves null when cancelled. */
+export function askText(title: string, label: string, value = ''): Promise<string | null> {
+  return new Promise((resolve) => set({ dialog: { kind: 'prompt', title, label, value, resolve } }))
+}
+
+function PromptDialog({ d }: { d: Extract<Dialog, { kind: 'prompt' }> }) {
+  const [v, setV] = useState(d.value)
+  const done = (out: string | null) => {
+    close()
+    d.resolve(out)
+  }
+  return (
+    <Modal open onOpenChange={(o) => !o && done(null)} title={d.title} width={420} footer={<><Btn onClick={() => done(null)}>Cancel</Btn><Btn variant="primary" onClick={() => done(v)} data-testid="prompt-ok">OK</Btn></>}>
+      <label className="block">
+        <span className="mb-1.5 block text-[12px] font-medium text-text-2">{d.label}</span>
+        <input autoFocus className={inputCls} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && done(v)} aria-label={d.label} data-testid="prompt-input" />
+      </label>
+    </Modal>
+  )
 }
 
 function ConfirmClose({ d }: { d: Extract<Dialog, { kind: 'confirm-close' }> }) {

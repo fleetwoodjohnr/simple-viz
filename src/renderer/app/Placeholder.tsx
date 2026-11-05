@@ -2,7 +2,6 @@
 import type { Workspace } from '../state/store'
 
 const PLANNED: Partial<Record<Workspace, string>> = {
-  charts: 'The chart builder is milestone M2.',
   dashboards: 'The dashboard editor is milestone M3.',
   analytics: 'The statistics workspace is milestone M5.'
 }

@@ -67,6 +67,11 @@ mac:
       arch: [arm64, x64]
   icon: resources/icon-mac.png
   category: public.app-category.business
-  # Unsigned: Apple Silicon only runs signed code, so sign ad hoc. With a Developer ID certificate, remove both lines.
+  # Unsigned: Apple Silicon only runs signed code, so sign ad hoc. With a Developer ID certificate, remove both lines
+  # (and add the com.apple.security.cs.disable-library-validation entitlement: the engine loads DuckDB extensions).
   identity: "-"
   hardenedRuntime: false
+  # DuckDB extensions carry DuckDB's own signature after the binary, which codesign rejects and re-signing would
+  # break; DuckDB verifies them itself when loading.
+  signIgnore:
+    - duckdb-ext/.*\.duckdb_extension$

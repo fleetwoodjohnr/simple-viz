@@ -460,8 +460,10 @@ function SchemaTree() {
   )
 }
 
+const NO_QUERIES: { id: string; name: string; sql: string }[] = []
+
 function SavedList() {
-  const queries = useApp((s) => s.project?.queries ?? [])
+  const queries = useApp((s) => s.project?.queries ?? NO_QUERIES)
   if (!queries.length) return <p className="p-2 text-[12px] leading-relaxed text-text-3">Saved queries are kept in the project file. Use “Save query” above.</p>
   return (
     <ul className="space-y-0.5">

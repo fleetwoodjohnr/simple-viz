@@ -10,6 +10,7 @@ import { Nav } from './Nav'
 import { Home } from './Home'
 import { DataView } from './Data'
 import { SqlEditor } from './SqlEditor'
+import { ChartBuilder } from './charts/ChartBuilder'
 import { Placeholder } from './Placeholder'
 import { Dialogs } from './Dialogs'
 import { TooltipProvider } from '../ui'
@@ -119,6 +120,8 @@ function Workspace() {
       return <DataView />
     case 'sql':
       return <SqlEditor />
+    case 'charts':
+      return <ChartBuilder />
     default:
       return <Placeholder workspace={workspace} />
   }

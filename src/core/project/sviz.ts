@@ -15,7 +15,7 @@ export function newId(): string {
 }
 
 export function newProject(title = 'Untitled project'): Project {
-  return { schemaVersion: PROJECT_SCHEMA_VERSION, id: newId(), title, createdAt: Date.now(), sources: [], datasets: [], queries: [], charts: [], dashboards: [] }
+  return { schemaVersion: PROJECT_SCHEMA_VERSION, id: newId(), title, createdAt: Date.now(), sources: [], datasets: [], queries: [], charts: [], calcs: [], params: [], dashboards: [] }
 }
 
 export function packProject(p: Project, extra: Record<string, Uint8Array> = {}): Uint8Array {
@@ -63,7 +63,9 @@ function normalize(p: Record<string, unknown>): Project {
     sources,
     datasets: arr(p.datasets).filter((d) => d && typeof d.name === 'string' && typeof d.sql === 'string'),
     queries: arr(p.queries).filter((q) => q && typeof q.sql === 'string'),
-    charts: arr(p.charts),
+    charts: arr(p.charts).filter((c) => c && typeof c.id === 'string' && typeof c.dataset === 'string').map((c) => ({ filters: [], options: {}, ...c, enc: { x: [], y: [], detail: [], tooltip: [], ...(c.enc ?? {}) } })),
+    calcs: arr(p.calcs).filter((c) => c && typeof c.name === 'string' && typeof c.formula === 'string'),
+    params: arr(p.params).filter((x) => x && typeof x.name === 'string'),
     dashboards: arr(p.dashboards)
   }
 }

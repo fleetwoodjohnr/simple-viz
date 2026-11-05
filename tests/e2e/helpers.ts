@@ -91,3 +91,35 @@ export async function waitForUiSettled(page: Page) {
     await Promise.all(animations.map((animation) => animation.finished.catch(() => {})))
   })
 }
+
+export const SALES_SQL = `SELECT t.order_id, t.order_date, t.customer_id, c.region, c.segment, t.product_name, t.revenue, t.cost,
+  t.revenue - t.cost AS profit,
+  CASE WHEN t.revenue >= 10000 THEN 'High Value' WHEN t.revenue >= 5000 THEN 'Medium Value' ELSE 'Low Value' END AS customer_segment
+FROM transactions t LEFT JOIN customers c ON t.customer_id = c.customer_id`
+
+/** A project with Sales.xlsx (copied to `dir`), customers.csv and the dataset sales_enriched, set up through the UI. */
+export async function salesProject(app: ElectronApplication, page: Page, dir: string) {
+  const { copyFileSync } = await import('node:fs')
+  const sales = path.join(dir, 'Sales.xlsx')
+  const customers = path.join(dir, 'customers.csv')
+  copyFileSync(fixture('Sales.xlsx'), sales)
+  copyFileSync(fixture('customers.csv'), customers)
+  await page.getByTestId('new-project').click()
+  await stubDialogs(app, { open: [sales, customers] })
+  await page.getByTestId('add-data').click()
+  await page.getByTestId('add-file').click()
+  await page.getByTestId('relation-customers').waitFor()
+  await page.evaluate((sql) => (window as any).__sv.P.saveDataset({ name: 'sales_enriched', sql }), SALES_SQL)
+  await page.waitForFunction(() => (window as any).__sv.get().relations.some((r: { name: string }) => r.name === 'sales_enriched'))
+  return { sales, customers }
+}
+
+/** The data ECharts is drawing: series name → values, in category order, plus the category labels. */
+export async function chartSeries(page: Page, scope = page.getByTestId('chart-canvas')) {
+  await scope.locator('[data-chart-state=ready]').first().waitFor()
+  return scope.locator('[data-testid=echart]').first().evaluate((el) => {
+    const opt = (el as any).__echart.getOption()
+    const cat = [opt.xAxis?.[0], opt.yAxis?.[0]].find((a: any) => a?.type === 'category')
+    return { categories: (cat?.data ?? []) as string[], series: Object.fromEntries(opt.series.map((s: any) => [s.name, s.data.map((d: any) => (d && typeof d === 'object' && 'value' in d ? d.value : d))])) as Record<string, number[]> }
+  })
+}
