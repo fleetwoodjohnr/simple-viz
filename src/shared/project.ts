@@ -1,6 +1,7 @@
 // The Simple Viz project model: what a .sviz file stores (as project.json). Pure data, no credentials, ever.
 import type { CalcField, Chart, Parameter } from './charts'
 import type { Dashboard } from './dashboards'
+import type { FeatureCollection } from '../core/charts/geo'
 
 // Bump PROJECT_SCHEMA_VERSION and add a step to src/core/project/migrate.ts for every incompatible change.
 
@@ -130,6 +131,16 @@ export interface Project {
   calcs: CalcField[]
   params: Parameter[]
   dashboards: Dashboard[]
+  /** Custom maps (GeoJSON areas) for map charts, kept in the project so it stays portable. */
+  maps?: CustomMap[]
+}
+
+export interface CustomMap {
+  id: string
+  name: string
+  /** The property naming each area (matched against the chart's values). */
+  nameProp: string
+  geojson: FeatureCollection
 }
 
 export const FILE_FORMATS: Record<string, FileFormat> = {

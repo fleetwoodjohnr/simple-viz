@@ -21,6 +21,11 @@
 - **Data modeling.** Relate tables by shared fields and chart across them without double-counting (Tableau-style
   relationships, several fact tables). Visual transforms — filter, calculate, join, group, pivot, unpivot and more —
   with a live preview and the equivalent SQL. Date tables and hierarchies.
+- **More charts and maps.** Waterfall, Pareto, funnel, gauge, bullet, radar, sankey, network, sunburst, calendar,
+  candlestick, sparklines, Gantt, density, violin, correlation matrix and cohort charts; small multiples (Panels).
+  Maps of countries and US states (names or ISO/postal codes, matched whatever the case or accents) and point maps;
+  add your own areas from a GeoJSON file, kept in the project. Custom visuals as ECharts JSON with data placeholders
+  (no code runs). Histograms and box plots now use every row (they used the first 20,001).
 - **Statistics.** An Analytics workspace: descriptive statistics, missing values, correlation, anomalies, t-tests
   (one-sample, Welch, paired), ANOVA, chi-square, Mann–Whitney, Kruskal–Wallis, simple/multiple/polynomial
   regression, logistic regression, exponential-smoothing forecasts (trend and season chosen by AICc, prediction

@@ -1,6 +1,6 @@
 # Implementation status
 
-_Last updated: 2026-11-05 · M0–M5 complete (with the limits listed), M1 has items pending tests; M6–M9 not started ·
+_Last updated: 2026-11-05 · M0–M6 complete (with the limits listed), M1 has items pending tests; M7–M9 not started ·
 version 0.1.0 (unreleased) · verified with automated tests on Linux (Fedora 44); CI builds, packages and tests on
 Linux, Windows and macOS._
 
@@ -11,9 +11,9 @@ Linux, Windows and macOS._
 | Suite | Result |
 |---|---|
 | `npm run typecheck` | ✅ clean |
-| `npm test` (unit) | ✅ 66 tests |
-| `npm run test:integration` (real DuckDB, files, PostgreSQL 17 in podman) | ✅ 83 tests |
-| `npm run e2e:headless` (the real app) | ✅ acceptance (24 steps), analytics, charts, dashboards, data, model, PostgreSQL, smoke; updater (packaged only) |
+| `npm test` (unit) | ✅ 81 tests |
+| `npm run test:integration` (real DuckDB, files, PostgreSQL 17 in podman) | ✅ 85 tests |
+| `npm run e2e:headless` (the real app) | ✅ acceptance (24 steps), analytics, charts, dashboards, data, maps, model, PostgreSQL, smoke; updater (packaged only) |
 | `npm run bench` (statistics on 10M rows) | ✅ see M5 |
 | Packaged Linux build (`electron-builder --linux dir`) + e2e | ✅ |
 | CI: Linux, Windows, macOS (arm64; Intel under Rosetta) build, test, package, test the packaged app; deb/rpm install on Ubuntu 22.04/24.04, Debian 12, Fedora 44; npm audit; CodeQL | ✅ run 42143235883 (commit 8b8a2c3). The M3, M4 and M5 runs had failed (an engine reboot under running queries, a save/recent-files race on Windows, stuck test workers); fixed in 8b8a2c3. The Intel smoke test under Rosetta passed on retry (first-launch translation); its launch wait no longer times out at 30 s |
@@ -162,6 +162,35 @@ committed), on a 500-row fixture with known structure and a 60-month seasonal se
 - Forecast overlays need regular periods: a chart with a missing month, or sorted by value, draws no forecast.
 - Statistics run on a dataset or table, not on a model.
 
+## M6 — More chart types and maps ✅
+
+### Done
+
+| Feature | Test |
+|---|---|
+| Waterfall (running total and total bar), Pareto (sorted, cumulative %), funnel, gauge (scale), bullet (actual vs target) | unit `charts-more`; e2e `maps` (waterfall, Pareto, funnel, gauge = total profit) |
+| Radar, sankey (flows between consecutive fields), network, sunburst | unit `charts-more`; e2e `maps` (radar, sunburst, sankey total = revenue) |
+| Calendar heat map, candlestick (open/close/low/high), sparklines, Gantt (start/end dates per task) | unit `charts-more`; e2e `maps` (calendar) |
+| Density and violin: binned in SQL over every row, Gaussian kernel (Silverman bandwidth) | unit (density integrates to 1), integration `charts` (bins = rows per group), e2e `maps` (violin) |
+| Correlation matrix (SQL `corr()` over every row) and cohort retention (first period per entity, periods since) | integration `charts` (vs hand-written SQL), e2e `maps` (correlation = SQL) |
+| Small multiples: Panels shelf, one panel per value (up to 24), shared value scale | unit `charts-more`, e2e `maps` |
+| Maps: world countries and US states (Natural Earth 1:110m, public domain), matched by name, ISO 3166 alpha-2/3 or postal code, case- and accent-insensitive; automatic map choice; values not on the map listed | unit `charts-more`, e2e `maps` (6 states = totals) |
+| Point maps (longitude/latitude, size, color) | unit `charts-more` |
+| Custom maps from GeoJSON: checked (areas only, a naming property), kept in the project (portable), 25 MB limit | unit `charts-more`, e2e `maps` |
+| Custom visuals: an ECharts option as JSON with `$categories`, `$values`, `$series`, `$items`, `$rows` placeholders; no code is evaluated, prototype keys dropped, tooltips forced to plain text | unit `charts-more`, e2e `maps` |
+| A chart that can't be drawn shows why instead of taking the window down | e2e `maps` (map chosen before its data arrives) |
+| Fix: histograms and box plots aggregated only the first 20,001 rows (the mark limit sat inside their query) | integration `charts` |
+| Fix: ±1 SD bands (M5) didn't draw in the app (ECharts' markArea wasn't registered) | e2e `maps` |
+
+### Known limitations
+
+- Maps: no tile/basemap providers (offline-first and the content security policy); only the two bundled maps plus
+  your own GeoJSON. Areas aren't matched across maps (a US state value on the world map is listed as not found).
+- Point maps need longitude and latitude columns (no geocoding of addresses or place names).
+- Gantt uses the dates' grain as chosen on the shelf; set it to "exact" for day precision.
+- Small multiples apply to bar, line and area charts; dual axes are turned off in panels.
+- Charts over a model don't use the wrapped queries (density, correlation, cohort) without the mark limit yet.
+
 ## Next
 
-M6 — advanced and geographic charts.
+M7 — more connectors.

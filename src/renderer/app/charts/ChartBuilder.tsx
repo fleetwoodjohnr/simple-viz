@@ -4,6 +4,8 @@
 import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react'
 import { create } from 'zustand'
 import * as Icons from 'lucide-react'
+import { BUILTIN_MAPS, checkGeoJson } from '@/core/charts/geo'
+import { DEFAULT_TEMPLATE } from '@/core/charts/more'
 import { BarChart3, Calculator, ChevronDown, Copy, Filter, Hash, Calendar, Type, Plus, Search, Star, Trash2, X, MoreHorizontal, Sparkles, Image, FileCode2, Table2 } from 'lucide-react'
 import { useApp, set, get, toast } from '../../state/store'
 import * as P from '../../state/project'
@@ -46,6 +48,7 @@ const SHELVES: { role: Role | 'filters'; label: string; multi: boolean; icon: Re
   { role: 'label', label: 'Label', multi: false, icon: <Type className="size-3.5" /> },
   { role: 'detail', label: 'Detail', multi: true, icon: <Icons.Layers className="size-3.5" /> },
   { role: 'tooltip', label: 'Tooltip', multi: true, icon: <Icons.MessageSquare className="size-3.5" /> },
+  { role: 'facet', label: 'Panels', multi: false, icon: <Icons.LayoutGrid className="size-3.5" /> },
   { role: 'filters', label: 'Filters', multi: true, icon: <Filter className="size-3.5" /> }
 ]
 
@@ -600,8 +603,11 @@ function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fie
           </button>
         )}
       </div>
-      <div className="grid grid-cols-4 gap-1" role="radiogroup" aria-label="Chart type">
-        {PLUGINS.map((p) => (
+      {(['main', 'more'] as const).map((g) => (
+      <div key={g}>
+      {g === 'more' && <div className="mb-1 mt-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">More types</div>}
+      <div className="grid grid-cols-4 gap-1" role="radiogroup" aria-label={g === 'more' ? 'More chart types' : 'Chart type'}>
+        {PLUGINS.filter((p) => (p.group === 'more') === (g === 'more')).map((p) => (
           <Tip key={p.id} label={`${p.label}${p.id === best ? ' — recommended for these fields' : ''}`}>
             <button role="radio" aria-checked={chart.type === p.id} aria-label={p.label} onClick={() => onType(p.id)} data-testid={`type-${p.id}`} className={cx('relative flex aspect-square items-center justify-center rounded-lg border text-text-2 transition-colors hover:bg-hover', chart.type === p.id ? 'border-accent bg-accent-soft text-accent-ink' : 'border-border')}>
               <ChartIcon type={p.id} className="size-[18px]" />
@@ -610,6 +616,8 @@ function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fie
           </Tip>
         ))}
       </div>
+      </div>
+      ))}
       <p className="mt-1.5 text-[11.5px] text-text-3">{type.label}</p>
 
       <div className="mt-4 space-y-3 border-t border-border pt-3">
@@ -668,6 +676,17 @@ function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fie
           </select>
         </Row>
         {chart.enc.x[0] && !chart.enc.x[0].agg && <DrillPath chart={chart} fields={fields} setO={setO} />}
+        {chart.type === 'gauge' && (
+          <Row label="Scale">
+            <div className="flex items-center gap-1">
+              <input type="number" aria-label="Gauge minimum" placeholder="0" className={cx(inputCls, 'h-7 w-14 px-1.5 text-[12px]')} value={o.gauge?.min ?? ''} onChange={(e) => setO({ gauge: { ...o.gauge, min: e.target.value === '' ? undefined : Number(e.target.value) } })} />
+              <span className="text-text-3">–</span>
+              <input type="number" aria-label="Gauge maximum" placeholder="auto" className={cx(inputCls, 'h-7 w-16 px-1.5 text-[12px]')} value={o.gauge?.max ?? ''} onChange={(e) => setO({ gauge: { ...o.gauge, max: e.target.value === '' ? undefined : Number(e.target.value) } })} />
+            </div>
+          </Row>
+        )}
+        {(chart.type === 'map' || chart.type === 'pointmap') && <MapPicker chart={chart} setO={setO} />}
+        {chart.type === 'custom' && <TemplateEditor key={chart.id} value={o.template} onChange={(template) => setO({ template })} />}
         {(cartesian || chart.type === 'scatter') && (
           <div>
             <span className="mb-1 block text-[12px] font-medium text-text-2">Analytics</span>
@@ -692,6 +711,73 @@ function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fie
         )}
       </div>
     </aside>
+  )
+}
+
+/** Which map a map chart draws on; custom maps are GeoJSON files kept in the project. */
+function MapPicker({ chart, setO }: { chart: Chart; setO: (p: Partial<ChartOptions>) => void }) {
+  const maps = useApp((s) => s.project?.maps) ?? NO_MAPS
+  const addMap = async () => {
+    const [file] = await window.simpleViz.openDialog({ name: 'GeoJSON', extensions: ['geojson', 'json'] })
+    if (!file) return
+    try {
+      if (file.data.byteLength > 25 * 2 ** 20) throw new Error('The file is over 25 MB. Simplify it first (for example with mapshaper).')
+      const { fc, nameProps } = checkGeoJson(new TextDecoder().decode(file.data))
+      const nameProp = nameProps[0]
+      // Areas are matched on "name": keep the naming property under that key (and nothing else, to stay small).
+      const geojson = { ...fc, features: fc.features.map((f) => ({ ...f, properties: { name: String(f.properties![nameProp]) } })) }
+      const m = { id: newId(), name: file.name.replace(/\.(geo)?json$/i, ''), nameProp, geojson }
+      P.edit((p) => ({ ...p, maps: [...(p.maps ?? []), m] }))
+      setO({ map: m.id })
+      toast(`Added the map “${m.name}”: ${geojson.features.length} areas named by “${nameProp}”`, 'success')
+    } catch (e) {
+      toast((e as Error).message, 'error')
+    }
+  }
+  return (
+    <div>
+      <span className="mb-1 block text-[12px] font-medium text-text-2">Map</span>
+      <select aria-label="Map" className={cx(inputCls, 'h-7 w-full text-[12px]')} value={chart.options.map ?? ''} onChange={(e) => setO({ map: e.target.value || undefined })} data-testid="chart-map">
+        {chart.type === 'map' && <option value="">Automatic (best match)</option>}
+        {BUILTIN_MAPS.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.label}
+          </option>
+        ))}
+        {maps.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.name}
+          </option>
+        ))}
+      </select>
+      <button className="mt-1 text-[11.5px] text-accent-ink hover:underline" onClick={addMap} data-testid="add-map">
+        Add a map (GeoJSON)…
+      </button>
+    </div>
+  )
+}
+const NO_MAPS: never[] = []
+
+/** The custom visual's ECharts option, as JSON with data placeholders. Checked as it's typed; saved when valid. */
+function TemplateEditor({ value, onChange }: { value: string | undefined; onChange: (v: string) => void }) {
+  const [text, setText] = useState(value ?? DEFAULT_TEMPLATE)
+  const [error, setError] = useState('')
+  return (
+    <div>
+      <span className="mb-1 block text-[12px] font-medium text-text-2">ECharts option (JSON)</span>
+      <textarea aria-label="Custom visual JSON" spellCheck={false} className={cx(inputCls, 'h-56 w-full resize-y py-1.5 font-mono text-[11px] leading-snug')} value={text} data-testid="custom-template" onChange={(e) => {
+        setText(e.target.value)
+        try {
+          const v = JSON.parse(e.target.value)
+          if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('It must be a JSON object.')
+          setError('')
+          onChange(e.target.value)
+        } catch (err) {
+          setError((err as Error).message)
+        }
+      }} />
+      {error ? <p className="mt-1 text-[11.5px] text-danger" role="alert">{error}</p> : <p className="mt-1 text-[11px] leading-snug text-text-3">Placeholders: "$categories", "$values" ("$values:1"…), "$series" ("$series:line"), "$items", "$rows". Tooltips show plain text.</p>}
+    </div>
   )
 }
 

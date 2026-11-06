@@ -37,8 +37,9 @@ export interface QueryInput {
   params?: Parameter[]
   /** Dashboard filters and cross-filter selections, applied as dimension filters. */
   extra?: ChartFilter[]
-  /** Most marks a chart may draw; one more row is fetched to detect overflow. */
-  maxMarks?: number
+  /** Most marks a chart may draw; one more row is fetched to detect overflow. null: no limit (the query is wrapped
+   * by one that aggregates it, like histogram bins). */
+  maxMarks?: number | null
   /** Query shape: aggregate (default), raw rows (scatter without dimensions, tables of rows). */
   mode?: 'aggregate' | 'raw'
 }
@@ -92,7 +93,8 @@ export function compileQuery(input: QueryInput): CompiledQuery {
   const colName = new Map(columns.map((c) => [c.name.toLowerCase(), c.name]))
   const calcBy = new Map(calcs.map((c) => [c.name.toLowerCase(), c]))
   const params = new Map((input.params ?? []).map((p) => [p.name.toLowerCase(), p]))
-  const maxMarks = input.maxMarks ?? 20_000
+  const maxMarks = input.maxMarks === undefined ? 20_000 : input.maxMarks
+  const limitSql = maxMarks === null ? '' : `\nLIMIT ${maxMarks + 1}`
   const enc = chart.enc
 
   // ---- calculated fields used anywhere in the chart
@@ -308,14 +310,14 @@ export function compileQuery(input: QueryInput): CompiledQuery {
       if (c && c.kind !== 'row') throw new QueryError(`“${f.ref.field}” aggregates, so it can’t be shown row by row.`)
       return c ? q(f.ref.field) : rowExpr(f.ref.field).sql
     })()} AS ${f.key}`))
-    sql += `\nSELECT ${cols.length ? cols.join(', ') : '*'} FROM f${ordered ? ` ORDER BY ${ordered}` : ''} LIMIT ${maxMarks + 1}`
-    return { sql, fields, limit: maxMarks }
+    sql += `\nSELECT ${cols.length ? cols.join(', ') : '*'} FROM f${ordered ? ` ORDER BY ${ordered}` : ''}${limitSql}`
+    return { sql, fields, limit: maxMarks ?? Infinity }
   }
 
   sql += `,\na AS (\n  SELECT ${aggCols.join(', ')}\n  FROM f${dims.length ? '\n  GROUP BY ALL' : ''}${having.length ? `\n  HAVING ${having.join(' AND ')}` : ''}\n)`
   for (const t of tuples) sql += `,\n${t}`
-  sql += `\nSELECT ${finalCols.join(', ')} FROM a${joins.length ? `\n${joins.join('\n')}` : ''}${ordered ? `\nORDER BY ${ordered}` : ''}\nLIMIT ${maxMarks + 1}`
-  return { sql, fields, limit: maxMarks }
+  sql += `\nSELECT ${finalCols.join(', ')} FROM a${joins.length ? `\n${joins.join('\n')}` : ''}${ordered ? `\nORDER BY ${ordered}` : ''}${limitSql}`
+  return { sql, fields, limit: maxMarks ?? Infinity }
 }
 
 const WINDOWABLE = 'sum|avg|mean|min|max|count|median|mode|stddev_samp|stddev_pop|var_samp|var_pop|quantile_cont|quantile_disc|any_value|first|last|string_agg|bool_and|bool_or|corr|covar_samp|covar_pop|approx_count_distinct|product|kurtosis|skewness|entropy'

@@ -3,8 +3,8 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import * as echarts from 'echarts/core'
-import { BarChart, LineChart, PieChart, ScatterChart, HeatmapChart, TreemapChart, BoxplotChart } from 'echarts/charts'
-import { GridComponent, LegendComponent, TooltipComponent, TitleComponent, VisualMapComponent, MarkLineComponent, AriaComponent } from 'echarts/components'
+import { BarChart, LineChart, PieChart, ScatterChart, HeatmapChart, TreemapChart, BoxplotChart, FunnelChart, GaugeChart, RadarChart, SankeyChart, GraphChart, SunburstChart, CandlestickChart, MapChart, CustomChart } from 'echarts/charts'
+import { GridComponent, LegendComponent, TooltipComponent, TitleComponent, VisualMapComponent, MarkLineComponent, MarkAreaComponent, AriaComponent, CalendarComponent, GeoComponent, RadarComponent } from 'echarts/components'
 import { CanvasRenderer, SVGRenderer } from 'echarts/renderers'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { useApp } from '../../state/store'
@@ -17,9 +17,10 @@ import type { Chart, ChartFilter } from '@/shared/charts'
 import type { Model } from '@/shared/project'
 import type { ColumnInfo, RelationInfo } from '@/shared/engine-protocol'
 import { DataGrid } from '../../ui/DataGrid'
+import { resolveMap } from './maps'
 import { cx } from '../../ui'
 
-echarts.use([BarChart, LineChart, PieChart, ScatterChart, HeatmapChart, TreemapChart, BoxplotChart, GridComponent, LegendComponent, TooltipComponent, TitleComponent, VisualMapComponent, MarkLineComponent, AriaComponent, CanvasRenderer, SVGRenderer])
+echarts.use([BarChart, LineChart, PieChart, ScatterChart, HeatmapChart, TreemapChart, BoxplotChart, FunnelChart, GaugeChart, RadarChart, SankeyChart, GraphChart, SunburstChart, CandlestickChart, MapChart, CustomChart, GridComponent, LegendComponent, TooltipComponent, TitleComponent, VisualMapComponent, MarkLineComponent, MarkAreaComponent, AriaComponent, CalendarComponent, GeoComponent, RadarComponent, CanvasRenderer, SVGRenderer])
 
 export const MAX_MARKS = 20_000
 
@@ -64,7 +65,8 @@ export function useChartData(chart: Chart | null, extra?: ChartFilter[], highlig
   const columns = useMemo(() => (model ? modelColumns(model, relations) : relations.find((r) => chart && r.name.toLowerCase() === chart.dataset.toLowerCase())?.columns), [relations, chart?.dataset, model])
   const calcs = project?.calcs
   const params = project?.params
-  const key = JSON.stringify([chart?.dataset, chart?.type, chart?.enc, chart?.filters, chart?.options.sort, chart?.options.bins, extra, calcs?.filter((c) => c.dataset === chart?.dataset), params, dataVersion, !!columns, model])
+  const maps = project?.maps ?? []
+  const key = JSON.stringify([chart?.dataset, chart?.type, chart?.enc, chart?.filters, chart?.options.sort, chart?.options.bins, chart?.options.map, maps.map((m) => m.id), extra, calcs?.filter((c) => c.dataset === chart?.dataset), params, dataVersion, !!columns, model])
 
   useEffect(() => {
     if (!chart) return
@@ -82,12 +84,12 @@ export function useChartData(chart: Chart | null, extra?: ChartFilter[], highlig
     try {
       compiled = model
         ? compileModelQuery({ chart, model, columns: Object.fromEntries(relations.map((r) => [r.name.toLowerCase(), r.columns])), extra, maxMarks: MAX_MARKS })
-        : compileQuery({ chart, columns, calcs: (calcs ?? []).filter((c) => c.dataset.toLowerCase() === chart.dataset.toLowerCase()), params, extra, maxMarks: MAX_MARKS, mode: p.raw?.(chart.enc) ? 'raw' : 'aggregate' })
+        : compileQuery({ chart, columns, calcs: (calcs ?? []).filter((c) => c.dataset.toLowerCase() === chart.dataset.toLowerCase()), params, extra, maxMarks: p.wrap ? null : MAX_MARKS, mode: p.raw?.(chart.enc) ? 'raw' : 'aggregate' })
     } catch (e) {
       setState({ data: null, error: e instanceof QueryError ? e.message : `Couldn’t build this chart: ${(e as Error).message}`, loading: false, sql: null })
       return
     }
-    const sql = p.wrap ? p.wrap(compiled.sql, { bins: chart.options.bins ?? 20, hasCat: compiled.fields.some((f) => f.kind === 'dim') }) : compiled.sql
+    const sql = p.wrap ? p.wrap(compiled.sql, { bins: chart.options.bins ?? 20, hasCat: compiled.fields.some((f) => f.kind === 'dim'), measures: compiled.fields.filter((f) => f.kind === 'measure').length, fields: compiled.fields }) : compiled.sql
     setState((s) => ({ ...s, loading: true, error: null, sql }))
     const { id, done } = E.runQuery(sql, { limit: MAX_MARKS + 1 })
     done.then(
@@ -96,7 +98,14 @@ export function useChartData(chart: Chart | null, extra?: ChartFilter[], highlig
         // Rows in field order (the query lists dimensions first); wrapped queries (bins, box stats) keep their own.
         const pos = compiled.fields.map((f) => r.columns.findIndex((c) => c.name === f.key))
         const rows = p.wrap || pos.some((x) => x < 0) ? r.rows : r.rows.map((row) => pos.map((i) => row[i]))
-        setState({ data: { fields: compiled.fields, rows: rows.slice(0, MAX_MARKS), truncated: rows.length > MAX_MARKS, options: chart.options }, error: null, loading: false, sql })
+        const data: ChartData = { fields: compiled.fields, rows: rows.slice(0, MAX_MARKS), truncated: rows.length > MAX_MARKS, options: chart.options }
+        if (!p.geo) return setState({ data, error: null, loading: false, sql })
+        // Map charts: load the map (and pick one if none is chosen) before drawing.
+        const area = compiled.fields.findIndex((f) => f.kind === 'dim')
+        resolveMap(p.id === 'pointmap' ? (chart.options.map ?? 'world') : chart.options.map, area < 0 ? [] : data.rows.map((x) => x[area]), maps).then(
+          (geo) => alive && setState({ data: { ...data, geo }, error: null, loading: false, sql }),
+          (e: Error) => alive && setState({ data: null, error: `Couldn’t load the map: ${e.message}`, loading: false, sql })
+        )
       },
       (e: Error) => alive && setState({ data: null, error: e.message, loading: false, sql })
     )
@@ -183,12 +192,29 @@ function EChart({ data, type, onMark }: { data: ChartData; type: string; onMark?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // A chart that can't be drawn (a custom visual ECharts rejects…) says so here instead of taking the page down.
+  const [drawError, setDrawError] = useState('')
   useEffect(() => {
-    const opt = plugin(type).option?.(data, readTheme(dark))
-    if (opt) inst.current?.setOption(opt as echarts.EChartsCoreOption, { notMerge: true })
+    try {
+      const opt = plugin(type).option?.(data, readTheme(dark))
+      if (opt) inst.current?.setOption(opt as echarts.EChartsCoreOption, { notMerge: true })
+      setDrawError('')
+    } catch (e) {
+      inst.current?.clear()
+      setDrawError((e as Error).message)
+    }
   }, [data, type, dark, accent])
 
-  return <div ref={host} className="min-h-0 flex-1" role="img" aria-label={describe(data)} data-testid="echart" />
+  return (
+    <>
+      <div ref={host} className="min-h-0 flex-1" role="img" aria-label={describe(data)} data-testid="echart" />
+      {drawError && (
+        <p className="absolute inset-0 flex items-center justify-center p-6 text-center text-[12.5px] text-danger" role="alert" data-testid="chart-draw-error">
+          This chart couldn’t be drawn: {drawError}
+        </p>
+      )}
+    </>
+  )
 }
 
 /** A text alternative for screen readers: what the chart shows, in a sentence. */

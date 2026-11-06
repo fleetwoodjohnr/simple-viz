@@ -12,7 +12,7 @@ export function explainError(raw: unknown, ctx: { host?: string; port?: number; 
   if (/SSL|certificate/i.test(m) && /required|verify|unsupported|failed|reject/i.test(m)) return `The secure (SSL) connection to ${where} failed. Try a different SSL mode, or ask your administrator for the server’s certificate settings.`
   if (/server closed the connection unexpectedly|terminating connection|connection to server .* lost|no connection to the server/i.test(m)) return `The connection to ${where} was lost. It is retried on the next refresh.`
   if (/INTERRUPT|Interrupted/i.test(m)) return 'The query was cancelled.'
-  if (/No such file or directory|ENOENT|IO Error: Cannot open file|does not exist/i.test(m)) return ctx.path ? `The file is missing: ${ctx.path}. It may have been moved or renamed — use Relink to find it.` : 'A file this project uses is missing.'
+  if (/No such file or directory|ENOENT|IO Error: Cannot open file|IO Error:[^\n]*does not exist|^File [^\n]* does not exist/i.test(m)) return ctx.path ? `The file is missing: ${ctx.path}. It may have been moved or renamed — use Relink to find it.` : 'A file this project uses is missing.'
   if (/EACCES|EPERM|Permission denied/i.test(m)) return ctx.path ? `Simple Viz isn’t allowed to read ${ctx.path}.` : 'Permission denied.'
   if (/EBUSY|being used by another process|Could not set lock/i.test(m)) return 'The file is locked by another program. Close it there, or wait a moment, and refresh again.'
   if (/Invalid Input Error: (CSV|Error when sniffing)|Could not convert string|Conversion Error/i.test(m)) return `The data couldn’t be read as a table: ${firstLine(m).replace(/^[A-Za-z ]+Error: /, '')}`

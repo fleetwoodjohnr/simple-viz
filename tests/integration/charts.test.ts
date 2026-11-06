@@ -3,6 +3,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { bootEngine, expected, fileSource, fixture, rows } from './helpers'
 import { compileQuery, type QueryInput } from '../../src/core/query/compile'
+import { plugin } from '../../src/core/charts/plugins'
+import { corrWrap, cohortWrap, densityWrap } from '../../src/core/charts/more'
 import type { Engine } from '../../src/engine/engine'
 import type { CalcField, Chart, FieldRef } from '../../src/shared/charts'
 
@@ -120,5 +122,39 @@ describe('chart queries', () => {
     expect(() => compileQuery({ chart: { dataset: 'sales', type: 'bar', filters: [], options: {}, enc: { x: [dim('nope')], y: [], detail: [], tooltip: [] } }, columns: columns(), calcs: [] })).toThrow(/no field “nope”/)
     expect(() => compileQuery({ chart: { dataset: 'sales', type: 'bar', filters: [], options: {}, enc: { x: [], y: [{ field: 'Bad', agg: 'none' }], detail: [], tooltip: [] } }, columns: columns(), calcs: [calc('Bad', '{FIXED [region] SUM([revenue])}')] })).toThrow(/needs a colon/)
     expect(() => compileQuery({ chart: { dataset: 'sales', type: 'bar', filters: [], options: {}, enc: { x: [], y: [{ field: 'Loop', agg: 'sum' }], detail: [], tooltip: [] } }, columns: columns(), calcs: [calc('Loop', '[Loop] + 1')] })).toThrow(/refers to itself/)
+  })
+
+  it('wrapped charts (histogram) aggregate every row, not only the first marks', async () => {
+    const chart = { type: 'histogram', enc: { x: [{ field: 'revenue', agg: 'none' as const }] } }
+    const bins = (rows: Record<string, unknown>[]) => rows.reduce((a, r) => a + Number(r.n), 0)
+    const wrap = (sql: string) => plugin('histogram').wrap!(sql, { bins: 10, hasCat: false, measures: 1, fields: [] })
+    const all = compileQuery({ chart: { dataset: 'sales', filters: [], options: {}, ...chart, enc: { y: [], detail: [], tooltip: [], ...chart.enc } }, columns: columns(), calcs: [], mode: 'raw', maxMarks: null })
+    expect(bins(await rows(engine, wrap(all.sql)))).toBe(exp.v1.rows)
+    // With the mark limit inside (the old behaviour) only the first 101 rows were binned.
+    const cut = compileQuery({ chart: { dataset: 'sales', filters: [], options: {}, ...chart, enc: { y: [], detail: [], tooltip: [], ...chart.enc } }, columns: columns(), calcs: [], mode: 'raw', maxMarks: 100 })
+    expect(bins(await rows(engine, wrap(cut.sql)))).toBe(101)
+  })
+
+  it('correlation matrix, cohort and density charts: their SQL over every row', async () => {
+    const enc = (e: Partial<Chart['enc']>) => ({ x: [], y: [], detail: [], tooltip: [], ...e })
+    const base = { dataset: 'sales', filters: [], options: {} }
+    // Correlations of three values, as DuckDB's corr() gives them.
+    const corr = compileQuery({ chart: { ...base, type: 'corrmatrix', enc: enc({ y: ['revenue', 'cost', 'quantity'].map((field) => ({ field, agg: 'none' as const })) }) }, columns: columns(), calcs: [], mode: 'raw', maxMarks: null })
+    const pairs = await rows(engine, corrWrap(corr.sql, { measures: 3 }))
+    const [ref] = await rows(engine, 'SELECT corr(revenue, cost) AS rc, corr(cost, quantity) AS cq FROM sales')
+    near(pairs.find((r) => r.i === 0 && r.j === 1)!.r, Number(ref.rc), 1e-12)
+    near(pairs.find((r) => r.i === 1 && r.j === 2)!.r, Number(ref.cq), 1e-12)
+    // Cohorts: customers by their first month, and how many are back k months later.
+    const co = compileQuery({ chart: { ...base, type: 'cohort', enc: enc({ x: [dim('order_date', { grain: 'month' })], detail: [dim('customer_id')] }) }, columns: columns(), calcs: [], maxMarks: null })
+    const cells = await rows(engine, cohortWrap(co.sql, { fields: co.fields }))
+    const [{ n }] = await rows(engine, 'SELECT count(DISTINCT customer_id) AS n FROM sales')
+    expect(cells.filter((c) => Number(c.k) === 0).reduce((a, c) => a + Number(c.n), 0)).toBe(Number(n))
+    const [{ back }] = await rows(engine, `WITH f AS (SELECT customer_id, min(date_trunc('month', order_date)) AS c FROM sales GROUP BY 1) SELECT count(DISTINCT s.customer_id) AS back FROM sales s JOIN f USING (customer_id) WHERE f.c = DATE '2025-01-01' AND date_trunc('month', s.order_date) = DATE '2025-03-01'`)
+    expect(Number(cells.find((c) => String(c.cohort).startsWith('2025-01') && Number(c.k) === 2)!.n)).toBe(Number(back))
+    // Density bins: every row, per group.
+    const de = compileQuery({ chart: { ...base, type: 'density', enc: enc({ x: [{ field: 'revenue', agg: 'none' }], color: dim('segment') }) }, columns: columns(), calcs: [], mode: 'raw', maxMarks: null })
+    const bins = await rows(engine, densityWrap(de.sql, { hasCat: true }))
+    const bySeg = await rows(engine, 'SELECT segment, count(revenue) AS n FROM sales GROUP BY 1')
+    for (const s of bySeg) expect(bins.filter((b) => b.g === s.segment).reduce((a, b) => a + Number(b.n), 0)).toBe(Number(s.n))
   })
 })

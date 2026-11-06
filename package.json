@@ -25,7 +25,8 @@
     "fixtures": "jiti scripts/make-fixtures.ts",
     "icons": "magick -background none resources/icon.svg -depth 8 resources/icon.png && magick -size 1024x1024 xc:none \\( resources/icon.png -resize 942x942 -background none -gravity center -extent 1024x1024 \\( +clone -background black -shadow 30x12+0+10 \\) +swap -background none -layers merge \\) -layers flatten -depth 8 resources/icon-mac.png && for s in 16 24 32 48 64 128 256 512; do magick resources/icon.png -filter Lanczos -resize ${s}x${s} -depth 8 resources/icons/${s}x${s}.png; done",
     "dist": "npm run build && electron-builder",
-    "bench": "node --expose-gc ./node_modules/vitest/vitest.mjs run --config vitest.bench.config.mts"
+    "bench": "node --expose-gc ./node_modules/vitest/vitest.mjs run --config vitest.bench.config.mts",
+    "geo": "node scripts/gen-geo.ts"
   },
   "desktopName": "simple-viz.desktop",
   "devDependencies": {

@@ -82,6 +82,13 @@ export interface ChartOptions {
   /** Histogram bin count. */
   bins?: number
   refLines?: ReferenceLine[]
+  /** Gauge: scale (default 0 to a round number above the value). */
+  gauge?: { min?: number; max?: number }
+  /** Maps: 'world', 'us-states' or a custom map's id (Project.maps); absent = the map that matches most values. */
+  map?: string
+  /** Custom visual: an ECharts option as JSON; the strings $categories, $values[:N], $series[:type], $items[:N] and
+   * $rows are replaced by the chart's data (core/charts/more.ts fillTemplate). */
+  template?: string
   /** Line/area over a date axis: exponential-smoothing forecast of each series, with a prediction interval. */
   forecast?: { periods: number; level?: number }
   /** Combo chart: series index (from y) drawn as lines instead of bars, and on the right axis. */

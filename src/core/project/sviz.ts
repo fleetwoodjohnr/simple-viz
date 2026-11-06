@@ -15,7 +15,7 @@ export function newId(): string {
 }
 
 export function newProject(title = 'Untitled project'): Project {
-  return { schemaVersion: PROJECT_SCHEMA_VERSION, id: newId(), title, createdAt: Date.now(), sources: [], datasets: [], queries: [], charts: [], models: [], hierarchies: [], calcs: [], params: [], dashboards: [] }
+  return { schemaVersion: PROJECT_SCHEMA_VERSION, id: newId(), title, createdAt: Date.now(), sources: [], datasets: [], queries: [], charts: [], models: [], hierarchies: [], calcs: [], params: [], dashboards: [], maps: [] }
 }
 
 export function packProject(p: Project, extra: Record<string, Uint8Array> = {}): Uint8Array {
@@ -68,6 +68,7 @@ function normalize(p: Record<string, unknown>): Project {
     hierarchies: arr(p.hierarchies).filter((h) => h && typeof h.name === 'string' && Array.isArray(h.levels)),
     calcs: arr(p.calcs).filter((c) => c && typeof c.name === 'string' && typeof c.formula === 'string'),
     params: arr(p.params).filter((x) => x && typeof x.name === 'string'),
-    dashboards: arr(p.dashboards).filter((d) => d && typeof d.id === 'string').map((d) => ({ size: { mode: 'fit', w: 1366, h: 768 }, actions: [], ...d, items: arr(d.items) }))
+    dashboards: arr(p.dashboards).filter((d) => d && typeof d.id === 'string').map((d) => ({ size: { mode: 'fit', w: 1366, h: 768 }, actions: [], ...d, items: arr(d.items) })),
+    maps: arr(p.maps).filter((m) => m && typeof m.id === 'string' && typeof m.name === 'string' && typeof m.nameProp === 'string' && m.geojson?.type === 'FeatureCollection' && Array.isArray(m.geojson.features))
   }
 }

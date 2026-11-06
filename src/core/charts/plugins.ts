@@ -3,11 +3,13 @@
 // Every data value shown in HTML (tooltips) is escaped: data is untrusted.
 
 import type { Encodings } from '../../shared/charts'
+import type { OutField } from '../query/compile'
 import type { Role } from '../query/compile'
 import { type ChartData, type Theme, type Value, col, dims, measures, fmt, esc, pivot, dimmed } from './data'
+import { type Option, isDateT, base, axisStyle, legend, grid, rowTooltip, axisTooltip, catLabels } from './option'
+import * as More from './more'
 import { etsAuto, addPeriods, SEASON, type Grain } from '../stats/analyses'
 
-type Option = Record<string, unknown>
 
 export interface FieldSummary {
   dims: { type: string; role: Role }[]
@@ -25,81 +27,70 @@ export interface ChartPlugin {
   /** Query rows instead of aggregates (scatter of records, histogram and box plot inputs). */
   raw?: (enc: Encodings) => boolean
   /** Wraps the compiled query (histogram bins, box-plot statistics). */
-  wrap?: (sql: string, d: { bins: number; hasCat: boolean }) => string
+  wrap?: (sql: string, d: { bins: number; hasCat: boolean; measures: number; fields: OutField[] }) => string
+  /** Draws on a map: the view loads the map and its area names first (ChartData.geo). */
+  geo?: boolean
   render: 'echarts' | 'table' | 'crosstab' | 'kpi'
   /** 0..1: how well this chart shows these fields. */
   score: (s: FieldSummary) => number
   option?: (d: ChartData, t: Theme) => Option
 }
 
-const isDateT = (t: string) => /^(DATE|TIMESTAMP)/.test(t)
+// ---------------------------------------------------------------- bar, line, area, combo
 
-// ---------------------------------------------------------------- shared pieces
-
-function base(t: Theme, d: ChartData): Option {
-  return {
-    backgroundColor: t.bg,
-    color: t.palette,
-    textStyle: { fontFamily: t.font, color: t.text2 },
-    animationDuration: 300,
-    title: d.options.title ? { text: d.options.title, subtext: d.options.subtitle, left: 8, top: 4, textStyle: { color: t.text, fontSize: 14, fontWeight: 600 }, subtextStyle: { color: t.text2 } } : undefined,
-    aria: { enabled: true, decal: { show: false } }
-  }
-}
-
-const axisStyle = (t: Theme) => ({ axisLine: { lineStyle: { color: t.axis } }, axisTick: { lineStyle: { color: t.axis } }, axisLabel: { color: t.text2, hideOverlap: true }, splitLine: { lineStyle: { color: t.grid } }, nameTextStyle: { color: t.text2 } })
-
-function legend(d: ChartData, t: Theme, n: number): Option | undefined {
-  const pos = d.options.legend ?? 'auto'
-  if (pos === 'none' || (pos === 'auto' && n < 2)) return undefined
-  const where = pos === 'auto' ? 'top' : pos
-  return { type: 'scroll', [where === 'right' ? 'right' : 'left']: where === 'right' ? 4 : 'center', [where === 'bottom' ? 'bottom' : 'top']: where === 'right' ? 'middle' : d.options.title ? 34 : 4, orient: where === 'right' ? 'vertical' : 'horizontal', textStyle: { color: t.text2 }, pageTextStyle: { color: t.text2 } }
-}
-
-function grid(d: ChartData, hasLegend: boolean): Option {
-  const top = (d.options.title ? 40 : 12) + (hasLegend && (d.options.legend ?? 'auto') !== 'right' && d.options.legend !== 'bottom' ? 28 : 0)
-  return { left: 12, right: d.options.legend === 'right' ? 140 : 20, top, bottom: d.options.legend === 'bottom' ? 40 : 12, containLabel: true }
-}
-
-/** Tooltip listing every field of the hovered row. */
-function rowTooltip(d: ChartData, t: Theme) {
-  return {
-    trigger: 'item',
-    confine: true,
-    backgroundColor: t.dark ? '#2a2a30' : '#ffffff',
-    borderColor: t.axis,
-    textStyle: { color: t.text, fontSize: 12 },
-    formatter: (p: { data?: { row?: Value[] } ; marker?: string; seriesName?: string; name?: string; value?: unknown }) => {
-      const row = p.data?.row
-      if (!row) return `${p.marker ?? ''}${esc(String(p.seriesName ?? ''))}: ${esc(fmt(p.value as Value))}`
-      return d.fields.map((f, i) => `<div style="display:flex;justify-content:space-between;gap:16px"><span style="opacity:.7">${esc(f.title)}</span><b>${esc(fmt(row[i], f))}</b></div>`).join('')
+/** Small multiples: with a field on Panels, one panel per value (up to 24), sharing the value scale. */
+function cartesian(kind: 'bar' | 'line' | 'area' | 'combo'): NonNullable<ChartPlugin['option']> {
+  const single = cartesianPanel(kind)
+  return (d, t) => {
+    const facet = dims(d, 'facet')[0]
+    if (!facet) return single(d, t)
+    const fi = col(d, facet.key)
+    const keep = d.fields.map((_, i) => i).filter((i) => i !== fi)
+    const values: Value[] = []
+    for (const r of d.rows) if (!values.some((v) => String(v) === String(r[fi]))) values.push(r[fi])
+    const shown = values.slice(0, 24)
+    const sub: ChartData = { ...d, fields: d.fields.filter((_, i) => i !== fi), rows: [], options: { ...d.options, title: undefined, legend: 'none', forecast: undefined, rightAxis: [] } }
+    const panels = shown.map((v) => single({ ...sub, rows: d.rows.filter((r) => String(r[fi]) === String(v)).map((r) => keep.map((i) => r[i])) }, t))
+    const n = panels.length
+    const cols = Math.ceil(Math.sqrt(n))
+    const rowsN = Math.ceil(n / cols)
+    const top = d.options.title ? 12 : 2
+    const lgH = (d.options.legend ?? 'auto') !== 'none' ? 6 : 0
+    const w = 100 / cols
+    const h = (100 - top - lgH - 2) / rowsN
+    const first = (a: unknown) => (Array.isArray(a) ? a[0] : a) as Option
+    const horizontal = first(panels[0]?.xAxis)?.type === 'value'
+    // One value scale for every panel, so panels compare (stacked: by category totals).
+    const stacked = (d.options.stack ?? 'none') !== 'none'
+    let lo = 0
+    let hi = 0
+    for (const p of panels) {
+      const sums = new Map<number, number>()
+      for (const s of p.series as Option[]) (s.data as unknown[]).forEach((x, i) => {
+        const v = Number(x && typeof x === 'object' ? (x as { value: unknown }).value : x)
+        if (!Number.isFinite(v)) return
+        if (stacked) sums.set(i, (sums.get(i) ?? 0) + v)
+        else (lo = Math.min(lo, v)), (hi = Math.max(hi, v))
+      })
+      for (const v of sums.values()) (lo = Math.min(lo, v)), (hi = Math.max(hi, v))
+    }
+    const scale = d.options.stack === 'percent' ? {} : { min: lo < 0 ? lo : 0, max: hi }
+    const at = (i: number) => ({ left: `${(i % cols) * w + 2}%`, width: `${w - 4}%`, top: `${top + lgH + Math.floor(i / cols) * h + 4}%`, height: `${h - 8}%`, containLabel: true })
+    const b = base(t, d)
+    return {
+      ...b,
+      title: [...(b.title ? [b.title as Option] : []), ...shown.map((v, i) => ({ text: fmt(v, facet), left: `${(i % cols) * w + 2}%`, top: `${top + lgH + Math.floor(i / cols) * h}%`, textStyle: { fontSize: 11, fontWeight: 600, color: t.text2 } }))],
+      legend: legend(d, t, (panels[0]?.series as Option[] | undefined)?.length ?? 0),
+      tooltip: panels[0]?.tooltip,
+      grid: shown.map((_, i) => at(i)),
+      xAxis: panels.map((p, i) => ({ ...first(p.xAxis), gridIndex: i, ...(horizontal ? scale : {}) })),
+      yAxis: panels.map((p, i) => ({ ...first(p.yAxis), gridIndex: i, ...(horizontal ? {} : scale) })),
+      series: panels.flatMap((p, i) => (p.series as Option[]).map((s) => ({ ...s, xAxisIndex: i, yAxisIndex: i })))
     }
   }
 }
 
-const axisTooltip = (d: ChartData, t: Theme, valueField?: (seriesIndex: number) => ChartData['fields'][number] | undefined) => ({
-  trigger: 'axis',
-  confine: true,
-  axisPointer: { type: 'shadow' },
-  backgroundColor: t.dark ? '#2a2a30' : '#ffffff',
-  borderColor: t.axis,
-  textStyle: { color: t.text, fontSize: 12 },
-  formatter: (all: { axisValueLabel: string; marker: string; seriesName: string; seriesId?: string; value: Value; seriesIndex: number }[]) => {
-    const ps = all.filter((p) => !p.seriesId?.startsWith('fc-band') && !(p.seriesId?.startsWith('fc-line') && p.value === null))
-    return `<div style="font-weight:600;margin-bottom:4px">${esc(all[0]?.axisValueLabel ?? '')}</div>` +
-    ps.map((p) => `<div style="display:flex;justify-content:space-between;gap:16px"><span>${p.marker}${esc(p.seriesName)}</span><b>${esc(fmt(p.value, valueField?.(p.seriesIndex)))}</b></div>`).join('')
-  }
-})
-
-/** Category axis labels: dates formatted at their grain, other values as text. */
-const catLabels = (d: ChartData, key: string | undefined, cats: Value[]) => {
-  const f = key ? d.fields.find((x) => x.key === key) : undefined
-  return cats.map((c) => fmt(c, f))
-}
-
-// ---------------------------------------------------------------- bar, line, area, combo
-
-function cartesian(kind: 'bar' | 'line' | 'area' | 'combo'): ChartPlugin['option'] {
+function cartesianPanel(kind: 'bar' | 'line' | 'area' | 'combo'): NonNullable<ChartPlugin['option']> {
   return (d, t) => {
     const catDim = dims(d, 'x')[0] ?? dims(d, 'y')[0]
     const horizontal = d.options.horizontal ?? (!!dims(d, 'y')[0] && !dims(d, 'x')[0])
@@ -403,9 +394,9 @@ const boxplot: ChartPlugin['option'] = (d, t) => {
 const has = (s: FieldSummary) => ({ date: s.dims.some((d) => isDateT(d.type)), cats: s.dims.filter((d) => !isDateT(d.type)).length, n: s.dims.length })
 
 export const PLUGINS: ChartPlugin[] = [
-  { id: 'bar', label: 'Bar', icon: 'BarChart3', group: 'basic', render: 'echarts', shelves: { x: 'Categories (or values for horizontal bars)', y: 'Values', color: 'Split into groups or stacks', label: 'Text on bars', tooltip: 'More in the tooltip' }, score: (s) => (s.measures >= 1 && has(s).cats >= 1 ? 0.9 : s.measures >= 1 && s.dims.length === 0 ? 0.6 : s.measures && has(s).date ? 0.55 : 0.2), option: cartesian('bar') },
-  { id: 'line', label: 'Line', icon: 'LineChart', group: 'basic', render: 'echarts', shelves: { x: 'Dates or ordered categories', y: 'Values', color: 'One line per value', tooltip: 'More in the tooltip' }, score: (s) => (s.measures >= 1 && has(s).date ? 0.95 : s.measures >= 1 && s.dims.length ? 0.4 : 0.1), option: cartesian('line') },
-  { id: 'area', label: 'Area', icon: 'AreaChart', group: 'basic', render: 'echarts', shelves: { x: 'Dates or ordered categories', y: 'Values', color: 'Stacked areas', tooltip: 'More in the tooltip' }, score: (s) => (s.measures >= 1 && has(s).date && s.dims.length >= 2 ? 0.7 : s.measures && has(s).date ? 0.5 : 0.1), option: cartesian('area') },
+  { id: 'bar', label: 'Bar', icon: 'BarChart3', group: 'basic', render: 'echarts', shelves: { x: 'Categories (or values for horizontal bars)', y: 'Values', color: 'Split into groups or stacks', label: 'Text on bars', tooltip: 'More in the tooltip', facet: 'One small chart per value' }, score: (s) => (s.measures >= 1 && has(s).cats >= 1 ? 0.9 : s.measures >= 1 && s.dims.length === 0 ? 0.6 : s.measures && has(s).date ? 0.55 : 0.2), option: cartesian('bar') },
+  { id: 'line', label: 'Line', icon: 'LineChart', group: 'basic', render: 'echarts', shelves: { x: 'Dates or ordered categories', y: 'Values', color: 'One line per value', tooltip: 'More in the tooltip', facet: 'One small chart per value' }, score: (s) => (s.measures >= 1 && has(s).date ? 0.95 : s.measures >= 1 && s.dims.length ? 0.4 : 0.1), option: cartesian('line') },
+  { id: 'area', label: 'Area', icon: 'AreaChart', group: 'basic', render: 'echarts', shelves: { x: 'Dates or ordered categories', y: 'Values', color: 'Stacked areas', tooltip: 'More in the tooltip', facet: 'One small chart per value' }, score: (s) => (s.measures >= 1 && has(s).date && s.dims.length >= 2 ? 0.7 : s.measures && has(s).date ? 0.5 : 0.1), option: cartesian('area') },
   { id: 'combo', label: 'Combo (bar + line)', icon: 'ChartColumnIncreasing', group: 'basic', render: 'echarts', shelves: { x: 'Categories or dates', y: 'Two or more values (the second is a line on its own axis)', tooltip: 'More in the tooltip' }, score: (s) => (s.measures >= 2 && s.dims.length >= 1 ? 0.75 : 0.05), option: cartesian('combo') },
   { id: 'pie', label: 'Pie / donut', icon: 'PieChart', group: 'basic', render: 'echarts', shelves: { color: 'Slices', y: 'Value', tooltip: 'More in the tooltip' }, score: (s) => (s.measures === 1 && s.dims.length === 1 && has(s).cats === 1 ? 0.5 : 0.05), option: pie },
   { id: 'scatter', label: 'Scatter / bubble', icon: 'ScatterChart', group: 'basic', render: 'echarts', raw: (enc) => !enc.detail.length && !enc.color && !enc.x.some((f) => !f.agg) && !enc.y.some((f) => !f.agg), shelves: { x: 'Value', y: 'Value', size: 'Bubble size', color: 'Groups', detail: 'One point per value (otherwise one per row)', tooltip: 'More in the tooltip' }, score: (s) => (s.measures >= 2 ? 0.85 : 0.05), option: scatter },
@@ -413,6 +404,26 @@ export const PLUGINS: ChartPlugin[] = [
   { id: 'boxplot', label: 'Box plot', icon: 'SquareSplitVertical', group: 'basic', render: 'echarts', raw: () => true, wrap: (sql, o) => `WITH r AS (SELECT ${o.hasCat ? 'd0' : "'All'"} AS c, m0 AS v FROM (${sql}) WHERE m0 IS NOT NULL), q AS (SELECT c, quantile_cont(v, 0.25) q1, median(v) q2, quantile_cont(v, 0.75) q3, count(*) n FROM r GROUP BY c)\nSELECT q.c, min(v) FILTER (WHERE v >= q1 - 1.5 * (q3 - q1)) lo, any_value(q1) q1, any_value(q2) q2, any_value(q3) q3, max(v) FILTER (WHERE v <= q3 + 1.5 * (q3 - q1)) hi, list(v) FILTER (WHERE v < q1 - 1.5 * (q3 - q1) OR v > q3 + 1.5 * (q3 - q1)) outliers, any_value(n) n FROM r JOIN q USING (c) GROUP BY q.c ORDER BY q.c`, shelves: { x: 'Groups (optional)', y: 'A number' }, score: (s) => (s.measures === 1 && s.dims.length <= 1 ? 0.35 : 0.05), option: boxplot },
   { id: 'heatmap', label: 'Heat map', icon: 'Grid3x3', group: 'basic', render: 'echarts', shelves: { x: 'Columns', y: 'Rows', color: 'Value (color)' }, score: (s) => (s.measures === 1 && s.dims.length === 2 ? 0.7 : 0.05), option: heatmap },
   { id: 'treemap', label: 'Treemap', icon: 'LayoutGrid', group: 'basic', render: 'echarts', shelves: { detail: 'Nested groups (in order)', size: 'Value (area)' }, score: (s) => (s.measures === 1 && has(s).cats >= 1 && !has(s).date ? 0.45 : 0.05), option: treemap },
+  { id: 'waterfall', label: 'Waterfall', icon: 'ChartColumnBig', group: 'more', render: 'echarts', shelves: { x: 'Steps', y: 'Change at each step' }, score: (s) => (s.measures === 1 && has(s).cats === 1 ? 0.3 : 0.02), option: More.waterfall },
+  { id: 'pareto', label: 'Pareto', icon: 'ChartBarDecreasing', group: 'more', render: 'echarts', shelves: { x: 'Categories', y: 'Value (sorted, with the cumulative %)' }, score: (s) => (s.measures === 1 && has(s).cats === 1 ? 0.3 : 0.02), option: More.pareto },
+  { id: 'funnel', label: 'Funnel', icon: 'Funnel', group: 'more', render: 'echarts', shelves: { x: 'Stages', y: 'Value' }, score: (s) => (s.measures === 1 && has(s).cats === 1 ? 0.2 : 0.02), option: More.funnel },
+  { id: 'gauge', label: 'Gauge', icon: 'CircleGauge', group: 'more', render: 'echarts', shelves: { y: 'Value' }, score: (s) => (s.measures === 1 && s.dims.length === 0 ? 0.4 : 0.02), option: More.gauge },
+  { id: 'bullet', label: 'Bullet', icon: 'Target', group: 'more', render: 'echarts', shelves: { x: 'Categories (optional)', y: 'Actual, then target' }, score: (s) => (s.measures === 2 && s.dims.length <= 1 ? 0.35 : 0.02), option: More.bullet },
+  { id: 'radar', label: 'Radar', icon: 'Radar', group: 'more', render: 'echarts', shelves: { x: 'Axes (one per value)', y: 'Values', color: 'One shape per value' }, score: (s) => (s.measures >= 1 && has(s).cats >= 1 ? 0.15 : 0.02), option: More.radar },
+  { id: 'sankey', label: 'Sankey', icon: 'Waypoints', group: 'more', render: 'echarts', shelves: { x: 'Steps of the flow, in order (two or more)', y: 'Flow size' }, score: (s) => (s.measures === 1 && has(s).cats >= 2 ? 0.35 : 0.02), option: More.sankey },
+  { id: 'network', label: 'Network', icon: 'Share2', group: 'more', render: 'echarts', shelves: { x: 'From and to (two fields)', y: 'Link weight (optional)' }, score: (s) => (has(s).cats === 2 && s.measures <= 1 ? 0.12 : 0.01), option: More.network },
+  { id: 'sunburst', label: 'Sunburst', icon: 'Sun', group: 'more', render: 'echarts', shelves: { x: 'Nested groups (in order)', y: 'Value' }, score: (s) => (s.measures === 1 && has(s).cats >= 2 ? 0.4 : 0.02), option: More.sunburst },
+  { id: 'calendar', label: 'Calendar', icon: 'CalendarDays', group: 'more', render: 'echarts', shelves: { x: 'A date (by day)', y: 'Value (color)' }, score: (s) => (s.measures === 1 && has(s).date && s.dims.length === 1 ? 0.2 : 0.01), option: More.calendar },
+  { id: 'candlestick', label: 'Candlestick', icon: 'ChartCandlestick', group: 'more', render: 'echarts', shelves: { x: 'Dates', y: 'Open, close, low, high (four values)' }, score: (s) => (s.measures === 4 && has(s).date ? 0.85 : 0.01), option: More.candlestick },
+  { id: 'sparkline', label: 'Sparklines', icon: 'Activity', group: 'more', render: 'echarts', shelves: { x: 'Dates', y: 'Value', color: 'One line per value' }, score: (s) => (s.measures === 1 && has(s).date && has(s).cats === 1 ? 0.5 : 0.01), option: More.sparkline },
+  { id: 'gantt', label: 'Gantt', icon: 'ChartGantt', group: 'more', render: 'echarts', raw: () => true, shelves: { x: 'Start and end dates', y: 'Tasks', color: 'Groups' }, score: (s) => (s.dims.filter((x) => isDateT(x.type)).length >= 2 && s.measures === 0 ? 0.8 : 0.01), option: More.gantt },
+  { id: 'density', label: 'Density', icon: 'ChartSpline', group: 'more', render: 'echarts', raw: () => true, wrap: More.densityWrap, shelves: { x: 'A number', color: 'Groups (one curve each)' }, score: (s) => (s.measures === 1 && s.dims.length === 1 ? 0.15 : 0.02), option: More.density },
+  { id: 'violin', label: 'Violin', icon: 'AudioWaveform', group: 'more', render: 'echarts', raw: () => true, wrap: (sql, o) => More.densityWrap(sql, o), shelves: { x: 'Groups', y: 'A number' }, score: (s) => (s.measures === 1 && s.dims.length === 1 ? 0.25 : 0.02), option: More.violin },
+  { id: 'corrmatrix', label: 'Correlation matrix', icon: 'Grid2x2', group: 'more', render: 'echarts', raw: () => true, wrap: More.corrWrap, shelves: { y: 'Two or more numbers' }, score: (s) => (s.measures >= 3 && s.dims.length === 0 ? 0.5 : 0.01), option: More.corrMatrix },
+  { id: 'cohort', label: 'Cohort', icon: 'Users', group: 'more', render: 'echarts', wrap: More.cohortWrap, shelves: { x: 'Activity date (cohorts by its grain)', detail: 'Who (customer, user…)' }, score: () => 0.01, option: More.cohort },
+  { id: 'map', label: 'Map (areas)', icon: 'Map', group: 'more', render: 'echarts', geo: true, shelves: { x: 'Country, state or area (name or code)', y: 'Value (color)' }, score: (s) => (s.measures === 1 && has(s).cats === 1 ? 0.05 : 0.01), option: More.choropleth },
+  { id: 'pointmap', label: 'Map (points)', icon: 'MapPin', group: 'more', render: 'echarts', geo: true, raw: (enc) => !enc.detail.length && !enc.color && !enc.x.some((f) => !f.agg) && !enc.y.some((f) => !f.agg), shelves: { x: 'Longitude', y: 'Latitude', size: 'Point size', color: 'Groups', detail: 'One point per value (otherwise one per row)' }, score: () => 0.01, option: More.pointMap },
+  { id: 'custom', label: 'Custom visual (JSON)', icon: 'Braces', group: 'more', render: 'echarts', shelves: { x: 'Categories ($categories)', y: 'Values ($values, $values:1…)', color: 'Series ($series)' }, score: () => 0, option: More.custom },
   { id: 'kpi', label: 'KPI card', icon: 'Gauge', group: 'table', render: 'kpi', shelves: { y: 'Value', tooltip: 'Smaller figures below' }, score: (s) => (s.measures >= 1 && s.dims.length === 0 ? 0.8 : 0.05) },
   { id: 'table', label: 'Table', icon: 'Table2', group: 'table', render: 'table', shelves: { x: 'Columns (any fields)', y: 'More columns' }, score: () => 0.3 },
   { id: 'crosstab', label: 'Crosstab', icon: 'Sheet', group: 'table', render: 'crosstab', shelves: { y: 'Row headers', x: 'Column headers', label: 'Value in cells' }, score: (s) => (s.measures >= 1 && s.dims.length >= 2 ? 0.5 : 0.1) }
