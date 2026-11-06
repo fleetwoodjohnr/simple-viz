@@ -46,7 +46,7 @@ export async function launch(opts: { userData?: string; settings?: Record<string
     app.process().stderr?.on('data', (d) => process.stdout.write(`main! ${d}`))
   } else if (process.env.CI) {
     // On CI, engine events (exits, errors) go into the test log: a failure there can't be rerun with SV_DEBUG.
-    app.process().stderr?.on('data', (d) => String(d).split('\n').filter((l) => /\[engine\]|terminate called/.test(l)).forEach((l) => process.stdout.write(`main! ${l}\n`)))
+    app.process().stderr?.on('data', (d) => open.has(app) && String(d).split('\n').filter((l) => /\[engine\]|terminate called/.test(l)).forEach((l) => process.stdout.write(`main! ${l}\n`)))
   }
   open.add(app)
   const page = await app.firstWindow()
@@ -58,7 +58,8 @@ export async function launch(opts: { userData?: string; settings?: Record<string
   page.on('pageerror', (e) => errors.get(app)?.push(e.message))
   cspViolations.set(app, violations)
   errors.set(app, [])
-  await page.waitForSelector('[data-testid=home], [data-testid=data-view]')
+  // Bounded by the test's timeout: a first launch under Rosetta takes minutes.
+  await page.waitForSelector('[data-testid=home], [data-testid=data-view]', { timeout: 0 })
   return { app, page, userData }
 }
 

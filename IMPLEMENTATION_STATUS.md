@@ -12,11 +12,11 @@ Linux, Windows and macOS._
 |---|---|
 | `npm run typecheck` | ✅ clean |
 | `npm test` (unit) | ✅ 66 tests |
-| `npm run test:integration` (real DuckDB, files, PostgreSQL 17 in podman) | ✅ 82 tests |
+| `npm run test:integration` (real DuckDB, files, PostgreSQL 17 in podman) | ✅ 83 tests |
 | `npm run e2e:headless` (the real app) | ✅ acceptance (24 steps), analytics, charts, dashboards, data, model, PostgreSQL, smoke; updater (packaged only) |
 | `npm run bench` (statistics on 10M rows) | ✅ see M5 |
 | Packaged Linux build (`electron-builder --linux dir`) + e2e | ✅ |
-| CI: Linux, Windows, macOS (arm64; Intel under Rosetta) build, test, package, test the packaged app; deb/rpm install on Ubuntu 22.04/24.04, Debian 12, Fedora 44; npm audit; CodeQL | ✅ |
+| CI: Linux, Windows, macOS (arm64; Intel under Rosetta) build, test, package, test the packaged app; deb/rpm install on Ubuntu 22.04/24.04, Debian 12, Fedora 44; npm audit; CodeQL | ✅ run 42143235883 (commit 8b8a2c3). The M3, M4 and M5 runs had failed (an engine reboot under running queries, a save/recent-files race on Windows, stuck test workers); fixed in 8b8a2c3. The Intel smoke test under Rosetta passed on retry (first-launch translation); its launch wait no longer times out at 30 s |
 | PostgreSQL tests on Windows and macOS CI | ⏭ skipped (no podman there); the acceptance test uses a CSV for customers and says so |
 
 ## M0 — Scaffold ✅
