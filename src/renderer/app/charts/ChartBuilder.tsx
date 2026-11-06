@@ -9,7 +9,7 @@ import { useApp, set, get, toast } from '../../state/store'
 import * as P from '../../state/project'
 import * as E from '../../state/engine'
 import { Btn, IconBtn, Menu, MenuContent, MenuItem, MenuSep, MenuTrigger, MenuLabel, SubMenu, MenuCheck, Segmented, Switch, Tip, cx, inputCls } from '../../ui'
-import { ChartView, exportChart } from './ChartView'
+import { ChartView, exportChart, modelColumns } from './ChartView'
 import { FilterDialog } from './FilterDialog'
 import { askText } from '../Dialogs'
 import { CalcDialog } from './CalcDialog'
@@ -153,7 +153,8 @@ function Builder({ chart }: { chart: Chart }) {
   const project = useApp((s) => s.project!)
   const dark = useApp((s) => s.dark)
   const calcTypes = useCharts((s) => s.calcTypes[chart.dataset.toLowerCase()] ?? NO_TYPES)
-  const rel = relations.find((r) => r.name.toLowerCase() === chart.dataset.toLowerCase())
+  const model = project.models.find((m) => m.name.toLowerCase() === chart.dataset.toLowerCase())
+  const rel = model ? { name: model.name, kind: 'dataset' as const, columns: modelColumns(model, relations) } : relations.find((r) => r.name.toLowerCase() === chart.dataset.toLowerCase())
   const calcs = useMemo(() => project.calcs.filter((c) => c.dataset.toLowerCase() === chart.dataset.toLowerCase()), [project.calcs, chart.dataset])
   const fields = useMemo(() => fieldDefs(rel?.columns ?? [], calcs, calcTypes), [rel, calcs, calcTypes])
   const [filterFor, setFilterFor] = useState<{ field: string; id?: string; asMeasure?: boolean } | null>(null)
@@ -300,6 +301,8 @@ const DRAG = 'application/x-simple-viz-field'
 
 function FieldsPanel({ chart, fields, onAdd, onDataset, onCalc }: { chart: Chart; fields: FieldDef[]; onAdd: (r: ShelfRole, f: FieldDef) => void; onDataset: (n: string) => void; onCalc: (c: CalcField | 'new') => void }) {
   const relations = useApp((s) => s.relations)
+  const models = useApp((s) => s.project!.models)
+  const hierarchies = useApp((s) => s.project!.hierarchies)
   const [q, setQ] = useState('')
   const shown = fields.filter((f) => !q || f.name.toLowerCase().includes(q.toLowerCase()))
   const group = (role: 'dim' | 'measure') => shown.filter((f) => f.role === role && !f.calc)
@@ -316,6 +319,11 @@ function FieldsPanel({ chart, fields, onAdd, onDataset, onCalc }: { chart: Chart
                 {r.kind === 'dataset' ? ' (dataset)' : ''}
               </option>
             ))}
+            {models.map((m) => (
+              <option key={m.id} value={m.name}>
+                {m.name} (model)
+              </option>
+            ))}
           </select>
         </label>
         <div className="relative">
@@ -326,6 +334,21 @@ function FieldsPanel({ chart, fields, onAdd, onDataset, onCalc }: { chart: Chart
       <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-2">
         <FieldGroup title="Dimensions" fields={group('dim')} onAdd={onAdd} />
         <FieldGroup title="Measures" fields={group('measure')} onAdd={onAdd} />
+        {hierarchies.some((h) => h.dataset.toLowerCase() === chart.dataset.toLowerCase()) && (
+          <>
+            <div className="px-1.5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-text-3">Hierarchies</div>
+            <ul>
+              {hierarchies.filter((h) => h.dataset.toLowerCase() === chart.dataset.toLowerCase()).map((h) => (
+                <li key={h.id}>
+                  <button onClick={() => updateChart(chart.id, (c) => ({ ...c, enc: { ...c.enc, x: [h.levels[0], ...c.enc.x.slice(1)] }, options: { ...c.options, drill: h.levels } }))} className="flex h-7 w-full items-center gap-2 rounded-md px-1.5 text-left text-[12.5px] hover:bg-hover" title={h.levels.map((l) => fieldTitle(l)).join(' › ')} data-testid={`hierarchy-${h.name}`}>
+                    <Icons.ListTree className="size-3.5 text-[color:var(--chart-1)]" />
+                    <span className="truncate">{h.name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
         <div className="flex items-center justify-between px-1.5 pb-1 pt-3">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Calculated fields</span>
           <IconBtn size="sm" label="New calculated field" onClick={() => onCalc('new')} data-testid="new-calc">
@@ -682,6 +705,14 @@ function DrillPath({ chart, fields, setO }: { chart: Chart; fields: FieldDef[]; 
           </span>
         ))}
       </div>
+      {path.length > 1 && (
+        <button className="mt-1 text-[11.5px] text-accent-ink hover:underline" onClick={async () => {
+          const name = await askText('Save as a hierarchy', 'Name (reuse it on other charts of this data)', path.map((r) => r.field).join(' › '))
+          if (name?.trim()) P.edit((p) => ({ ...p, hierarchies: [...p.hierarchies, { id: newId(), name: name.trim(), dataset: chart.dataset, levels: path }] }))
+        }} data-testid="save-hierarchy">
+          Save as hierarchy…
+        </button>
+      )}
       <select aria-label="Add a drill-down level" className={cx(inputCls, 'mt-1.5 h-7 text-[12px]')} value="" onChange={(e) => {
         const o = options.find((x) => x.key === e.target.value)
         if (o) setO({ drill: [...path, o.ref] })

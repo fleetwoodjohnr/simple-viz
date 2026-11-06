@@ -65,8 +65,54 @@ export type Source = FileSource | DbSource
 export interface Dataset {
   id: string
   name: string
+  /** The query. For a visual transform, generated from `steps` (and kept in step). */
   sql: string
   description?: string
+  /** Visual transform: the relation it starts from and its steps (src/core/transform.ts). */
+  input?: string
+  steps?: TransformStep[]
+}
+
+export type TransformStep =
+  | { id: string; kind: 'select'; columns: string[] }
+  | { id: string; kind: 'rename'; from: string; to: string }
+  | { id: string; kind: 'filter'; column: string; op: '=' | '<>' | '>' | '>=' | '<' | '<=' | 'contains' | 'starts' | 'null' | 'not_null' | 'in'; value?: string }
+  | { id: string; kind: 'calc'; name: string; expr: string }
+  | { id: string; kind: 'cast'; column: string; type: string }
+  | { id: string; kind: 'fill'; column: string; value: string }
+  | { id: string; kind: 'text'; column: string; fn: 'trim' | 'upper' | 'lower' | 'title' }
+  | { id: string; kind: 'split'; column: string; sep: string; into: string[] }
+  | { id: string; kind: 'dedupe'; columns: string[] }
+  | { id: string; kind: 'sort'; column: string; dir: 'asc' | 'desc' }
+  | { id: string; kind: 'group'; by: string[]; aggs: { column: string; fn: 'sum' | 'avg' | 'min' | 'max' | 'count' | 'count_distinct' | 'median'; as: string }[] }
+  | { id: string; kind: 'join'; with: string; type: 'left' | 'inner' | 'right' | 'full'; on: { left: string; right: string }[] }
+  | { id: string; kind: 'union'; with: string }
+  | { id: string; kind: 'pivot'; column: string; value: string; fn: 'sum' | 'avg' | 'count' | 'min' | 'max'; values: string[] }
+  | { id: string; kind: 'unpivot'; columns: string[]; name: string; value: string }
+  | { id: string; kind: 'sql'; sql: string }
+
+/** Tables related by fields (Tableau's logical layer): charts can use fields from all of them. */
+export interface Model {
+  id: string
+  name: string
+  tables: { name: string; x: number; y: number }[]
+  relationships: Relationship[]
+}
+
+export interface Relationship {
+  id: string
+  left: string
+  leftField: string
+  right: string
+  rightField: string
+}
+
+/** A named drill path (Region → State → City), reusable across charts. */
+export interface Hierarchy {
+  id: string
+  name: string
+  dataset: string
+  levels: import('./charts').FieldRef[]
 }
 
 export interface Project {
@@ -79,6 +125,8 @@ export interface Project {
   /** Saved SQL editor queries (not exposed as relations). */
   queries: { id: string; name: string; sql: string }[]
   charts: Chart[]
+  models: Model[]
+  hierarchies: Hierarchy[]
   calcs: CalcField[]
   params: Parameter[]
   dashboards: Dashboard[]

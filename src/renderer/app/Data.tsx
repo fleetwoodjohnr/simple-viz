@@ -1,7 +1,7 @@
 // The Data workspace: sources and datasets on the left; the selected table's rows and column profile on the right.
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ChevronDown, ChevronRight, Database, FileSpreadsheet, FileText, FolderSearch, Layers, MoreHorizontal, Pencil, Plus, RefreshCw, Server, SquareTerminal, Trash2, Globe2 } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronRight, Database, FileSpreadsheet, FileText, FolderSearch, Layers, MoreHorizontal, Pencil, Plus, RefreshCw, Server, SquareTerminal, Trash2, Globe2, Network, Wand2, CalendarDays } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useApp, set, get, toast } from '../state/store'
 import * as P from '../state/project'
@@ -14,6 +14,11 @@ import { profileSql, readProfile, type Profile } from '@/core/profile'
 import type { Source } from '@/shared/project'
 import type { RelationInfo } from '@/shared/engine-protocol'
 import { openInSql } from './SqlEditor'
+import { ModelEditor } from './ModelEditor'
+import { TransformEditor } from './TransformEditor'
+import { askText } from './Dialogs'
+import { dateTableSql } from '@/core/transform'
+import { newId } from '@/core/project/sviz'
 
 const q = (s: string) => `"${s.replace(/"/g, '""')}"`
 
@@ -37,6 +42,8 @@ export function DataView() {
   }, [focus])
   const relByName = useMemo(() => new Map(relations.map((r) => [r.name.toLowerCase(), r])), [relations])
   const current = selected ? relByName.get(selected.toLowerCase()) : undefined
+  const selectedModel = selected?.startsWith('model:') ? project.models.find((m) => `model:${m.id}` === selected) : undefined
+  const selectedTransform = project.datasets.find((d) => d.name === selected && d.steps)
   // Default selection: the first relation that exists.
   useEffect(() => {
     if (!selected && relations.length) setSelected(relations[0].name)
@@ -67,6 +74,15 @@ export function DataView() {
                 <MenuSep />
                 <MenuItem icon={<SquareTerminal />} onSelect={() => openInSql('', { asDataset: true })}>
                   Dataset from SQL
+                </MenuItem>
+                <MenuItem icon={<Wand2 />} onSelect={() => setSelected(newTransform())} data-testid="add-transform">
+                  Visual transform
+                </MenuItem>
+                <MenuItem icon={<Network />} onSelect={() => setSelected(`model:${newModel()}`)} data-testid="add-model">
+                  Model (related tables)
+                </MenuItem>
+                <MenuItem icon={<CalendarDays />} onSelect={() => void addDateTable().then((n) => n && setSelected(n))}>
+                  Date table
                 </MenuItem>
               </MenuContent>
             </Menu>
@@ -135,7 +151,7 @@ export function DataView() {
               return (
                 <li key={d.id} className="group flex h-7 items-center gap-1 rounded-md pr-1 hover:bg-hover">
                   <button onClick={() => setSelected(d.name)} aria-current={selected?.toLowerCase() === d.name.toLowerCase() ? 'true' : undefined} data-testid={`relation-${d.name}`} className={cx('flex h-7 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-[12.5px]', selected?.toLowerCase() === d.name.toLowerCase() ? 'bg-accent-soft font-medium text-accent-ink' : 'text-text-2')} title={err ?? d.description ?? d.name}>
-                    <Layers className="size-3.5 shrink-0" />
+                    {d.steps ? <Wand2 className="size-3.5 shrink-0" /> : <Layers className="size-3.5 shrink-0" />}
                     <span className="flex-1 truncate font-mono text-[12px]">{d.name}</span>
                     {err && <AlertTriangle className="size-3.5 text-danger" aria-label="Dataset has an error" />}
                   </button>
@@ -146,9 +162,11 @@ export function DataView() {
                       </button>
                     </MenuTrigger>
                     <MenuContent align="end">
-                      <MenuItem icon={<SquareTerminal />} onSelect={() => openInSql(d.sql, { datasetId: d.id })}>
-                        Edit SQL
-                      </MenuItem>
+                      {!d.steps && (
+                        <MenuItem icon={<SquareTerminal />} onSelect={() => openInSql(d.sql, { datasetId: d.id })}>
+                          Edit SQL
+                        </MenuItem>
+                      )}
                       <MenuItem icon={<Pencil />} onSelect={() => setRenaming({ kind: 'dataset', id: d.id, old: d.name })}>
                         Rename
                       </MenuItem>
@@ -162,14 +180,55 @@ export function DataView() {
               )
             })}
           </ul>
+          <div className="px-1.5 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wide text-text-3">Models</div>
+          {!project.models.length && <p className="px-2 text-[12px] leading-relaxed text-text-3">Relate tables by shared fields to chart them together without duplicating totals.</p>}
+          <ul className="space-y-0.5">
+            {project.models.map((m) => (
+              <li key={m.id} className="group flex h-7 items-center gap-1 rounded-md pr-1 hover:bg-hover">
+                <button onClick={() => setSelected(`model:${m.id}`)} aria-current={selected === `model:${m.id}` ? 'true' : undefined} className={cx('flex h-7 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-[12.5px]', selected === `model:${m.id}` ? 'bg-accent-soft font-medium text-accent-ink' : 'text-text-2')} data-testid={`model-${m.name}`}>
+                  <Network className="size-3.5 shrink-0" />
+                  <span className="flex-1 truncate">{m.name}</span>
+                </button>
+                <IconBtn size="sm" label={`Delete ${m.name}`} className="opacity-0 group-hover:opacity-100" onClick={() => P.edit((p) => ({ ...p, models: p.models.filter((x) => x.id !== m.id) }))}>
+                  <Trash2 className="size-3.5" />
+                </IconBtn>
+              </li>
+            ))}
+          </ul>
         </div>
       </aside>
       <section className="flex min-w-0 flex-1 flex-col" aria-label="Table preview">
-        {current ? <RelationPane rel={current} /> : <EmptyPane name={selected} />}
+        {selectedModel ? <ModelEditor model={selectedModel} /> : selectedTransform ? <TransformEditor ds={selectedTransform} /> : current ? <RelationPane rel={current} /> : <EmptyPane name={selected} />}
       </section>
       {renaming && <RenameDialog r={renaming} onClose={() => setRenaming(null)} onDone={(n) => setSelected(n)} />}
     </div>
   )
+}
+
+function newTransform(): string {
+  const p = get().project!
+  const name = P.uniqueAlias('transform', P.usedNames())
+  const input = get().relations[0]?.name ?? ''
+  P.saveDataset({ name, sql: input ? `SELECT * FROM "${input}"` : '', input, steps: [] })
+  void p
+  return name
+}
+
+function newModel(): string {
+  const id = newId()
+  const p = get().project!
+  P.edit((x) => ({ ...x, models: [...x.models, { id, name: `Model ${p.models.length + 1}`, tables: [], relationships: [] }] }))
+  return id
+}
+
+async function addDateTable(): Promise<string | null> {
+  const y = new Date().getFullYear()
+  const range = await askText('Add a date table', 'From and to (YYYY-MM-DD YYYY-MM-DD)', `${y - 2}-01-01 ${y + 1}-12-31`)
+  const m = range && /^(\d{4}-\d{2}-\d{2})\s+(\d{4}-\d{2}-\d{2})$/.exec(range.trim())
+  if (!m) return range === null ? null : (toast('Write two dates, like 2024-01-01 2026-12-31.', 'error'), null)
+  const name = P.uniqueAlias('dates', P.usedNames())
+  P.saveDataset({ name, sql: dateTableSql(m[1], m[2]), description: 'One row per day' })
+  return name
 }
 
 function EmptyPane({ name }: { name: string | null }) {

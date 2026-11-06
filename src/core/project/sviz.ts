@@ -15,7 +15,7 @@ export function newId(): string {
 }
 
 export function newProject(title = 'Untitled project'): Project {
-  return { schemaVersion: PROJECT_SCHEMA_VERSION, id: newId(), title, createdAt: Date.now(), sources: [], datasets: [], queries: [], charts: [], calcs: [], params: [], dashboards: [] }
+  return { schemaVersion: PROJECT_SCHEMA_VERSION, id: newId(), title, createdAt: Date.now(), sources: [], datasets: [], queries: [], charts: [], models: [], hierarchies: [], calcs: [], params: [], dashboards: [] }
 }
 
 export function packProject(p: Project, extra: Record<string, Uint8Array> = {}): Uint8Array {
@@ -64,6 +64,8 @@ function normalize(p: Record<string, unknown>): Project {
     datasets: arr(p.datasets).filter((d) => d && typeof d.name === 'string' && typeof d.sql === 'string'),
     queries: arr(p.queries).filter((q) => q && typeof q.sql === 'string'),
     charts: arr(p.charts).filter((c) => c && typeof c.id === 'string' && typeof c.dataset === 'string').map((c) => ({ filters: [], options: {}, ...c, enc: { x: [], y: [], detail: [], tooltip: [], ...(c.enc ?? {}) } })),
+    models: arr(p.models).filter((m) => m && typeof m.name === 'string').map((m) => ({ ...m, tables: arr(m.tables), relationships: arr(m.relationships) })),
+    hierarchies: arr(p.hierarchies).filter((h) => h && typeof h.name === 'string' && Array.isArray(h.levels)),
     calcs: arr(p.calcs).filter((c) => c && typeof c.name === 'string' && typeof c.formula === 'string'),
     params: arr(p.params).filter((x) => x && typeof x.name === 'string'),
     dashboards: arr(p.dashboards).filter((d) => d && typeof d.id === 'string').map((d) => ({ size: { mode: 'fit', w: 1366, h: 768 }, actions: [], ...d, items: arr(d.items) }))

@@ -18,5 +18,8 @@
 - **Dashboards.** Drag charts onto a canvas, resize, align, group, lock; text with live values, filter controls,
   buttons, images. Click a bar to filter the other charts; drill down; go to another dashboard. Presentation mode.
   PDF and PNG export.
+- **Data modeling.** Relate tables by shared fields and chart across them without double-counting (Tableau-style
+  relationships, several fact tables). Visual transforms — filter, calculate, join, group, pivot, unpivot and more —
+  with a live preview and the equivalent SQL. Date tables and hierarchies.
 - **Secure by design.** Read-only SQL, locked-down engine, passwords in the system keychain, approval before a project
   reads new sources.

@@ -1,6 +1,6 @@
 # Implementation status
 
-_Last updated: 2026-11-05 · M0–M3 complete (with the limits listed), M1 has items pending tests; M4–M9 not started ·
+_Last updated: 2026-11-05 · M0–M4 complete (with the limits listed), M1 has items pending tests; M5–M9 not started ·
 version 0.1.0 (unreleased) · verified with automated tests on Linux (Fedora 44); CI builds, packages and tests on
 Linux, Windows and macOS._
 
@@ -12,8 +12,8 @@ Linux, Windows and macOS._
 |---|---|
 | `npm run typecheck` | ✅ clean |
 | `npm test` (unit) | ✅ 62 tests |
-| `npm run test:integration` (real DuckDB, files, PostgreSQL 17 in podman) | ✅ 62 tests |
-| `npm run e2e:headless` (the real app) | ✅ acceptance (24 steps), charts, dashboards, data, PostgreSQL, smoke; updater (packaged only) |
+| `npm run test:integration` (real DuckDB, files, PostgreSQL 17 in podman) | ✅ 72 tests |
+| `npm run e2e:headless` (the real app) | ✅ acceptance (24 steps), charts, dashboards, data, model, PostgreSQL, smoke; updater (packaged only) |
 | Packaged Linux build (`electron-builder --linux dir`) + e2e | ✅ |
 | CI: Linux, Windows, macOS (arm64; Intel under Rosetta) build, test, package, test the packaged app; deb/rpm install on Ubuntu 22.04/24.04, Debian 12, Fedora 44; npm audit; CodeQL | ✅ |
 | PostgreSQL tests on Windows and macOS CI | ⏭ skipped (no podman there); the acceptance test uses a CSV for customers and says so |
@@ -105,6 +105,27 @@ Linux, Windows and macOS._
 - PNG export captures the dashboard as shown on screen (scaled to fit); PDF is at full size.
 - Saved filter views (`Dashboard.views`) are in the model but have no UI yet.
 
+## M4 — Data modeling and transforms ✅
+
+### Done
+
+| Feature | Test |
+|---|---|
+| Models: tables related by fields (logical layer); charts over a model use fields of every table | integration `model`, e2e `model` |
+| No duplicated measures: each measure is counted once per combination of dimension values it relates to (fan-out safe); two fact tables sharing dimensions; coarser tables not multiplied; unmatched rows in a Null group | integration `model` (5 cases against known answers) |
+| Relationship canvas: draggable table cards, relationship lines, suggestions (same-named keys, `id` ↔ `table_id`), loop and unrelated-table warnings | integration `model`, e2e `model` |
+| Relationship preview: cardinality (one/many on each side) and matched rows | e2e `model` |
+| Visual transforms: keep columns, rename, filter, calculated column, change type, fill empty, clean text, split, remove duplicates, sort, group and summarize, join, append (union), pivot, unpivot, custom SQL — each step previewed | integration `transform`, e2e `model` |
+| Steps ⇄ SQL: the SQL view shows the generated SQL; "Edit as SQL" converts, and undo brings the steps back | e2e `model` |
+| Date table (one row per day with year, quarter, month, week, weekday) | integration `transform` |
+| Hierarchies: save a drill path, reuse it on any chart of the same data | manual check; test pending |
+
+### Known limitations
+
+- Calculated fields and top-N filters work on single tables and datasets, not on models yet.
+- A model can't contain the same table twice (role-playing dimensions); loops are reported, not resolved.
+- Transform steps are applied in the order listed; reordering a step doesn't rewrite the steps after it.
+
 ## Next
 
-M4 — data modeling (relationships, multi-fact), visual transforms, hierarchies.
+M5 — statistics and forecasting.

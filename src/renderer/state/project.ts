@@ -414,7 +414,8 @@ export function removeSource(id: string) {
 }
 
 export function saveDataset(d: Omit<Dataset, 'id'> & { id?: string }): Dataset {
-  const ds: Dataset = { id: d.id ?? newId(), name: d.name, sql: d.sql, description: d.description }
+  // Every field is kept (a visual transform's input and steps too); undefined ones are dropped.
+  const ds = Object.fromEntries(Object.entries({ ...d, id: d.id ?? newId() }).filter(([, v]) => v !== undefined)) as unknown as Dataset
   edit((p) => ({ ...p, datasets: p.datasets.some((x) => x.id === ds.id) ? p.datasets.map((x) => (x.id === ds.id ? ds : x)) : [...p.datasets, ds] }))
   return ds
 }

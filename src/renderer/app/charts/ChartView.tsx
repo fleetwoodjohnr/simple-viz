@@ -10,9 +10,12 @@ import { AlertTriangle, Loader2 } from 'lucide-react'
 import { useApp } from '../../state/store'
 import * as E from '../../state/engine'
 import { compileQuery, QueryError, type OutField } from '@/core/query/compile'
+import { compileModelQuery } from '@/core/query/model'
 import { plugin } from '@/core/charts/plugins'
 import { LIGHT, fmt, type ChartData, type Theme, type Value } from '@/core/charts/data'
 import type { Chart, ChartFilter } from '@/shared/charts'
+import type { Model } from '@/shared/project'
+import type { ColumnInfo, RelationInfo } from '@/shared/engine-protocol'
 import { DataGrid } from '../../ui/DataGrid'
 import { cx } from '../../ui'
 
@@ -39,6 +42,11 @@ export function readTheme(dark: boolean): Theme {
   }
 }
 
+/** A model's fields, named table.column, for the chart builder and the compiler. */
+export function modelColumns(model: Model, relations: RelationInfo[]): ColumnInfo[] {
+  return model.tables.flatMap((t) => (relations.find((r) => r.name.toLowerCase() === t.name.toLowerCase())?.columns ?? []).map((c) => ({ name: `${t.name}.${c.name}`, type: c.type })))
+}
+
 export interface ChartResult {
   data: ChartData | null
   error: string | null
@@ -52,10 +60,11 @@ export function useChartData(chart: Chart | null, extra?: ChartFilter[], highlig
   const project = useApp((s) => s.project)
   const dataVersion = useApp((s) => s.dataVersion)
   const [state, setState] = useState<ChartResult>({ data: null, error: null, loading: false, sql: null })
-  const columns = useMemo(() => relations.find((r) => chart && r.name.toLowerCase() === chart.dataset.toLowerCase())?.columns, [relations, chart?.dataset])
+  const model = project?.models.find((m) => chart && m.name.toLowerCase() === chart.dataset.toLowerCase())
+  const columns = useMemo(() => (model ? modelColumns(model, relations) : relations.find((r) => chart && r.name.toLowerCase() === chart.dataset.toLowerCase())?.columns), [relations, chart?.dataset, model])
   const calcs = project?.calcs
   const params = project?.params
-  const key = JSON.stringify([chart?.dataset, chart?.type, chart?.enc, chart?.filters, chart?.options.sort, chart?.options.bins, extra, calcs?.filter((c) => c.dataset === chart?.dataset), params, dataVersion, !!columns])
+  const key = JSON.stringify([chart?.dataset, chart?.type, chart?.enc, chart?.filters, chart?.options.sort, chart?.options.bins, extra, calcs?.filter((c) => c.dataset === chart?.dataset), params, dataVersion, !!columns, model])
 
   useEffect(() => {
     if (!chart) return
@@ -71,7 +80,9 @@ export function useChartData(chart: Chart | null, extra?: ChartFilter[], highlig
     const p = plugin(chart.type)
     let compiled
     try {
-      compiled = compileQuery({ chart, columns, calcs: (calcs ?? []).filter((c) => c.dataset.toLowerCase() === chart.dataset.toLowerCase()), params, extra, maxMarks: MAX_MARKS, mode: p.raw?.(chart.enc) ? 'raw' : 'aggregate' })
+      compiled = model
+        ? compileModelQuery({ chart, model, columns: Object.fromEntries(relations.map((r) => [r.name.toLowerCase(), r.columns])), extra, maxMarks: MAX_MARKS })
+        : compileQuery({ chart, columns, calcs: (calcs ?? []).filter((c) => c.dataset.toLowerCase() === chart.dataset.toLowerCase()), params, extra, maxMarks: MAX_MARKS, mode: p.raw?.(chart.enc) ? 'raw' : 'aggregate' })
     } catch (e) {
       setState({ data: null, error: e instanceof QueryError ? e.message : `Couldn’t build this chart: ${(e as Error).message}`, loading: false, sql: null })
       return

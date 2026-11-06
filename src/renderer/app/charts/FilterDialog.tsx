@@ -18,6 +18,14 @@ type Mode = 'values' | 'range' | 'relative' | 'contains' | 'top'
 /** Distinct values of a field in a relation (with calculated fields), most frequent first beyond 1,000. */
 export async function distinctValues(dataset: string, field: string): Promise<{ value: Value; n: number }[]> {
   const s = useApp.getState()
+  const model = s.project?.models.find((m) => m.name.toLowerCase() === dataset.toLowerCase())
+  if (model) {
+    // A model field (table.column): its values come from its own table.
+    const dot = field.indexOf('.')
+    const q = (x: string) => `"${x.replace(/"/g, '""')}"`
+    const r = await E.query(`SELECT ${q(field.slice(dot + 1))}, count(*) FROM ${q(field.slice(0, dot))} GROUP BY 1 ORDER BY 2 DESC LIMIT 1000`, { limit: 1000 })
+    return r.rows.map(([value, n]) => ({ value, n: Number(n) })).sort((a, b) => String(a.value).localeCompare(String(b.value), undefined, { numeric: true }))
+  }
   const rel = s.relations.find((r) => r.name.toLowerCase() === dataset.toLowerCase())
   if (!rel) return []
   const q = compileQuery({ chart: { dataset, type: 'table', enc: { ...emptyEncodings(), x: [{ field }], y: [{ field, agg: 'count' }] }, filters: [], options: {} }, columns: rel.columns, calcs: s.project?.calcs.filter((c) => c.dataset.toLowerCase() === dataset.toLowerCase()) ?? [], params: s.project?.params })
