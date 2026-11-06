@@ -1,6 +1,5 @@
 // Connecting to PostgreSQL through the UI (the packaged app loads the bundled postgres extension).
-import { test, expect } from '@playwright/test'
-import { launch, quit } from './helpers'
+import { test, expect, launch, quit } from './helpers'
 import { startPostgres, type Pg } from '../integration/helpers'
 
 let pg: Pg | null = null

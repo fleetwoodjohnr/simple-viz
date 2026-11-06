@@ -1,10 +1,9 @@
-import { test, expect } from '@playwright/test'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { launch, quit, tempDir } from './helpers'
+import { test, expect, launch, quit, tempDir } from './helpers'
 
 // On Linux an unpacked build counts as an AppImage, and electron-updater's AppImage updater stays off unless
 // APPIMAGE names the running image: point it at a stand-in file (the test never installs).

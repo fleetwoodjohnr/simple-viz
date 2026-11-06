@@ -278,9 +278,10 @@ export async function save(as = false): Promise<boolean> {
   try {
     await api().writeFile(path, packProject(project))
     const changedId = project.id !== p.id
-    set({ project, path, dirty: false, status: 'saved', saveError: undefined })
+    // "Saved" only once the recent-files entry is on disk too (quitting right after a save keeps it).
+    const recents = await api().recentAdd({ path, name: path.split(/[\\/]/).pop()!, openedAt: Date.now() }).catch(() => get().recents)
+    set({ project, path, dirty: false, status: 'saved', saveError: undefined, recents })
     void api().recoveryRemove(p.id)
-    set({ recents: await api().recentAdd({ path, name: path.split(/[\\/]/).pop()!, openedAt: Date.now() }) })
     if (changedId) void configureEngine()
     return true
   } catch (e) {

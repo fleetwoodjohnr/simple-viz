@@ -2,14 +2,14 @@
 // Excel + PostgreSQL → SQL join with profit and customer_segment → dataset → bar, line and KPI charts → dashboard with a
 // region filter → save, quit → the workbook changes → reopen: figures refreshed → dark/light → PDF → update check.
 // With no PostgreSQL available (Windows/macOS CI), customers come from a CSV instead and the test says so.
-import { test, expect, type Page } from '@playwright/test'
+import { type Page } from '@playwright/test'
 import { copyFileSync, existsSync, readFileSync, statSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { createServer } from 'node:http'
 import { createHash, randomBytes } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
 import path from 'node:path'
-import { launch, quit, stubDialogs, fixture, tempDir, setSql, chartSeries, MOD } from './helpers'
+import { test, expect, launch, quit, stubDialogs, fixture, tempDir, setSql, chartSeries, MOD } from './helpers'
 import { startPostgres, type Pg } from '../integration/helpers'
 
 const exp = JSON.parse(readFileSync(fixture('expected.json'), 'utf8'))

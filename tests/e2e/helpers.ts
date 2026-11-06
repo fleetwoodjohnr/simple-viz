@@ -1,7 +1,25 @@
-import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
+import { _electron as electron, test as base, type ElectronApplication, type Page } from '@playwright/test'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+
+const open = new Set<ElectronApplication>()
+
+/**
+ * Specs use this `test`: after every test, an app it left running (it failed before quitting) is killed. Otherwise
+ * Playwright's own teardown asks the app to close, the app asks about unsaved changes, and the worker hangs.
+ */
+export const test = base.extend<{ cleanup: void }>({
+  cleanup: [
+    async ({}, use) => {
+      await use()
+      for (const a of open) a.process().kill('SIGKILL')
+      open.clear()
+    },
+    { auto: true }
+  ]
+})
+export { expect } from '@playwright/test'
 
 export interface Launched {
   app: ElectronApplication
@@ -26,7 +44,11 @@ export async function launch(opts: { userData?: string; settings?: Record<string
   if (process.env.SV_DEBUG) {
     app.process().stdout?.on('data', (d) => process.stdout.write(`main: ${d}`))
     app.process().stderr?.on('data', (d) => process.stdout.write(`main! ${d}`))
+  } else if (process.env.CI) {
+    // On CI, engine events (exits, errors) go into the test log: a failure there can't be rerun with SV_DEBUG.
+    app.process().stderr?.on('data', (d) => String(d).split('\n').filter((l) => /\[engine\]|terminate called/.test(l)).forEach((l) => process.stdout.write(`main! ${l}\n`)))
   }
+  open.add(app)
   const page = await app.firstWindow()
   const violations: string[] = []
   page.on('console', (m) => {
@@ -58,6 +80,7 @@ export async function stubDialogs(app: ElectronApplication, d: { save?: string |
 
 /** Every test fails on a Content-Security-Policy violation or an uncaught renderer error. */
 export async function quit(app: ElectronApplication) {
+  open.delete(app)
   await app.evaluate(({ app }) => app.exit(0)).catch(() => {})
   const v = cspViolations.get(app)
   if (v?.length) throw new Error(`CSP violations:\n${v.join('\n')}`)

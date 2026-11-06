@@ -1,9 +1,8 @@
 // The chart builder through the UI: fields onto shelves, recommended types, a calculated field, a filter, a KPI card;
 // drawn values are checked against SQL on the same data, and survive save and reopen.
-import { test, expect } from '@playwright/test'
 import path from 'node:path'
 import { readFileSync } from 'node:fs'
-import { launch, quit, salesProject, chartSeries, tempDir, stubDialogs, sql, MOD } from './helpers'
+import { test, expect, launch, quit, salesProject, chartSeries, tempDir, stubDialogs, sql, MOD } from './helpers'
 
 const exp = JSON.parse(readFileSync(path.resolve('tests/fixtures/expected.json'), 'utf8'))
 const near = (a: number, b: number) => expect(Math.abs(a - b)).toBeLessThan(0.01)

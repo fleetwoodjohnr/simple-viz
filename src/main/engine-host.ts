@@ -23,6 +23,7 @@ export class EngineHost {
 
   start(): Promise<void> {
     if (this.ready) return this.ready
+    this.stopping = false
     this.ready = new Promise((resolve, reject) => {
       const child = utilityProcess.fork(path.join(__dirname, 'engine.js'), [], { serviceName: 'Simple Viz engine', stdio: 'inherit' })
       this.child = child

@@ -23,3 +23,19 @@ it('reboots with a new dataset while the previous refresh is still running', asy
   await e.close()
   void path
 })
+
+// Closing DuckDB under running native work aborted the engine process (an uncaught Napi::Error); a reboot now waits.
+it('reboots while queries are running without taking the process down', async () => {
+  const config: EngineConfig = { projectId: 'q', cacheDir: tmp(), extensionsDir: null, sources: [fileSource('c', fixture('customers.csv'), 'csv', [{ alias: 'customers' }])], datasets: [] }
+  const e = new Engine()
+  await e.boot(config)
+  await e.refresh()
+  for (let round = 0; round < 5; round++) {
+    const slow = [1, 2, 3].map((i) => e.work(() => e.query(round * 10 + i, 'SELECT count(*) AS n FROM range(3000000000) a WHERE a % 7 = 3', {})).then(() => 'done', (err: Error) => err.message))
+    await new Promise((r) => setTimeout(r, 20 * round))
+    await e.boot(config)
+    for (const r of await Promise.all(slow)) expect(r).toMatch(/^(done|The query was cancelled\.)$/)
+    expect((await rows(e, 'SELECT count(*) AS n FROM customers'))[0].n).toBe(120)
+  }
+  await e.close()
+})

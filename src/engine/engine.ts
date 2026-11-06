@@ -103,10 +103,8 @@ export class Engine {
     // Another project: forget the previous one's source states.
     if (this.config?.projectId !== config.projectId) this.status.clear()
     for (const id of [...this.status.keys()]) if (!config.sources.some((s) => s.id === id)) this.status.delete(id)
-    const running = this.refreshing
+    // A refresh of the previous configuration stops at its next step (its connections are interrupted); close waits.
     await this.close()
-    // A refresh of the previous configuration stops at its next step (its connections were interrupted).
-    if (running) await running.catch(() => {})
     this.config = config
     this.attachFailed.clear()
     const cacheDir = path.resolve(config.cacheDir)
@@ -191,8 +189,23 @@ export class Engine {
     await c.run(`ATTACH ${lit(conn)} AS ${ident(`db_${s.id}`)} (TYPE postgres, SECRET ${secret}, READ_ONLY)`)
   }
 
+  /** Engine work a reboot must wait for (renderer requests, exports). */
+  private inflight = new Set<Promise<unknown>>()
+  work<T>(f: () => Promise<T>): Promise<T> {
+    const p = f()
+    this.inflight.add(p)
+    p.then(() => this.inflight.delete(p), () => this.inflight.delete(p))
+    return p
+  }
+
   async close() {
-    for (const conn of [...this.running.values(), ...this.busy]) conn.interrupt()
+    // Interrupted work ends asynchronously. Closing the instance under it aborts the whole process (DuckDB's binding
+    // throws a Napi::Error from a native callback, which nothing can catch), so wait for it, interrupting again
+    // anything that started in the meantime.
+    do {
+      for (const conn of [...this.running.values(), ...this.busy]) conn.interrupt()
+      await Promise.race([Promise.allSettled([...this.inflight, this.refreshing]), new Promise((r) => setTimeout(r, 50))])
+    } while (this.inflight.size || this.refreshing)
     this.running.clear()
     this.busy.clear()
     this.results.clear()

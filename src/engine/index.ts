@@ -37,7 +37,7 @@ async function control(m: ControlMessage): Promise<unknown> {
     case 'refresh':
       return engine.refresh(m.sourceIds, m.force)
     case 'export':
-      return engine.exportTo(m.sql, m.format, m.file)
+      return engine.work(() => engine.exportTo(m.sql, m.format, m.file))
     case 'tables':
       return (await Engine.probe(m.source, extensionsDir)).tables
     case 'sheets': {
@@ -73,13 +73,13 @@ async function onRenderer(p: PortLike, data: unknown) {
     let result: unknown
     switch (req.op) {
       case 'query':
-        result = await engine.query(req.id, req.sql, { params: req.params, keep: req.keep, limit: req.limit })
+        result = await engine.work(() => engine.query(req.id, req.sql, { params: req.params, keep: req.keep, limit: req.limit }))
         break
       case 'page':
-        result = await engine.page(req.resultId, req.offset, req.limit)
+        result = await engine.work(() => engine.page(req.resultId, req.offset, req.limit))
         break
       case 'release':
-        result = await engine.release(req.resultId)
+        result = await engine.work(() => engine.release(req.resultId))
         break
       case 'cancel':
         result = engine.cancel(req.target)
@@ -88,10 +88,10 @@ async function onRenderer(p: PortLike, data: unknown) {
         result = { ...engine.describe(), statuses: engine.statuses() }
         break
       case 'explain':
-        result = await engine.explain(req.sql)
+        result = await engine.work(() => engine.explain(req.sql))
         break
       case 'validate':
-        await engine.gate(req.sql)
+        await engine.work(() => engine.gate(req.sql))
         result = true
         break
     }

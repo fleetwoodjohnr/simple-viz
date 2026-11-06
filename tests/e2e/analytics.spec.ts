@@ -1,10 +1,10 @@
 // The Analytics workspace through the UI: descriptive statistics, regression, forecasting and clustering on the sales
 // data, each checked against SQL computed independently; clusters saved as a dataset; results exported; and a
 // forecast overlay on a line chart.
-import { test, expect, type Page } from '@playwright/test'
+import { type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { launch, quit, salesProject, chartSeries, tempDir, sql, stubDialogs } from './helpers'
+import { test, expect, launch, quit, salesProject, chartSeries, tempDir, sql, stubDialogs } from './helpers'
 
 const cell = async (page: Page, table: number, col: string, row = 0) => {
   const t = page.getByTestId('analysis-table').nth(table)

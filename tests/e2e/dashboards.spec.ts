@@ -1,9 +1,9 @@
 // Dashboard editing and interaction through the UI: add, move and resize tiles, cross-filter by clicking a bar,
 // drill down, text with live values, PNG export, save and reopen.
-import { test, expect, type Page, type Locator } from '@playwright/test'
+import { type Page, type Locator } from '@playwright/test'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import { launch, quit, salesProject, chartSeries, tempDir, stubDialogs, MOD } from './helpers'
+import { test, expect, launch, quit, salesProject, chartSeries, tempDir, stubDialogs, MOD } from './helpers'
 
 const exp = JSON.parse(readFileSync(path.resolve('tests/fixtures/expected.json'), 'utf8'))
 

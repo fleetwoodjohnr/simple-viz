@@ -1,5 +1,4 @@
-import { test, expect } from '@playwright/test'
-import { launch, quit, sql } from './helpers'
+import { test, expect, launch, quit, sql } from './helpers'
 
 test('launches, shows Home, and the engine answers from the page', async () => {
   const { app, page } = await launch()

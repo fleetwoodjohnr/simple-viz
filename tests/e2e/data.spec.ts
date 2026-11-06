@@ -1,8 +1,7 @@
 // M1 workflow through the UI: add an Excel workbook and a CSV, preview, query with SQL, save a dataset, save and reopen.
-import { test, expect } from '@playwright/test'
 import { copyFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
-import { launch, quit, stubDialogs, fixture, tempDir, setSql, sql, MOD } from './helpers'
+import { test, expect, launch, quit, stubDialogs, fixture, tempDir, setSql, sql, MOD } from './helpers'
 
 const shots = process.env.SV_SHOTS
 

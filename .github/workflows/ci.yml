@@ -124,7 +124,8 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           softwareupdate --install-rosetta --agree-to-license || true
-          SV_PACKAGED="$PWD/release/mac/Simple Viz.app/Contents/MacOS/Simple Viz" npx playwright test tests/e2e/smoke.spec.ts
+          # The first launch under Rosetta translates Electron and DuckDB, which can take minutes: allow 10.
+          SV_PACKAGED="$PWD/release/mac/Simple Viz.app/Contents/MacOS/Simple Viz" npx playwright test tests/e2e/smoke.spec.ts --timeout=600000
 
       - name: Validate platform downloads and update feed
         run: node scripts/release.ts verify release

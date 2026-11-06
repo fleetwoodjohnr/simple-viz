@@ -1,9 +1,9 @@
 // Data modeling through the UI: relate two tables (accepting the suggestion), chart a measure of one by a field of the
 // other; and a visual transform with a live preview, its SQL, and "Edit as SQL" that undo reverses.
-import { test, expect, type Page } from '@playwright/test'
+import { type Page } from '@playwright/test'
 import path from 'node:path'
 import { readFileSync } from 'node:fs'
-import { launch, quit, salesProject, chartSeries, tempDir, sql, MOD } from './helpers'
+import { test, expect, launch, quit, salesProject, chartSeries, tempDir, sql, MOD } from './helpers'
 
 const exp = JSON.parse(readFileSync(path.resolve('tests/fixtures/expected.json'), 'utf8'))
 const near = (a: number, b: number) => expect(Math.abs(a - b)).toBeLessThan(0.01)
