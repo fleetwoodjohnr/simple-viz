@@ -95,3 +95,30 @@ function totals(list: Order[]) {
 }
 writeFileSync(path.join(out, 'expected.json'), JSON.stringify({ v1: totals(orders.slice(0, 1000)), v2: totals(orders), customers: customers.length, regions: REGIONS }, null, 2) + '\n')
 console.log(`Wrote fixtures to ${path.relative(process.cwd(), out)}`)
+
+// ---------------------------------------------------------------- statistics fixtures (reference values: stats-ref.py)
+{
+  const r2 = rng(7)
+  const normal = () => Math.sqrt(-2 * Math.log(1 - r2())) * Math.cos(2 * Math.PI * r2())
+  const lines = ['id,x1,x2,y,grp,y2,cat,b,before,after']
+  for (let i = 0; i < 500; i++) {
+    const x1 = normal()
+    const x2 = 10 * r2()
+    const y = 3 + 2 * x1 - 1.5 * x2 + 2 * normal()
+    const grp = ['A', 'B', 'C'][i % 3]
+    const y2 = 10 + { A: 0, B: 1.2, C: 2.5 }[grp]! + 3 * normal() + (grp === 'C' ? 2 * Math.abs(normal()) : 0)
+    const cat = r2() < ({ A: 0.6, B: 0.4, C: 0.2 } as Record<string, number>)[grp] ? 'Red' : r2() < 0.5 ? 'Green' : 'Blue'
+    const b = r2() < 1 / (1 + Math.exp(-(0.5 + 1.2 * x1 - 0.3 * x2))) ? 1 : 0
+    const before = 50 + 10 * normal()
+    const after = before + 0.8 + 3 * normal()
+    const f = (v: number) => v.toFixed(6)
+    lines.push([i + 1, f(x1), i % 97 === 5 ? '' : f(x2), f(y), grp, f(y2), cat, b, f(before), f(after)].join(','))
+  }
+  writeFileSync(path.join(out, 'stats.csv'), lines.join('\n') + '\n')
+  const series = ['month,sales']
+  for (let t = 0; t < 60; t++) {
+    const d = new Date(Date.UTC(2020, t, 1)).toISOString().slice(0, 10)
+    series.push(`${d},${(100 + 2 * t + 15 * Math.sin((2 * Math.PI * t) / 12) + 4 * normal()).toFixed(4)}`)
+  }
+  writeFileSync(path.join(out, 'series.csv'), series.join('\n') + '\n')
+}

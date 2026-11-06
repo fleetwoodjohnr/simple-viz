@@ -5,6 +5,7 @@
 import type { Encodings } from '../../shared/charts'
 import type { Role } from '../query/compile'
 import { type ChartData, type Theme, type Value, col, dims, measures, fmt, esc, pivot, dimmed } from './data'
+import { etsAuto, addPeriods, SEASON, type Grain } from '../stats/analyses'
 
 type Option = Record<string, unknown>
 
@@ -83,9 +84,11 @@ const axisTooltip = (d: ChartData, t: Theme, valueField?: (seriesIndex: number) 
   backgroundColor: t.dark ? '#2a2a30' : '#ffffff',
   borderColor: t.axis,
   textStyle: { color: t.text, fontSize: 12 },
-  formatter: (ps: { axisValueLabel: string; marker: string; seriesName: string; value: Value; seriesIndex: number }[]) =>
-    `<div style="font-weight:600;margin-bottom:4px">${esc(ps[0]?.axisValueLabel ?? '')}</div>` +
+  formatter: (all: { axisValueLabel: string; marker: string; seriesName: string; seriesId?: string; value: Value; seriesIndex: number }[]) => {
+    const ps = all.filter((p) => !p.seriesId?.startsWith('fc-band') && !(p.seriesId?.startsWith('fc-line') && p.value === null))
+    return `<div style="font-weight:600;margin-bottom:4px">${esc(all[0]?.axisValueLabel ?? '')}</div>` +
     ps.map((p) => `<div style="display:flex;justify-content:space-between;gap:16px"><span>${p.marker}${esc(p.seriesName)}</span><b>${esc(fmt(p.value, valueField?.(p.seriesIndex)))}</b></div>`).join('')
+  }
 })
 
 /** Category axis labels: dates formatted at their grain, other values as text. */
@@ -104,6 +107,8 @@ function cartesian(kind: 'bar' | 'line' | 'area' | 'combo'): ChartPlugin['option
     const colorDim = dims(d, 'color')[0]
     const { cats, series } = pivot(d, catDim?.key ?? null, colorDim?.key ?? null, ms.map((m) => m.key))
     const stack = d.options.stack ?? (kind === 'area' && colorDim ? 'stacked' : 'none')
+    const fc = (kind === 'line' || kind === 'area') && stack === 'none' && !horizontal ? forecastSeries(d, t, catDim, cats, series) : null
+    if (fc) cats.push(...fc.cats)
     const pct = stack === 'percent'
     const lineIdx = new Set(kind === 'combo' ? (d.options.lineSeries ?? [1]) : kind === 'bar' ? [] : series.map((_, i) => i))
     const right = new Set(d.options.rightAxis ?? (kind === 'combo' && ms.length > 1 ? [1] : []))
@@ -125,7 +130,7 @@ function cartesian(kind: 'bar' | 'line' | 'area' | 'combo'): ChartPlugin['option
       tooltip: axisTooltip(d, t, (i) => d.fields.find((f) => f.key === series[i]?.measure)),
       xAxis: horizontal ? valueAxes : categoryAxis,
       yAxis: horizontal ? { ...categoryAxis, inverse: true } : valueAxes,
-      series: series.map((s, si) => {
+      series: series.map((s, si): Option => {
         const isLine = lineIdx.has(si) && kind !== 'bar'
         const axisIndex = right.has(si) && hasRight ? 1 : 0
         return {
@@ -146,11 +151,62 @@ function cartesian(kind: 'bar' | 'line' | 'area' | 'combo'): ChartPlugin['option
             const value = pct && v !== null ? v / (totals[ci] || 1) : v
             return { value, row, itemStyle: row && dimmed(d, row) ? { opacity: 0.25 } : undefined }
           }),
-          markLine: si === 0 ? refLines(d, t, s.values) : undefined
+          markLine: si === 0 ? refLines(d, t, s.values) : undefined,
+          markArea: si === 0 ? refBands(d, t, s.values) : undefined
         }
-      })
+      }).concat(fc?.series ?? [])
     }
   }
+}
+
+/** Shaded mean ± k standard deviations (sample) of the plotted values. */
+function refBands(d: ChartData, t: Theme, values: (number | null)[]): Option | undefined {
+  const bands = (d.options.refLines ?? []).filter((l) => l.kind === 'band')
+  const nums = values.filter((v): v is number => v !== null)
+  if (!bands.length || nums.length < 2) return undefined
+  const mean = nums.reduce((a, b) => a + b, 0) / nums.length
+  const sd = Math.sqrt(nums.reduce((a, b) => a + (b - mean) ** 2, 0) / (nums.length - 1))
+  return {
+    silent: true,
+    itemStyle: { color: t.accent, opacity: 0.1 },
+    label: { color: t.text2, position: 'insideTopRight' },
+    data: bands.map((b) => [{ yAxis: mean - (b.value ?? 1) * sd, name: b.label ?? `±${b.value ?? 1} SD` }, { yAxis: mean + (b.value ?? 1) * sd }])
+  }
+}
+
+/**
+ * Forecast overlay for a date axis at day/week/month/quarter/year grain: each series (up to 8) is fitted with the
+ * analytics module's exponential smoothing (lowest AICc), drawn dashed with its prediction interval as a band.
+ * Missing periods inside the range are filled with 0 so the series is regular.
+ */
+function forecastSeries(d: ChartData, t: Theme, catDim: ChartData['fields'][number] | undefined, cats: Value[], series: { name: string; values: (number | null)[] }[]) {
+  const f = d.options.forecast
+  const grain = catDim?.ref.grain as Grain | undefined
+  if (!f?.periods || !catDim || !isDateT(catDim.type) || !grain || !(grain in SEASON) || cats.length < 4 || cats.some((c) => typeof c !== 'string')) return null
+  const iso = (cats as string[]).map((c) => c.slice(0, 10))
+  const sorted = iso.every((c, i) => !i || c > iso[i - 1])
+  if (!sorted) return null
+  // Regular periods from the first to the last category.
+  const all: string[] = [iso[0]]
+  while (all[all.length - 1] < iso[iso.length - 1] && all.length < 10_000) all.push(addPeriods(iso[0], grain, all.length))
+  if (all[all.length - 1] !== iso[iso.length - 1] || all.length !== iso.length) return null // gaps or misaligned periods: draw no forecast
+  const h = Math.max(1, Math.min(120, f.periods))
+  const level = f.level ?? 0.95
+  const n = cats.length
+  const pad = (k: number) => new Array<null>(k).fill(null)
+  const out: Option[] = []
+  series.slice(0, 8).forEach((s, si) => {
+    const y = s.values.map((v) => v ?? 0)
+    const r = etsAuto(y, SEASON[grain], h, level)
+    const color = t.palette[si % t.palette.length]
+    const lo = r.forecast.map((p) => p.lo)
+    out.push(
+      { id: `fc-band-lo-${si}`, name: `${s.name} interval`, type: 'line', stack: `fc${si}`, data: [...pad(n), ...lo], lineStyle: { opacity: 0 }, showSymbol: false, silent: true },
+      { id: `fc-band-hi-${si}`, name: `${s.name} interval`, type: 'line', stack: `fc${si}`, data: [...pad(n), ...r.forecast.map((p) => p.hi - p.lo)], lineStyle: { opacity: 0 }, areaStyle: { color, opacity: 0.15 }, showSymbol: false, silent: true },
+      { id: `fc-line-${si}`, name: `${s.name} forecast`, type: 'line', data: [...pad(n - 1), y[n - 1], ...r.forecast.map((p) => p.mean)], lineStyle: { color, type: 'dashed', width: 2 }, itemStyle: { color }, showSymbol: false }
+    )
+  })
+  return { cats: Array.from({ length: h }, (_, j) => addPeriods(iso[n - 1], grain, j + 1)), series: out }
 }
 
 /** Reference lines: constant, average, median, min, max, or a least-squares trend line. */

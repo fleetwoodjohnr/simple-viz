@@ -589,7 +589,7 @@ function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fie
   const type = plugin(chart.type)
   const cartesian = ['bar', 'line', 'area', 'combo'].includes(chart.type)
   const lines = o.refLines ?? []
-  const toggleLine = (kind: 'average' | 'median' | 'trend' | 'max' | 'min') => setO({ refLines: lines.some((l) => l.kind === kind) ? lines.filter((l) => l.kind !== kind) : [...lines, { id: kind, kind }] })
+  const toggleLine = (kind: 'average' | 'median' | 'trend' | 'max' | 'min' | 'band') => setO({ refLines: lines.some((l) => l.kind === kind) ? lines.filter((l) => l.kind !== kind) : [...lines, { id: kind, kind }] })
   return (
     <aside className="w-[236px] shrink-0 overflow-y-auto border-l border-border bg-panel p-3" aria-label="Chart type and format">
       <div className="mb-1.5 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-text-3">
@@ -672,12 +672,22 @@ function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fie
           <div>
             <span className="mb-1 block text-[12px] font-medium text-text-2">Analytics</span>
             <div className="flex flex-wrap gap-1">
-              {(chart.type === 'scatter' ? (['trend'] as const) : (['average', 'median', 'max', 'min', 'trend'] as const)).map((k) => (
+              {(chart.type === 'scatter' ? (['trend'] as const) : (['average', 'median', 'max', 'min', 'trend', 'band'] as const)).map((k) => (
                 <button key={k} onClick={() => toggleLine(k)} aria-pressed={lines.some((l) => l.kind === k)} className={cx('h-6 rounded-md border px-2 text-[11.5px] capitalize', lines.some((l) => l.kind === k) ? 'border-accent bg-accent-soft text-accent-ink' : 'border-border text-text-2 hover:bg-hover')} data-testid={`refline-${k}`}>
-                  {k === 'trend' ? 'Trend line' : `${k} line`}
+                  {k === 'trend' ? 'Trend line' : k === 'band' ? '±1 SD band' : `${k} line`}
                 </button>
               ))}
             </div>
+            {(chart.type === 'line' || chart.type === 'area') && chart.enc.x[0]?.grain && chart.enc.x[0].grain !== 'exact' && (
+              <label className="mt-2 flex items-center gap-2 text-[12px] text-text-2">
+                <input type="checkbox" className="size-3.5 accent-[var(--accent)]" checked={!!o.forecast} onChange={(e) => setO({ forecast: e.target.checked ? { periods: 6 } : undefined })} data-testid="forecast-toggle" />
+                Forecast
+                {o.forecast && (
+                  <input type="number" min={1} max={120} aria-label="Periods to forecast" className={cx(inputCls, 'h-6 w-14 px-1.5 text-[12px]')} value={o.forecast.periods} onChange={(e) => setO({ forecast: { ...o.forecast, periods: Math.max(1, Number(e.target.value) || 1) } })} data-testid="forecast-periods" />
+                )}
+                {o.forecast && <span className="text-text-3">periods</span>}
+              </label>
+            )}
           </div>
         )}
       </div>

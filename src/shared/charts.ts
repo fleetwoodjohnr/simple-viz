@@ -59,12 +59,11 @@ export interface ChartFilter {
 
 export interface ReferenceLine {
   id: string
-  kind: 'constant' | 'average' | 'median' | 'min' | 'max' | 'trend' | 'param'
+  /** band: shaded mean ± value standard deviations (default 1), Tableau's distribution band. */
+  kind: 'constant' | 'average' | 'median' | 'min' | 'max' | 'trend' | 'param' | 'band'
   value?: number
   param?: string
   label?: string
-  /** For trend lines: confidence band (0.95). */
-  band?: number
 }
 
 export interface ChartOptions {
@@ -83,6 +82,8 @@ export interface ChartOptions {
   /** Histogram bin count. */
   bins?: number
   refLines?: ReferenceLine[]
+  /** Line/area over a date axis: exponential-smoothing forecast of each series, with a prediction interval. */
+  forecast?: { periods: number; level?: number }
   /** Combo chart: series index (from y) drawn as lines instead of bars, and on the right axis. */
   lineSeries?: number[]
   rightAxis?: number[]

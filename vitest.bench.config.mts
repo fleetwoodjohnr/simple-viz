@@ -4,5 +4,5 @@ import { resolve } from 'node:path'
 
 export default defineConfig({
   resolve: { alias: { '@': resolve(import.meta.dirname, 'src') } },
-  test: { include: ['tests/perf/**/*.test.ts'], environment: 'node', testTimeout: 300_000 }
+  test: { include: ['tests/perf/**/*.test.ts'], environment: 'node', testTimeout: 300_000, reporters: ['verbose'], silent: false }
 })

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { plugin, recommend } from '@/core/charts/plugins'
 import { LIGHT, pivot, fmt, esc, type ChartData } from '@/core/charts/data'
 import type { OutField } from '@/core/query/compile'
+import { addPeriods } from '@/core/stats/analyses'
 
 const f = (key: string, field: string, kind: 'dim' | 'measure', role: OutField['role'], type = kind === 'dim' ? 'VARCHAR' : 'DOUBLE', extra: Partial<OutField['ref']> = {}): OutField => ({ key, role, kind, title: kind === 'measure' ? `Sum of ${field}` : field, type, ref: { field, ...(kind === 'measure' ? { agg: 'sum' } : {}), ...extra } })
 
@@ -102,5 +103,45 @@ describe('dashboard filtering', () => {
     expect(toggleMark(toggleMark([], m), m)).toEqual([])
     expect(dynamicText('Sales in {region}', {}, [m])).toBe('Sales in Virginia')
     expect(dynamicText('Sales in {region}', {}, [])).toBe('Sales in All')
+  })
+})
+
+describe('chart analytics overlays', () => {
+  const month = f('d0', 'order_date', 'dim', 'x', 'DATE', { grain: 'month' })
+  const series = (n: number, skip = -1): ChartData => ({
+    fields: [month, f('m0', 'revenue', 'measure', 'y')],
+    rows: Array.from({ length: n }, (_, i) => [addPeriods('2024-01-01', 'month', i), 100 + 3 * i + 10 * Math.sin(i)]).filter((_, i) => i !== skip),
+    truncated: false,
+    options: { forecast: { periods: 6 } }
+  })
+  type O = { xAxis: { data: string[] }; series: { id?: string; data: unknown[]; markArea?: { data: { yAxis: number }[][] } }[] }
+
+  it('adds periods, clamping month ends', () => {
+    expect(addPeriods('2024-01-31', 'month', 1)).toBe('2024-02-29')
+    expect(addPeriods('2024-11-01', 'quarter', 1)).toBe('2025-02-01')
+    expect(addPeriods('2024-12-30', 'week', 1)).toBe('2025-01-06')
+    expect(addPeriods('2024-02-29', 'year', 1)).toBe('2025-02-28')
+  })
+
+  it('forecast extends the date axis and adds a dashed series with its interval', () => {
+    const o = plugin('line').option!(series(30), LIGHT) as O
+    expect(o.xAxis.data).toHaveLength(36)
+    const line = o.series.find((s) => s.id === 'fc-line-0')!
+    expect(line.data).toHaveLength(36)
+    expect(line.data.slice(30).every((v) => typeof v === 'number')).toBe(true)
+    expect(o.series.filter((s) => s.id?.startsWith('fc-band'))).toHaveLength(2)
+  })
+
+  it('no forecast when periods are missing, the grain is not a date grain, or the chart is a bar chart', () => {
+    expect((plugin('line').option!(series(30, 12), LIGHT) as O).series.some((s) => s.id?.startsWith('fc-'))).toBe(false)
+    expect((plugin('bar').option!(series(30), LIGHT) as O).series.some((s) => s.id?.startsWith('fc-'))).toBe(false)
+  })
+
+  it('±1 SD band spans mean ± sample standard deviation', () => {
+    const d: ChartData = { ...series(4), rows: [['2024-01-01', 1], ['2024-02-01', 2], ['2024-03-01', 3], ['2024-04-01', 4]], options: { refLines: [{ id: 'b', kind: 'band' }] } }
+    const area = (plugin('line').option!(d, LIGHT) as O).series[0].markArea!.data[0]
+    const sd = Math.sqrt(5 / 3)
+    expect(area[0].yAxis).toBeCloseTo(2.5 - sd, 10)
+    expect(area[1].yAxis).toBeCloseTo(2.5 + sd, 10)
   })
 })

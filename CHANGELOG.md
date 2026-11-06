@@ -21,5 +21,11 @@
 - **Data modeling.** Relate tables by shared fields and chart across them without double-counting (Tableau-style
   relationships, several fact tables). Visual transforms — filter, calculate, join, group, pivot, unpivot and more —
   with a live preview and the equivalent SQL. Date tables and hierarchies.
+- **Statistics.** An Analytics workspace: descriptive statistics, missing values, correlation, anomalies, t-tests
+  (one-sample, Welch, paired), ANOVA, chi-square, Mann–Whitney, Kruskal–Wallis, simple/multiple/polynomial
+  regression, logistic regression, exponential-smoothing forecasts (trend and season chosen by AICc, prediction
+  intervals), k-means clustering (save the clusters as a dataset) and principal components. Each result has a
+  chart, a plain-language summary, its assumptions, and the rows used. Validated against SciPy and statsmodels;
+  regression on 10 million rows in under 2 seconds. Forecast overlays and standard-deviation bands on charts.
 - **Secure by design.** Read-only SQL, locked-down engine, passwords in the system keychain, approval before a project
   reads new sources.

@@ -12,7 +12,7 @@ import { DataView } from './Data'
 import { SqlEditor } from './SqlEditor'
 import { ChartBuilder } from './charts/ChartBuilder'
 import { DashboardsView } from './dashboards/DashboardsView'
-import { Placeholder } from './Placeholder'
+import { Analytics } from './Analytics'
 import { Dialogs } from './Dialogs'
 import { TooltipProvider } from '../ui'
 
@@ -126,7 +126,7 @@ function Workspace() {
     case 'dashboards':
       return <DashboardsView />
     default:
-      return <Placeholder workspace={workspace} />
+      return <Analytics />
   }
 }
 

@@ -1,6 +1,6 @@
 # Implementation status
 
-_Last updated: 2026-11-05 · M0–M4 complete (with the limits listed), M1 has items pending tests; M5–M9 not started ·
+_Last updated: 2026-11-05 · M0–M5 complete (with the limits listed), M1 has items pending tests; M6–M9 not started ·
 version 0.1.0 (unreleased) · verified with automated tests on Linux (Fedora 44); CI builds, packages and tests on
 Linux, Windows and macOS._
 
@@ -11,9 +11,10 @@ Linux, Windows and macOS._
 | Suite | Result |
 |---|---|
 | `npm run typecheck` | ✅ clean |
-| `npm test` (unit) | ✅ 62 tests |
-| `npm run test:integration` (real DuckDB, files, PostgreSQL 17 in podman) | ✅ 72 tests |
-| `npm run e2e:headless` (the real app) | ✅ acceptance (24 steps), charts, dashboards, data, model, PostgreSQL, smoke; updater (packaged only) |
+| `npm test` (unit) | ✅ 66 tests |
+| `npm run test:integration` (real DuckDB, files, PostgreSQL 17 in podman) | ✅ 82 tests |
+| `npm run e2e:headless` (the real app) | ✅ acceptance (24 steps), analytics, charts, dashboards, data, model, PostgreSQL, smoke; updater (packaged only) |
+| `npm run bench` (statistics on 10M rows) | ✅ see M5 |
 | Packaged Linux build (`electron-builder --linux dir`) + e2e | ✅ |
 | CI: Linux, Windows, macOS (arm64; Intel under Rosetta) build, test, package, test the packaged app; deb/rpm install on Ubuntu 22.04/24.04, Debian 12, Fedora 44; npm audit; CodeQL | ✅ |
 | PostgreSQL tests on Windows and macOS CI | ⏭ skipped (no podman there); the acceptance test uses a CSV for customers and says so |
@@ -126,6 +127,41 @@ Linux, Windows and macOS._
 - A model can't contain the same table twice (role-playing dimensions); loops are reported, not resolved.
 - Transform steps are applied in the order listed; reordering a step doesn't rewrite the steps after it.
 
+## M5 — Statistics and forecasting ✅
+
+Reference values come from SciPy 1.18 and statsmodels 0.15 (`scripts/stats-ref.py` → `tests/fixtures/stats-ref.json`,
+committed), on a 500-row fixture with known structure and a 60-month seasonal series.
+
+### Done
+
+| Feature | Test |
+|---|---|
+| Analytics workspace: pick an analysis, data and variables; result tables, chart, plain-language summary, assumptions, rows used and left out; CSV export | e2e `analytics` |
+| Descriptive statistics (mean with CI, median, mode, sd, variance, percentiles, bias-corrected skewness and excess kurtosis, IQR outliers, histogram with normal curve) | integration `stats` vs SciPy; e2e `analytics` vs SQL |
+| Missing values per column | integration `stats` |
+| Pearson correlation matrix with p-values and covariances | integration `stats` vs SciPy |
+| t-tests: one-sample, Welch two-sample (with Cohen's d), paired | integration `stats` vs SciPy |
+| One-way ANOVA (with η²) | integration `stats` vs SciPy |
+| Chi-square test of independence (with Cramér's V, small-expected-count warning) | integration `stats` vs SciPy |
+| Mann–Whitney U (tie and continuity corrections) and Kruskal–Wallis | integration `stats` vs SciPy |
+| Linear regression — simple, multiple, polynomial — from sufficient statistics over every row: coefficients, SE, t, p, CI, R², adjusted R², F, residual quantiles and plot; listwise deletion reported | integration `stats` vs statsmodels; e2e `analytics` vs DuckDB `regr_*` |
+| Logistic regression (IRLS on a reproducible sample of up to 100,000 rows): coefficients, SE, odds ratios, McFadden R², likelihood-ratio test, accuracy | integration `stats` vs statsmodels |
+| Forecasting: exponential smoothing (level, trend, additive season) with the model chosen by AICc and prediction intervals; missing periods filled | integration `stats` (recursion and forecasts equal statsmodels to 1e-9 for given parameters; fitted SSE within 5% of statsmodels' optimum); e2e `analytics` |
+| K-means (standardized, k-means++ seeded, best of 5; k chosen by Calinski–Harabasz); save clusters as a dataset that labels every row | integration `stats`, e2e `analytics` |
+| Principal components (correlation matrix, eigenvalues, loadings, Kaiser's rule) | integration `stats` vs NumPy |
+| Anomalies by z-score or IQR, with the most extreme rows | integration `stats` |
+| Chart overlays: forecast on line/area charts over a date axis (dashed, with its interval); ±1 SD band; existing average/median/min/max/trend lines | unit `charts`, e2e `analytics` |
+| 10 million rows: describe 2.7 s, regression 1.7 s, logistic 1.8 s; extract 1.1 s (AMD Ryzen 3 3200U × 4, 13.6 GB, Fedora 44; 484 MB RSS) | `npm run bench` (asserts the known coefficients are recovered) |
+
+### Known limitations
+
+- ARIMA is not implemented; multiplicative seasonality and damped trends aren't either (additive exponential smoothing only).
+- Logistic regression, k-means and the residual plot use a reproducible sample (100,000 / 20,000 / 2,000 rows); the
+  workspace says so in the assumptions.
+- Regression predictors must be numeric (no automatic dummy coding of categories yet).
+- Forecast overlays need regular periods: a chart with a missing month, or sorted by value, draws no forecast.
+- Statistics run on a dataset or table, not on a model.
+
 ## Next
 
-M5 — statistics and forecasting.
+M6 — advanced and geographic charts.
