@@ -4,6 +4,7 @@
 import { get, set, toast, updateSettings, type Workspace } from '../state/store'
 import * as P from '../state/project'
 import { SHORTCUTS } from './shortcuts'
+import { DATA_EXTENSIONS } from '@/shared/project'
 
 export interface Command {
   id: string
@@ -146,6 +147,6 @@ def({ id: 'tools.about', label: 'About Simple Viz', run: () => set({ dialog: { k
 def({ id: 'tools.checkUpdates', label: 'Check for updates', run: () => window.simpleViz.checkForUpdates() })
 
 export async function pickDataFiles() {
-  const paths = await window.simpleViz.pickFiles({ name: 'Data files', extensions: ['xlsx', 'xlsm', 'ods', 'csv', 'tsv', 'txt', 'json', 'jsonl', 'ndjson', 'parquet', 'xml', 'sqlite', 'sqlite3', 'db', 'duckdb'] }, true)
+  const paths = await window.simpleViz.pickFiles({ name: 'Data files', extensions: DATA_EXTENSIONS }, true)
   if (paths.length) await P.addFiles(paths)
 }

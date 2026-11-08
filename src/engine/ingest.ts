@@ -6,6 +6,7 @@ import { promises as fs } from 'node:fs'
 import { dateValue, timestampValue, type DuckDBConnection } from '@duckdb/node-api'
 import type { ResolvedSource } from '../shared/engine-protocol'
 import { isServer, isRemotePath } from '../shared/project'
+import { readArrow } from './arrow'
 import { readWorkbook, tableRows, type SheetFormat } from '../core/sheets/rows'
 import type { Workbook } from '../core/sheets/model/workbook'
 import { ident, lit } from './sql'
@@ -45,6 +46,10 @@ export async function extractSelect(conn: DuckDBConnection, s: ResolvedSource, r
         return { select: `SELECT * FROM read_json_auto(${p}, format = 'newline_delimited')`, cleanup: none }
       case 'parquet':
         return { select: `SELECT * FROM read_parquet(${p})`, cleanup: none }
+      case 'arrow': {
+        const bytes = isRemotePath(s.path) ? await readBytes(conn, s.path!) : await readLocal(s.path!)
+        return stageColumns(conn, readArrow(bytes))
+      }
       case 'xlsx':
       case 'ods':
       case 'xml2003':
@@ -73,6 +78,17 @@ async function stageSheet(conn: DuckDBConnection, s: ResolvedSource, ref: string
   })()
   const table = tableRows(await memo.book, ref, s.header !== false)
   if (!table.columns.length) throw new Error(`“${ref ?? 'The first sheet'}” is empty.`)
+  return stageColumns(conn, table)
+}
+
+async function readLocal(file: string) {
+  const st = await fs.stat(file)
+  if (st.size > MAX_SHEET_BYTES) throw new Error('The file is larger than 512 MB.')
+  return new Uint8Array(await fs.readFile(file))
+}
+
+/** Typed columns (spreadsheet tables, Arrow files) into a staging table with an appender; the caller copies it on. */
+async function stageColumns(conn: DuckDBConnection, table: { columns: { name: string; type: string; values: unknown[] }[]; rowCount: number }) {
   const stage = `__stage_${process.pid}_${++stageSeq}`
   const q = `memory.main.${ident(stage)}`
   await conn.run(`CREATE TABLE ${q} (${table.columns.map((c) => `${ident(c.name)} ${c.type}`).join(', ')})`)

@@ -7,7 +7,7 @@ import type { FeatureCollection } from '../core/charts/geo'
 
 export const PROJECT_SCHEMA_VERSION = 1
 
-export type FileFormat = 'csv' | 'tsv' | 'json' | 'jsonl' | 'parquet' | 'xlsx' | 'ods' | 'xml2003'
+export type FileFormat = 'csv' | 'tsv' | 'json' | 'jsonl' | 'parquet' | 'arrow' | 'xlsx' | 'ods' | 'xml2003'
 export type DbKind = 'postgres' | 'mysql' | 'sqlite' | 'duckdb'
 /** Database servers (host, port, user, password), as opposed to database files. */
 export type ServerKind = 'postgres' | 'mysql'
@@ -177,6 +177,10 @@ export const FILE_FORMATS: Record<string, FileFormat> = {
   jsonl: 'jsonl',
   ndjson: 'jsonl',
   parquet: 'parquet',
+  arrow: 'arrow',
+  feather: 'arrow',
+  ipc: 'arrow',
+  arrows: 'arrow',
   xlsx: 'xlsx',
   xlsm: 'xlsx',
   xltx: 'xlsx',
