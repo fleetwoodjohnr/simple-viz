@@ -131,7 +131,8 @@ def({ id: 'nav.dashboards', label: 'Go to Dashboards', group: 'go', global: true
 def({ id: 'nav.analytics', label: 'Go to Analytics', group: 'go', global: true, needsProject: true, run: go('analytics') })
 
 def({ id: 'data.add', label: 'Add data file…', keywords: 'import excel csv parquet json sqlite duckdb', run: () => pickDataFiles() })
-def({ id: 'data.connect', label: 'Connect to PostgreSQL…', keywords: 'database server', run: () => set({ dialog: { kind: 'connect-db', kind2: 'postgres' } }) })
+def({ id: 'data.connect', label: 'Connect to PostgreSQL…', keywords: 'database server postgres', run: () => set({ dialog: { kind: 'connect-db', kind2: 'postgres' } }) })
+def({ id: 'data.connect-mysql', label: 'Connect to MySQL or MariaDB…', keywords: 'database server mysql mariadb', run: () => set({ dialog: { kind: 'connect-db', kind2: 'mysql' } }) })
 def({ id: 'data.refresh', label: 'Refresh all data', needsProject: true, keywords: 'reload update', run: () => P.refreshSources(undefined, true) })
 
 def({ id: 'view.theme', label: 'Toggle dark mode', global: true, run: () => updateSettings({ theme: get().dark ? 'light' : 'dark' }) })

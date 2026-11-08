@@ -5,6 +5,7 @@
 import { promises as fs } from 'node:fs'
 import { dateValue, timestampValue, type DuckDBConnection } from '@duckdb/node-api'
 import type { ResolvedSource } from '../shared/engine-protocol'
+import { isServer } from '../shared/project'
 import { readWorkbook, tableRows, type SheetFormat } from '../core/sheets/rows'
 import type { Workbook } from '../core/sheets/model/workbook'
 import { ident, lit } from './sql'
@@ -16,7 +17,7 @@ export interface Stat {
 
 /** Size and modification time of a file-backed source (null for servers). */
 export async function sourceStat(s: ResolvedSource): Promise<Stat | null> {
-  if (!s.path || s.kind === 'postgres') return null
+  if (!s.path || isServer(s.kind)) return null
   const st = await fs.stat(s.path)
   if (!st.isFile()) throw new Error(`ENOENT: not a file: ${s.path}`)
   return { size: st.size, mtime: Math.round(st.mtimeMs) }
@@ -54,8 +55,8 @@ export async function extractSelect(conn: DuckDBConnection, s: ResolvedSource, r
   const db = ident(`db_${s.id}`)
   const r = ref ?? ''
   const dot = r.indexOf('.')
-  if (s.kind === 'postgres') {
-    const [schema, table] = dot > 0 ? [r.slice(0, dot), r.slice(dot + 1)] : ['public', r]
+  if (s.kind === 'postgres' || s.kind === 'mysql') {
+    const [schema, table] = dot > 0 ? [r.slice(0, dot), r.slice(dot + 1)] : [s.kind === 'mysql' ? (s.database ?? '') : 'public', r]
     return { select: `SELECT * FROM ${db}.${ident(schema)}.${ident(table)}`, cleanup: none }
   }
   if (s.kind === 'duckdb' && dot > 0) return { select: `SELECT * FROM ${db}.${ident(r.slice(0, dot))}.${ident(r.slice(dot + 1))}`, cleanup: none }

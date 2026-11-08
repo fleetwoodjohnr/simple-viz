@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { DEFAULT_SETTINGS, type RecentFile, type RecoveryEntry, type Settings } from '@/shared/ipc-types'
-import type { Project } from '@/shared/project'
+import type { Project, ServerKind } from '@/shared/project'
 import type { RelationInfo, SourceStatus } from '@/shared/engine-protocol'
 
 export type Workspace = 'home' | 'data' | 'sql' | 'charts' | 'dashboards' | 'analytics'
@@ -13,7 +13,7 @@ export type Dialog =
   | { kind: 'about' }
   | { kind: 'palette' }
   | { kind: 'add-data' }
-  | { kind: 'connect-db'; kind2: 'postgres' }
+  | { kind: 'connect-db'; kind2: ServerKind }
   | { kind: 'sheet-picker'; path: string; sourceId?: string }
   | { kind: 'relink'; sourceId: string }
   | { kind: 'message'; title: string; body: string }

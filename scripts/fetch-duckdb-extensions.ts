@@ -11,7 +11,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { gunzipSync } from 'node:zlib'
 import path from 'node:path'
 
-export const EXTENSIONS = ['postgres_scanner', 'sqlite_scanner']
+export const EXTENSIONS = ['postgres_scanner', 'sqlite_scanner', 'mysql_scanner', 'httpfs', 'azure']
 const PLATFORMS: Record<string, string> = {
   'linux-x64': 'linux_amd64',
   'linux-arm64': 'linux_arm64',

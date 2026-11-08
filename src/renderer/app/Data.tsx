@@ -23,7 +23,7 @@ import { newId } from '@/core/project/sviz'
 const q = (s: string) => `"${s.replace(/"/g, '""')}"`
 
 function sourceIcon(s: Source) {
-  if (s.kind === 'postgres') return <Server className="size-4" />
+  if (s.kind === 'postgres' || s.kind === 'mysql') return <Server className="size-4" />
   if (s.kind === 'sqlite' || s.kind === 'duckdb') return <Database className="size-4" />
   if (s.kind === 'file' && ['xlsx', 'ods', 'xml2003'].includes(s.format)) return <FileSpreadsheet className="size-4" />
   return <FileText className="size-4" />
@@ -71,6 +71,9 @@ export function DataView() {
                 <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect')} data-testid="add-postgres">
                   PostgreSQL database
                 </MenuItem>
+                <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-mysql')} data-testid="add-mysql">
+                  MySQL or MariaDB database
+                </MenuItem>
                 <MenuSep />
                 <MenuItem icon={<SquareTerminal />} onSelect={() => openInSql('', { asDataset: true })}>
                   Dataset from SQL
@@ -106,7 +109,7 @@ export function DataView() {
                       {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
                     </button>
                     <span className={cx('text-text-3', st?.state === 'error' && 'text-danger')}>{sourceIcon(s)}</span>
-                    <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium" title={s.kind === 'postgres' ? `${s.user}@${s.host}:${s.port}/${s.database}` : s.path}>
+                    <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium" title={s.kind === 'postgres' || s.kind === 'mysql' ? `${s.user}@${s.host}:${s.port}/${s.database ?? ''}` : s.path}>
                       {s.name}
                     </span>
                     {st?.state === 'checking' ? <RefreshCw className="size-3.5 animate-spin text-text-3" /> : st?.state === 'error' ? <AlertTriangle className="size-3.5 text-danger" aria-label="Refresh failed" /> : null}
@@ -457,7 +460,7 @@ function SourceMenu({ s }: { s: Source }) {
           <MenuCheck checked={s.refresh.onOpen} onCheckedChange={(v) => setPolicy({ onOpen: !!v })}>
             When the project opens
           </MenuCheck>
-          {s.kind !== 'postgres' && (
+          {s.kind !== 'postgres' && s.kind !== 'mysql' && (
             <MenuCheck checked={s.refresh.watch} onCheckedChange={(v) => setPolicy({ watch: !!v })}>
               When the file changes
             </MenuCheck>
@@ -472,7 +475,7 @@ function SourceMenu({ s }: { s: Source }) {
             </MenuCheck>
           ))}
         </SubMenu>
-        {s.kind === 'postgres' && (
+        {(s.kind === 'postgres' || s.kind === 'mysql') && (
           <MenuItem icon={<Server />} onSelect={() => P.updateSource(s.id, { mode: s.mode === 'live' ? 'extract' : 'live' })}>
             {s.mode === 'live' ? 'Switch to extract (local copy)' : 'Switch to live queries'}
           </MenuItem>

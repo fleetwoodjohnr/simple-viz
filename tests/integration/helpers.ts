@@ -117,3 +117,54 @@ async function seed(pg: Pg) {
 export function pgSource(pg: Pg, mode: 'extract' | 'live', tables = [{ alias: 'customers', ref: 'public.customers' }]): ResolvedSource {
   return { id: `pg${mode}`, kind: 'postgres', host: pg.host, port: pg.port, user: pg.user, password: pg.password, database: pg.database, sslmode: 'disable', mode, timeoutSec: 10, tables }
 }
+
+// ---------------------------------------------------------------- MySQL / MariaDB
+
+export type My = Omit<Pg, 'restart'>
+
+/** Runs SQL on the server through DuckDB's mysql extension (no client needed). */
+export async function myExec(my: My, sql: string) {
+  const i = await DuckDBInstance.create(':memory:', { autoinstall_known_extensions: 'false', autoload_known_extensions: 'false' })
+  const c = await i.connect()
+  try {
+    await c.run(`LOAD '${path.join(extensionsDir, 'mysql_scanner.duckdb_extension').replace(/'/g, "''")}'`)
+    await c.run(`CREATE TEMPORARY SECRET s (TYPE mysql, HOST '${my.host}', PORT ${my.port}, USER '${my.user}', PASSWORD '${my.password}', DATABASE '${my.database}')`)
+    await c.run(`ATTACH '' AS my (TYPE mysql, SECRET s)`)
+    await c.run(`CALL mysql_execute('my', '${sql.replace(/'/g, "''")}')`)
+  } finally {
+    c.closeSync()
+    i.closeSync()
+  }
+}
+
+/** MariaDB to test against: SV_MY_HOST, or a throwaway podman container; null when neither exists. */
+export async function startMysql(): Promise<My | null> {
+  let my: My
+  if (process.env.SV_MY_HOST) my = { host: process.env.SV_MY_HOST, port: Number(process.env.SV_MY_PORT ?? 3306), user: process.env.SV_MY_USER ?? 'root', password: process.env.SV_MY_PASSWORD ?? '', database: process.env.SV_MY_DATABASE ?? 'shop', stop() {} }
+  else {
+    if (!hasPodman() || process.env.SV_NO_PODMAN || !existsSync(path.join(extensionsDir, 'mysql_scanner.duckdb_extension'))) return null
+    const name = `sv-my-${process.pid}-${Date.now()}`
+    const port = 20000 + Math.floor(Math.random() * 20000)
+    execFileSync('podman', ['run', '-d', '--name', name, '-p', `127.0.0.1:${port}:3306`, '-e', 'MARIADB_ROOT_PASSWORD=sv-secret', '-e', 'MARIADB_DATABASE=shop', 'docker.io/library/mariadb:11'], { stdio: 'ignore' })
+    my = { name, host: '127.0.0.1', port, user: 'root', password: 'sv-secret', database: 'shop', stop: () => void execFileSync('podman', ['rm', '-f', name], { stdio: 'ignore' }) }
+  }
+  const t0 = Date.now()
+  for (;;) {
+    try {
+      await myExec(my, 'SELECT 1')
+      break
+    } catch (e) {
+      if (Date.now() - t0 > 90_000) throw e
+      await new Promise((r) => setTimeout(r, 1000))
+    }
+  }
+  await myExec(my, 'DROP TABLE IF EXISTS customers')
+  await myExec(my, 'CREATE TABLE customers (customer_id INT PRIMARY KEY, customer_name VARCHAR(100) NOT NULL, region VARCHAR(40) NOT NULL, segment VARCHAR(40) NOT NULL)')
+  const rows = readFileSync(fixture('customers.csv'), 'utf8').trim().split('\n').slice(1).map((l) => l.split(','))
+  await myExec(my, `INSERT INTO customers VALUES ${rows.map((r) => `(${r[0]}, '${r[1]}', '${r[2]}', '${r[3]}')`).join(', ')}`)
+  return my
+}
+
+export function mySource(my: My, mode: 'extract' | 'live', password = my.password): ResolvedSource {
+  return { id: `my${mode}`, kind: 'mysql', host: my.host, port: my.port, user: my.user, password, database: my.database, sslmode: 'disable', mode, timeoutSec: 10, tables: [{ alias: 'my_customers', ref: 'customers' }] }
+}

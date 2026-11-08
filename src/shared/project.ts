@@ -8,7 +8,14 @@ import type { FeatureCollection } from '../core/charts/geo'
 export const PROJECT_SCHEMA_VERSION = 1
 
 export type FileFormat = 'csv' | 'tsv' | 'json' | 'jsonl' | 'parquet' | 'xlsx' | 'ods' | 'xml2003'
-export type DbKind = 'postgres' | 'sqlite' | 'duckdb'
+export type DbKind = 'postgres' | 'mysql' | 'sqlite' | 'duckdb'
+/** Database servers (host, port, user, password), as opposed to database files. */
+export type ServerKind = 'postgres' | 'mysql'
+export const isServer = (k: string): k is ServerKind => k === 'postgres' || k === 'mysql'
+export const SERVER: Record<ServerKind, { label: string; port: number; database: string }> = {
+  postgres: { label: 'PostgreSQL', port: 5432, database: 'postgres' },
+  mysql: { label: 'MySQL / MariaDB', port: 3306, database: '' }
+}
 
 /** One relation a source exposes to SQL under `alias` (a sheet, named table, cell range, or database table). */
 export interface SourceTable {
@@ -49,7 +56,7 @@ export interface DbSource extends SourceBase {
   kind: DbKind
   /** sqlite / duckdb: the database file. */
   path?: string
-  /** postgres */
+  /** postgres, mysql */
   host?: string
   port?: number
   database?: string

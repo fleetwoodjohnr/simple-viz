@@ -7,7 +7,7 @@ import * as P from '../state/project'
 import { close } from './Dialogs'
 import { Btn, Field, Modal, Segmented, cx, inputCls } from '../ui'
 import { newId } from '@/core/project/sviz'
-import { DEFAULT_REFRESH, FILE_FORMATS, type DbSource } from '@/shared/project'
+import { DEFAULT_REFRESH, FILE_FORMATS, SERVER, type DbSource, type ServerKind } from '@/shared/project'
 
 type SheetRef = { ref: string; kind: 'sheet' | 'table' | 'name'; rows: number; columns: number }
 
@@ -69,9 +69,10 @@ export function SheetPicker({ path }: { path: string }) {
   )
 }
 
-export function ConnectDialog() {
+export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
   const settings = useApp((s) => s.settings)
-  const [f, setF] = useState({ name: '', host: 'localhost', port: 5432, database: 'postgres', user: '', password: '', sslmode: 'prefer' as DbSource['sslmode'], mode: 'extract' as DbSource['mode'], timeoutSec: settings.refreshTimeoutSec })
+  const info = SERVER[kind]
+  const [f, setF] = useState({ name: '', host: 'localhost', port: info.port, database: info.database, user: '', password: '', sslmode: 'prefer' as DbSource['sslmode'], mode: 'extract' as DbSource['mode'], timeoutSec: settings.refreshTimeoutSec })
   const [tables, setTables] = useState<string[] | null>(null)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
@@ -84,7 +85,7 @@ export function ConnectDialog() {
     setTables(null)
     setError('')
   }
-  const source = (): DbSource => ({ id, kind: 'postgres', name: f.name || `${f.database} on ${f.host}`, host: f.host.trim(), port: Number(f.port) || 5432, database: f.database.trim(), user: f.user.trim(), sslmode: f.sslmode, mode: f.mode, timeoutSec: f.timeoutSec, tables: [], refresh: { ...DEFAULT_REFRESH, watch: false } })
+  const source = (): DbSource => ({ id, kind, name: f.name || `${f.database || info.label} on ${f.host}`, host: f.host.trim(), port: Number(f.port) || info.port, database: f.database.trim(), user: f.user.trim(), sslmode: f.sslmode, mode: f.mode, timeoutSec: f.timeoutSec, tables: [], refresh: { ...DEFAULT_REFRESH, watch: false } })
   const test = async () => {
     setBusy(true)
     setError('')
@@ -115,7 +116,7 @@ export function ConnectDialog() {
       onOpenChange={(o) => !o && close()}
       title={
         <span className="flex items-center gap-2">
-          <Server className="size-4 text-accent-ink" /> Connect to PostgreSQL
+          <Server className="size-4 text-accent-ink" /> Connect to {info.label}
         </span>
       }
       description="Simple Viz only reads from the database. The password is kept in your system keychain, never in the project file."
@@ -128,7 +129,7 @@ export function ConnectDialog() {
               Add {picked.size} table{picked.size === 1 ? '' : 's'}
             </Btn>
           ) : (
-            <Btn variant="primary" disabled={busy || !f.host || !f.database} onClick={test} data-testid="pg-test">
+            <Btn variant="primary" disabled={busy || !f.host || (kind === 'postgres' && !f.database)} onClick={test} data-testid="pg-test">
               {busy && <Loader2 className="size-4 animate-spin" />} Connect
             </Btn>
           )}
@@ -142,7 +143,7 @@ export function ConnectDialog() {
         <Field label="Port">
           <input className={inputCls} type="number" value={f.port} onChange={(e) => upd({ port: Number(e.target.value) })} aria-label="Port" data-testid="pg-port" />
         </Field>
-        <Field label="Database">
+        <Field label={kind === 'mysql' ? 'Database (empty: all)' : 'Database'}>
           <input className={inputCls} value={f.database} onChange={(e) => upd({ database: e.target.value })} aria-label="Database" data-testid="pg-database" />
         </Field>
         <Field label="SSL">

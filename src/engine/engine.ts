@@ -10,6 +10,7 @@ import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import type { ColumnInfo, EngineConfig, QueryResult, RelationInfo, ResolvedSource, ResultPage, SourceStatus } from '../shared/engine-protocol'
+import { SERVER, isServer } from '../shared/project'
 import { gateProblems, collectRefs, SAFE_TABLE_FUNCTIONS } from '../core/sql/ast'
 import { explainError } from '../core/errors'
 import { numberFromText } from '../core/profile'
@@ -128,7 +129,7 @@ export class Engine {
 
     // 1. Extensions, from the app's own resources (never downloaded).
     const kinds = new Set(config.sources.map((s) => s.kind))
-    const exts = [...(kinds.has('postgres') ? ['postgres_scanner'] : []), ...(kinds.has('sqlite') ? ['sqlite_scanner'] : [])]
+    const exts = [...(kinds.has('postgres') ? ['postgres_scanner'] : []), ...(kinds.has('mysql') ? ['mysql_scanner'] : []), ...(kinds.has('sqlite') ? ['sqlite_scanner'] : [])]
     for (const e of exts) {
       if (!config.extensionsDir) throw new Error(`The ${e} extension is not bundled with this build.`)
       await c.run(`LOAD ${lit(path.join(config.extensionsDir, `${e}.duckdb_extension`))}`)
@@ -150,10 +151,10 @@ export class Engine {
     // 3. Databases: credentials go into temporary secrets, never into connection strings or files.
     let pgTimeout = 0
     for (const s of config.sources) {
-      if (s.kind === 'postgres') {
-        pgTimeout = Math.max(pgTimeout, s.timeoutSec * 1000)
+      if (isServer(s.kind)) {
+        if (s.kind === 'postgres') pgTimeout = Math.max(pgTimeout, s.timeoutSec * 1000)
         try {
-          await this.attachPostgres(c, s)
+          await this.attachServer(c, s)
         } catch (e) {
           this.attachFailed.add(s.id)
           this.setStatus(s.id, { state: 'error', error: explainError(e, s), auth: isAuthError(e) })
@@ -177,6 +178,21 @@ export class Engine {
 
     await this.loadMeta()
     await this.syncViews()
+  }
+
+  private attachServer(c: DuckDBConnection, s: ResolvedSource) {
+    return s.kind === 'mysql' ? this.attachMysql(c, s) : this.attachPostgres(c, s)
+  }
+
+  /** MySQL / MariaDB: the same pattern, a temporary secret and a read-only attachment. */
+  private async attachMysql(c: DuckDBConnection, s: ResolvedSource) {
+    const secret = ident(`my_${s.id}`)
+    const ssl = { disable: 'disabled', prefer: 'preferred', require: 'required', 'verify-full': 'verify_identity' }[s.sslmode ?? 'prefer'] ?? 'preferred'
+    const parts = [`TYPE mysql`, `HOST ${lit(s.host ?? 'localhost')}`, `PORT ${Number(s.port) || 3306}`, `USER ${lit(s.user ?? '')}`, `SSL_MODE ${lit(ssl)}`]
+    if (s.database) parts.push(`DATABASE ${lit(s.database)}`)
+    if (s.password) parts.push(`PASSWORD ${lit(s.password)}`)
+    await c.run(`CREATE OR REPLACE TEMPORARY SECRET ${secret} (${parts.join(', ')})`)
+    await c.run(`ATTACH '' AS ${ident(`db_${s.id}`)} (TYPE mysql, SECRET ${secret}, READ_ONLY)`)
   }
 
   private async attachPostgres(c: DuckDBConnection, s: ResolvedSource) {
@@ -242,7 +258,7 @@ export class Engine {
         let from: string | null = null
         let kind: RelationInfo['kind'] = 'extract'
         if (s.mode === 'live' && s.kind !== 'file' && s.kind !== 'duckdb' && !this.attachFailed.has(s.id)) {
-          const [schema, table] = splitRef(t.ref, s.kind)
+          const [schema, table] = splitRef(t.ref, s)
           from = `${ident(`db_${s.id}`)}.${schema ? `${ident(schema)}.` : ''}${ident(table)}`
           kind = 'live'
         } else {
@@ -590,11 +606,11 @@ export class Engine {
     const inst = await DuckDBInstance.create(':memory:', { autoinstall_known_extensions: 'false', autoload_known_extensions: 'false' })
     const c = await inst.connect()
     try {
-      if (s.kind === 'postgres') {
-        if (!extensionsDir) throw new Error('The PostgreSQL extension is not bundled with this build.')
-        await c.run(`LOAD ${lit(path.join(extensionsDir, 'postgres_scanner.duckdb_extension'))}`)
-        const e = new Engine()
-        await e.attachPostgres(c, s)
+      if (isServer(s.kind)) {
+        const ext = s.kind === 'mysql' ? 'mysql_scanner' : 'postgres_scanner'
+        if (!extensionsDir) throw new Error(`The ${SERVER[s.kind].label} extension is not bundled with this build.`)
+        await c.run(`LOAD ${lit(path.join(extensionsDir, `${ext}.duckdb_extension`))}`)
+        await new Engine().attachServer(c, s)
       } else if (s.kind === 'sqlite') {
         if (!extensionsDir) throw new Error('The SQLite extension is not bundled with this build.')
         await c.run(`LOAD ${lit(path.join(extensionsDir, 'sqlite_scanner.duckdb_extension'))}`)
@@ -603,7 +619,7 @@ export class Engine {
         await c.run(`ATTACH ${lit(s.path!)} AS ${ident(`db_${s.id}`)} (READ_ONLY)`)
       }
       const rows = (await c.runAndReadAll(`SELECT schema_name, table_name FROM duckdb_tables() WHERE database_name = ${lit(`db_${s.id}`)} UNION ALL SELECT schema_name, view_name FROM duckdb_views() WHERE database_name = ${lit(`db_${s.id}`)} AND NOT internal ORDER BY 1, 2`)).getRows()
-      return { tables: rows.map(([sch, t]) => (s.kind === 'postgres' || (s.kind === 'duckdb' && sch !== 'main') ? `${sch}.${t}` : String(t))) }
+      return { tables: rows.map(([sch, t]) => (isServer(s.kind) || (s.kind === 'duckdb' && sch !== 'main') ? `${sch}.${t}` : String(t))) }
     } catch (e) {
       throw new Error(explainError(e, s))
     } finally {
@@ -622,12 +638,14 @@ function castExpr(col: string, ty: string): string | null {
   return isSafeType(t) ? `TRY_CAST(${ident(col)} AS ${t})` : null
 }
 
-const isAuthError = (e: unknown) => /password authentication failed|no password supplied|authentication failed|password is required/i.test(String((e as Error)?.message ?? e))
+const isAuthError = (e: unknown) => /password authentication failed|no password supplied|authentication failed|password is required|Access denied for user/i.test(String((e as Error)?.message ?? e))
 
-function splitRef(ref: string | undefined, kind: string): [string | null, string] {
+function splitRef(ref: string | undefined, s: ResolvedSource): [string | null, string] {
   const r = ref ?? ''
   const dot = r.indexOf('.')
-  if (kind === 'postgres') return dot > 0 ? [r.slice(0, dot), r.slice(dot + 1)] : ['public', r]
+  if (s.kind === 'postgres') return dot > 0 ? [r.slice(0, dot), r.slice(dot + 1)] : ['public', r]
+  // MySQL: schemas are databases.
+  if (s.kind === 'mysql') return dot > 0 ? [r.slice(0, dot), r.slice(dot + 1)] : [s.database || null, r]
   return [null, r]
 }
 

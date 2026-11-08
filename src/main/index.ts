@@ -4,7 +4,7 @@ import { promises as fs, existsSync } from 'node:fs'
 import path from 'node:path'
 import type { ConnectionDraft, OpenedFile, RecentFile, Settings } from '../shared/ipc-types'
 import type { EngineConfig, ResolvedSource } from '../shared/engine-protocol'
-import { DATA_EXTENSIONS, FILE_FORMATS, PROJECT_EXTENSION, type Project, type Source } from '../shared/project'
+import { DATA_EXTENSIONS, FILE_FORMATS, PROJECT_EXTENSION, SERVER, isServer, type Project, type Source } from '../shared/project'
 import * as store from './store'
 import * as creds from './credentials'
 import { EngineHost } from './engine-host'
@@ -98,14 +98,14 @@ async function addTrust(keys: string[]) {
   keys.forEach((k) => t.add(k))
   await store.atomicWrite(trustFile(), JSON.stringify([...t]))
 }
-const sourceKey = (s: Source) => (s.kind === 'postgres' ? `postgres:${s.user ?? ''}@${s.host ?? ''}:${s.port ?? 5432}/${s.database ?? ''}` : `file:${path.resolve(s.path ?? '')}`)
+const sourceKey = (s: Source) => ((s.kind === 'postgres' || s.kind === 'mysql') ? `${s.kind}:${s.user ?? ''}@${s.host ?? ''}:${s.port ?? SERVER[s.kind].port}/${s.database ?? ''}` : `file:${path.resolve(s.path ?? '')}`)
 
 function checkSource(x: unknown): Source {
   const s = x as Source & Record<string, unknown>
-  if (!s || typeof s !== 'object' || !isId(s.id) || !['file', 'postgres', 'sqlite', 'duckdb'].includes(s.kind)) throw new Error('Invalid source')
+  if (!s || typeof s !== 'object' || !isId(s.id) || !['file', 'postgres', 'mysql', 'sqlite', 'duckdb'].includes(s.kind)) throw new Error('Invalid source')
   if (!Array.isArray(s.tables) || s.tables.length > 500) throw new Error('Invalid source tables')
   for (const t of s.tables) if (!t || !isName(t.alias) || (t.ref !== undefined && (typeof t.ref !== 'string' || t.ref.length > 500))) throw new Error(`Invalid table name “${String(t?.alias)}”`)
-  if (s.kind === 'postgres') {
+  if (s.kind === 'postgres' || s.kind === 'mysql') {
     if (typeof s.host !== 'string' || s.host.length > 255 || /[\s'"\\]/.test(s.host)) throw new Error('Invalid host')
     if (s.port !== undefined && !(Number.isInteger(s.port) && s.port > 0 && s.port < 65536)) throw new Error('Invalid port')
   } else if (!isAbs(s.path)) throw new Error('Invalid path')
@@ -126,7 +126,7 @@ async function resolveSource(s: Source, settings: Settings): Promise<ResolvedSou
     database: s.database,
     user: s.user,
     sslmode: s.sslmode,
-    password: s.kind === 'postgres' ? await creds.getPassword(s.id) : undefined
+    password: isServer(s.kind) ? await creds.getPassword(s.id) : undefined
   }
 }
 
@@ -139,12 +139,12 @@ async function configureEngine(p: Pick<Project, 'id' | 'sources' | 'datasets'>):
   const sources = p.sources.map(checkSource)
   for (const d of p.datasets) if (!isName(d?.name) || typeof d.sql !== 'string' || d.sql.length > 1_000_000) throw new Error(`Invalid dataset “${String(d?.name)}”`)
   const t = await trust()
-  const isOk = (s: Source) => (s.kind === 'postgres' ? t.has(sourceKey(s)) : granted.has(path.resolve(s.path!)) || t.has(sourceKey(s)))
+  const isOk = (s: Source) => (s.kind === 'postgres' || s.kind === 'mysql' ? t.has(sourceKey(s)) : granted.has(path.resolve(s.path!)) || t.has(sourceKey(s)))
   const unknown = sources.filter((s) => !isOk(s))
   const problems: string[] = []
   let allowed = sources
   if (unknown.length && mainWindow) {
-    const list = unknown.map((s) => (s.kind === 'postgres' ? `• PostgreSQL ${s.user ? `${s.user}@` : ''}${s.host}:${s.port ?? 5432}/${s.database ?? ''}` : `• ${s.path}`)).join('\n')
+    const list = unknown.map((s) => (s.kind === 'postgres' || s.kind === 'mysql' ? `• ${SERVER[s.kind].label} ${s.user ? `${s.user}@` : ''}${s.host}:${s.port ?? SERVER[s.kind].port}/${s.database ?? ''}` : `• ${s.path}`)).join('\n')
     const { response } = await dialog.showMessageBox(mainWindow, {
       type: 'question',
       message: 'Allow this project to read these data sources?',

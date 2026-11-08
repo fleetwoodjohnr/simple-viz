@@ -27,7 +27,7 @@ export function Dialogs() {
     case 'sheet-picker':
       return <SheetPicker path={d.path} />
     case 'connect-db':
-      return <ConnectDialog />
+      return <ConnectDialog kind={d.kind2} key={d.kind2} />
     case 'relink':
       return <RelinkDialog sourceId={d.sourceId} />
     case 'prompt':
