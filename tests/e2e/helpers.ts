@@ -14,8 +14,11 @@ export const test = base.extend<{ cleanup: void }>({
     async ({}, use) => {
       await use()
       for (const a of open) {
+        // Exit the way quit() does (no save prompt), so Playwright sees the app close; kill it if that hangs.
+        // (A bare kill left Windows workers waiting for the app's 'close' until their teardown timed out.)
+        await Promise.race([a.evaluate(({ app }) => app.exit(0)).catch(() => {}), new Promise((r) => setTimeout(r, 5000))])
         try {
-          a.process().kill('SIGKILL')
+          if (a.process().exitCode === null) a.process().kill('SIGKILL')
         } catch {
           /* already gone (a test may kill its app itself) */
         }

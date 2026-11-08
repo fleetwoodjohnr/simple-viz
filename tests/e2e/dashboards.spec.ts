@@ -13,19 +13,32 @@ async function addField(page: Page, field: string, shelf: string) {
   await page.getByTestId(`add-to-${shelf}`).click()
 }
 
-/** Clicks the bar of a category in an ECharts bar chart (screen coordinates account for the canvas scale). */
+/**
+ * Clicks the bar of a category in an ECharts bar chart (screen coordinates account for the canvas scale). Waits until
+ * the bar stays put: switching modes re-fits the canvas, and a chart resizes a moment later.
+ */
 async function clickBar(page: Page, tile: Locator, category: string) {
   const el = tile.locator('[data-testid=echart]')
-  const pt = await el.evaluate((node, cat) => {
-    const c = (node as any).__echart
-    const opt = c.getOption()
-    const i = opt.xAxis[0].data.indexOf(cat)
-    const v = opt.series[0].data[i].value
-    const [x, y] = c.convertToPixel({ seriesIndex: 0 }, [i, v / 2])
-    return { x, y, scale: Number(node.closest('[data-scale]')?.getAttribute('data-scale') ?? 1) }
-  }, category)
-  const box = (await el.boundingBox())!
-  await page.mouse.click(box.x + pt.x * pt.scale, box.y + pt.y * pt.scale)
+  const where = async () => {
+    const pt = await el.evaluate((node, cat) => {
+      const c = (node as any).__echart
+      const opt = c.getOption()
+      const i = opt.xAxis[0].data.indexOf(cat)
+      const v = opt.series[0].data[i].value
+      const [x, y] = c.convertToPixel({ seriesIndex: 0 }, [i, v / 2])
+      return { x, y, scale: Number(node.closest('[data-scale]')?.getAttribute('data-scale') ?? 1) }
+    }, category)
+    const box = (await el.boundingBox())!
+    return { x: box.x + pt.x * pt.scale, y: box.y + pt.y * pt.scale }
+  }
+  let prev = await where()
+  for (let i = 0; i < 30; i++) {
+    await page.waitForTimeout(100)
+    const now = await where()
+    if (Math.abs(now.x - prev.x) < 0.5 && Math.abs(now.y - prev.y) < 0.5) break
+    prev = now
+  }
+  await page.mouse.click(prev.x, prev.y)
 }
 
 test('edit a dashboard, cross-filter, drill down, export, save and reopen', async () => {
