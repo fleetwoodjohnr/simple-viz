@@ -168,3 +168,54 @@ export async function startMysql(): Promise<My | null> {
 export function mySource(my: My, mode: 'extract' | 'live', password = my.password): ResolvedSource {
   return { id: `my${mode}`, kind: 'mysql', host: my.host, port: my.port, user: my.user, password, database: my.database, sslmode: 'disable', mode, timeoutSec: 10, tables: [{ alias: 'my_customers', ref: 'customers' }] }
 }
+
+// ---------------------------------------------------------------- SQL Server
+
+export type Ms = Omit<Pg, 'restart'>
+
+/** Runs one batch on SQL Server with tedious. */
+export async function msExec(ms: Ms, sql: string, database = ms.database) {
+  const { Connection, Request } = await import('tedious')
+  const conn = new Connection({ server: ms.host, authentication: { type: 'default', options: { userName: ms.user, password: ms.password } }, options: { port: ms.port, database, encrypt: true, trustServerCertificate: true, connectTimeout: 5000 } })
+  await new Promise<void>((resolve, reject) => {
+    conn.on('connect', (err) => (err ? reject(err) : resolve()))
+    conn.connect()
+  })
+  try {
+    await new Promise<void>((resolve, reject) => conn.execSql(new Request(sql, (err) => (err ? reject(err) : resolve()))))
+  } finally {
+    conn.close()
+  }
+}
+
+/** SQL Server 2022 to test against: SV_MS_HOST, or a throwaway podman container (x64 only); null when neither. */
+export async function startSqlServer(): Promise<Ms | null> {
+  let ms: Ms
+  if (process.env.SV_MS_HOST) ms = { host: process.env.SV_MS_HOST, port: Number(process.env.SV_MS_PORT ?? 1433), user: process.env.SV_MS_USER ?? 'sa', password: process.env.SV_MS_PASSWORD ?? '', database: 'shop', stop() {} }
+  else {
+    if (!hasPodman() || process.env.SV_NO_PODMAN || process.arch !== 'x64') return null
+    const name = `sv-ms-${process.pid}-${Date.now()}`
+    const port = 20000 + Math.floor(Math.random() * 20000)
+    execFileSync('podman', ['run', '-d', '--name', name, '-p', `127.0.0.1:${port}:1433`, '-e', 'ACCEPT_EULA=Y', '-e', 'MSSQL_SA_PASSWORD=Sv-Secret-2026!', 'mcr.microsoft.com/mssql/server:2022-latest'], { stdio: 'ignore' })
+    ms = { name, host: '127.0.0.1', port, user: 'sa', password: 'Sv-Secret-2026!', database: 'shop', stop: () => void execFileSync('podman', ['rm', '-f', name], { stdio: 'ignore' }) }
+  }
+  const t0 = Date.now()
+  for (;;) {
+    try {
+      await msExec(ms, "IF DB_ID('shop') IS NULL CREATE DATABASE shop", 'master')
+      break
+    } catch (e) {
+      if (Date.now() - t0 > 180_000) throw e
+      await new Promise((r) => setTimeout(r, 2000))
+    }
+  }
+  const rows = readFileSync(fixture('customers.csv'), 'utf8').trim().split('\n').slice(1).map((l) => l.split(','))
+  await msExec(ms, `IF OBJECT_ID('dbo.customers') IS NOT NULL DROP TABLE dbo.customers;
+    CREATE TABLE dbo.customers (customer_id INT PRIMARY KEY, customer_name NVARCHAR(100) NOT NULL, region NVARCHAR(40) NOT NULL, segment NVARCHAR(40) NOT NULL, since DATE NULL, score DECIMAL(6,2) NULL, vip BIT NULL);
+    INSERT INTO dbo.customers VALUES ${rows.map((r, i) => `(${r[0]}, N'${r[1]}', N'${r[2]}', N'${r[3]}', ${i % 5 ? `DATEADD(day, ${i}, '2024-01-01')` : 'NULL'}, ${i % 7 ? (i * 1.25).toFixed(2) : 'NULL'}, ${i % 3 === 0 ? 1 : 0})`).join(', ')};`)
+  return ms
+}
+
+export function msSource(ms: Ms, password = ms.password): ResolvedSource {
+  return { id: 'ms1', kind: 'sqlserver', host: ms.host, port: ms.port, user: ms.user, password, database: ms.database, sslmode: 'require', mode: 'extract', timeoutSec: 15, tables: [{ alias: 'ms_customers', ref: 'dbo.customers' }] }
+}

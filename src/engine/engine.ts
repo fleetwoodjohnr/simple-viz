@@ -18,6 +18,7 @@ import { numberFromText } from '../core/profile'
 import { MACROS } from '../core/calc/macros'
 import { extractName, ident, isSafeType, lit, trimStatement } from './sql'
 import { extractSelect, sourceStat, readBytes, fileTables, type Memo, type Stat } from './ingest'
+import { sqlServerTables } from './sqlserver'
 
 type Value = string | number | boolean | null
 
@@ -187,7 +188,9 @@ export class Engine {
     await this.syncViews()
   }
 
-  private attachServer(c: DuckDBConnection, s: ResolvedSource) {
+  private async attachServer(c: DuckDBConnection, s: ResolvedSource) {
+    // SQL Server isn't attached: each refresh reads it with its own driver (extract only).
+    if (s.kind === 'sqlserver') return
     return s.kind === 'mysql' ? this.attachMysql(c, s) : this.attachPostgres(c, s)
   }
 
@@ -613,7 +616,9 @@ export class Engine {
     const inst = await DuckDBInstance.create(':memory:', { autoinstall_known_extensions: 'false', autoload_known_extensions: 'false' })
     const c = await inst.connect()
     try {
-      if (isServer(s.kind)) {
+      if (s.kind === 'sqlserver') {
+        return { tables: await sqlServerTables(s) }
+      } else if (isServer(s.kind)) {
         const ext = s.kind === 'mysql' ? 'mysql_scanner' : 'postgres_scanner'
         if (!extensionsDir) throw new Error(`The ${SERVER[s.kind].label} extension is not bundled with this build.`)
         await c.run(`LOAD ${lit(path.join(extensionsDir, `${ext}.duckdb_extension`))}`)
@@ -656,7 +661,7 @@ function castExpr(col: string, ty: string): string | null {
   return isSafeType(t) ? `TRY_CAST(${ident(col)} AS ${t})` : null
 }
 
-const isAuthError = (e: unknown) => /password authentication failed|no password supplied|authentication failed|password is required|Access denied for user/i.test(String((e as Error)?.message ?? e))
+const isAuthError = (e: unknown) => /password authentication failed|no password supplied|authentication failed|password is required|Access denied for user|Login failed for user/i.test(String((e as Error)?.message ?? e))
 
 function splitRef(ref: string | undefined, s: ResolvedSource): [string | null, string] {
   const r = ref ?? ''

@@ -13,8 +13,10 @@ and [Simple Cell](https://github.com/fleetwoodjohnr/simple-cell).
 
 ## What it does
 
-- **Connect.** Excel (`.xlsx`, `.xlsm`), OpenDocument (`.ods`), CSV, TSV, JSON, Parquet, SQLite and DuckDB files, and
-  PostgreSQL. Choose sheets, Excel tables, named ranges or cell ranges. Drop files anywhere in the window.
+- **Connect.** Excel (`.xlsx`, `.xlsm`, `.xls`), OpenDocument (`.ods`), CSV, TSV, JSON, Parquet, Arrow/Feather, XML,
+  SQLite and DuckDB files — on your computer, on the web, in Amazon S3 (and compatible storage) or Azure Blob storage —
+  and PostgreSQL, MySQL/MariaDB and SQL Server. Choose sheets, Excel tables, named ranges or cell ranges. Drop files
+  anywhere in the window. See [docs/CONNECTORS.md](docs/CONNECTORS.md).
 - **SQL on any of it.** A sheet called `Transactions` becomes a table called `transactions`. Join it with a PostgreSQL
   table, add calculated columns, and save the query as a dataset — no database import needed. Powered by DuckDB.
 - **Always current.** When a project opens, Simple Viz checks every source; edited spreadsheets and changed tables are
@@ -35,6 +37,7 @@ and [Simple Cell](https://github.com/fleetwoodjohnr/simple-cell).
 - [CONTRIBUTING.md](CONTRIBUTING.md) — set up, test, definition of done
 - [ARCHITECTURE.md](ARCHITECTURE.md) — processes, engine, key decisions
 - [docs/SECURITY.md](docs/SECURITY.md) — threat model and protections
+- [docs/CONNECTORS.md](docs/CONNECTORS.md) — every source, how it's read and tested, and what isn't supported yet
 
 ## License
 

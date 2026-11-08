@@ -70,6 +70,7 @@
   "dependencies": {
     "@duckdb/node-api": "2.0.0-r.1",
     "apache-arrow": "^21.2.0",
-    "electron-updater": "6.8.10"
+    "electron-updater": "6.8.10",
+    "tedious": "^20.3.8"
   }
 }

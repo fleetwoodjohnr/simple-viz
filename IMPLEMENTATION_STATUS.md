@@ -1,6 +1,6 @@
 # Implementation status
 
-_Last updated: 2026-11-05 · M0–M6 complete (with the limits listed), M1 has items pending tests; M7–M9 not started ·
+_Last updated: 2026-11-05 · M0–M7 complete (with the limits listed), M1 has items pending tests; M8–M9 not started ·
 version 0.1.0 (unreleased) · verified with automated tests on Linux (Fedora 44); CI builds, packages and tests on
 Linux, Windows and macOS._
 
@@ -11,9 +11,9 @@ Linux, Windows and macOS._
 | Suite | Result |
 |---|---|
 | `npm run typecheck` | ✅ clean |
-| `npm test` (unit) | ✅ 81 tests |
-| `npm run test:integration` (real DuckDB, files, PostgreSQL 17 in podman) | ✅ 85 tests |
-| `npm run e2e:headless` (the real app) | ✅ acceptance (24 steps), analytics, charts, dashboards, data, maps, model, PostgreSQL, smoke; updater (packaged only) |
+| `npm test` (unit) | ✅ 93 tests |
+| `npm run test:integration` (real DuckDB, files; PostgreSQL 17, MariaDB 11, SQL Server 2022, S3Mock, Azurite in podman) | ✅ 97 tests |
+| `npm run e2e:headless` (the real app) | ✅ acceptance (24 steps), analytics, arrow/xls, charts, dashboards, data, maps, model, MySQL, PostgreSQL, remote files, SQL Server, smoke; updater (packaged only) |
 | `npm run bench` (statistics on 10M rows) | ✅ see M5 |
 | Packaged Linux build (`electron-builder --linux dir`) + e2e | ✅ |
 | CI: Linux, Windows, macOS (arm64; Intel under Rosetta) build, test, package, test the packaged app; deb/rpm install on Ubuntu 22.04/24.04, Debian 12, Fedora 44; npm audit; CodeQL | ✅ run 42143235883 (commit 8b8a2c3). The M3, M4 and M5 runs had failed (an engine reboot under running queries, a save/recent-files race on Windows, stuck test workers); fixed in 8b8a2c3. The Intel smoke test under Rosetta passed on retry (first-launch translation); its launch wait no longer times out at 30 s |
@@ -191,6 +191,33 @@ committed), on a 500-row fixture with known structure and a 60-month seasonal se
 - Small multiples apply to bar, line and area charts; dual axes are turned off in panels.
 - Charts over a model don't use the wrapped queries (density, correlation, cohort) without the mark limit yet.
 
+## M7 — More connectors ✅
+
+Details per source, and what isn't supported (with reasons): [docs/CONNECTORS.md](docs/CONNECTORS.md).
+
+### Done
+
+| Feature | Test |
+|---|---|
+| MySQL / MariaDB, extract or live (bundled mysql extension, read-only attach, keychain password, SSL mode) | integration `mysql`, e2e `mysql` (MariaDB 11 in podman) |
+| SQL Server / Azure SQL, extract (tedious, read-only intent, TLS from the SSL setting); typed columns incl. nullable ones | integration `sqlserver`, e2e `sqlserver` (SQL Server 2022 in podman, x64) |
+| Files on the web (HTTP/S, optional bearer token), in Amazon S3 and S3-compatible storage (region, endpoint, path style, keys in the keychain), in Azure Blob (connection string); any format incl. spreadsheets; only each source's exact address is readable | integration `remote` (local server, S3Mock, Azurite), e2e `remote` |
+| Excel 97–2003 `.xls`, read natively (BIFF8 in the sheet core: shared strings across records, RK/MULRK, cached formula results, 1900/1904 dates, hidden sheets); encrypted and Excel 95 files refused with a reason | unit `xls` (cell by cell against xlrd; hand-made records), integration `formats`, e2e `arrow` |
+| Arrow IPC / Feather v2, uncompressed, LZ4 or ZSTD | unit `arrow` (pyarrow files), integration `formats`, e2e `arrow` |
+| Any XML file: the repeated element is a row, attributes/children/nested leaves are typed columns; no entity expansion | unit `xmlrows`, integration `formats` |
+| OpenDocument and Excel XML 2003 readers covered here too (they were only tested in Simple Cell) | unit `sheet-formats` |
+| Fix: DuckDB's secret store initialised lazily after lockdown and was refused (remote credentials failed); now in memory, initialised before lockdown, persistent secrets off | integration `remote` |
+
+### Known limitations
+
+- `.xlsb`, Excel 95 `.xls`, password-protected workbooks, Redshift, Snowflake, BigQuery, Databricks, Athena, Trino,
+  ClickHouse, Oracle, Google Sheets, ODBC/JDBC: not supported (reasons in docs/CONNECTORS.md).
+- SQL Server is extract only. S3-compatible services other than the S3 emulator (MinIO, R2, GCS) use the same code but
+  weren't tested against the services themselves.
+- SQL Server, MySQL, S3 and Azure tests run where podman is available (Linux CI); they are skipped on Windows and macOS
+  CI and say so.
+- The bundled extensions add about 114 MB (uncompressed, Linux x64) for MySQL, web/S3 and Azure.
+
 ## Next
 
-M7 — more connectors.
+M8 — hardening, performance benchmarks, accessibility, documentation and a draft release.

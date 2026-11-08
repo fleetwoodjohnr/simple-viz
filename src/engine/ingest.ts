@@ -7,6 +7,7 @@ import { dateValue, timestampValue, type DuckDBConnection } from '@duckdb/node-a
 import type { ResolvedSource } from '../shared/engine-protocol'
 import { isServer, isRemotePath } from '../shared/project'
 import { readArrow } from './arrow'
+import { stageSqlServer } from './sqlserver'
 import { isSpreadsheetXml, xmlRecords, xmlTables } from '../core/xmlrows'
 import { listTables } from '../core/sheets/rows'
 import { readWorkbook, tableRows, type SheetFormat } from '../core/sheets/rows'
@@ -64,6 +65,7 @@ export async function extractSelect(conn: DuckDBConnection, s: ResolvedSource, r
     }
     throw new Error(`Unsupported file format: ${s.format}`)
   }
+  if (s.kind === 'sqlserver') return stageSqlServer(conn, s, ref ?? '')
   const db = ident(`db_${s.id}`)
   const r = ref ?? ''
   const dot = r.indexOf('.')

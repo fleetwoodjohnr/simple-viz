@@ -119,7 +119,7 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
           <Server className="size-4 text-accent-ink" /> Connect to {info.label}
         </span>
       }
-      description="Simple Viz only reads from the database. The password is kept in your system keychain, never in the project file."
+      description={`Simple Viz only reads from the database${kind === 'sqlserver' ? ' (tables are copied into a fast local cache and refreshed)' : ''}. The password is kept in your system keychain, never in the project file.`}
       width={560}
       footer={
         <>
@@ -162,6 +162,7 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
           <input className={inputCls} type="password" value={f.password} onChange={(e) => upd({ password: e.target.value })} aria-label="Password" autoComplete="off" data-testid="pg-password" />
         </Field>
       </div>
+      {kind !== 'sqlserver' && (
       <div className="mt-4 flex items-center justify-between gap-4 rounded-lg bg-panel-2 px-3 py-2.5 shadow-[0_0_0_1px_var(--border)]">
         <div>
           <div className="text-[13px] font-medium">How to use the data</div>
@@ -169,6 +170,7 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
         </div>
         <Segmented value={f.mode} onChange={(v) => upd({ mode: v })} label="Connection mode" options={[{ value: 'extract', label: 'Extract' }, { value: 'live', label: 'Live' }]} />
       </div>
+      )}
       {error && (
         <p className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-[12.5px] text-danger" role="alert" data-testid="pg-error">
           {error}
