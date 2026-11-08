@@ -44,10 +44,28 @@ interface SourceBase {
   refresh: RefreshPolicy
 }
 
+/** A file on the web or in cloud storage, read by DuckDB's httpfs or azure extension. */
+export interface RemoteOptions {
+  provider: 'http' | 's3' | 'azure'
+  /** S3: region, and for S3-compatible services (MinIO, Cloudflare R2, Google Cloud Storage…) the endpoint host. */
+  region?: string
+  endpoint?: string
+  urlStyle?: 'vhost' | 'path'
+  useSsl?: boolean
+  /** S3 access key id. The secret key (S3), connection string (Azure) or bearer token (web) is in the keychain. */
+  keyId?: string
+  hasSecret?: boolean
+}
+
+/** http(s)://, s3://, az:// and other storage URLs (not local paths). */
+export const isRemotePath = (p: string | undefined) => !!p && /^(https?|s3|s3a|s3n|r2|gcs|gs|az|azure|abfss):\/\//i.test(p)
+
 export interface FileSource extends SourceBase {
   kind: 'file'
   format: FileFormat
+  /** A local path, or a URL (see isRemotePath) with `remote` set. */
   path: string
+  remote?: RemoteOptions
   /** CSV/TSV: first row holds column names (default true). Spreadsheets: same, per table. */
   header?: boolean
 }

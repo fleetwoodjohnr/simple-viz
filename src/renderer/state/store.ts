@@ -14,6 +14,7 @@ export type Dialog =
   | { kind: 'palette' }
   | { kind: 'add-data' }
   | { kind: 'connect-db'; kind2: ServerKind }
+  | { kind: 'connect-remote' }
   | { kind: 'sheet-picker'; path: string; sourceId?: string }
   | { kind: 'relink'; sourceId: string }
   | { kind: 'message'; title: string; body: string }

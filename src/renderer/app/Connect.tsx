@@ -1,13 +1,13 @@
 // Adding data: the sheet picker for spreadsheets, the PostgreSQL connection dialog, and relinking moved files.
 
 import { useEffect, useState } from 'react'
-import { FileSpreadsheet, Loader2, Server, Table2, Tag } from 'lucide-react'
+import { FileSpreadsheet, Globe2, Loader2, Server, Table2, Tag } from 'lucide-react'
 import { useApp, get, toast } from '../state/store'
 import * as P from '../state/project'
 import { close } from './Dialogs'
 import { Btn, Field, Modal, Segmented, cx, inputCls } from '../ui'
 import { newId } from '@/core/project/sviz'
-import { DEFAULT_REFRESH, FILE_FORMATS, SERVER, type DbSource, type ServerKind } from '@/shared/project'
+import { DEFAULT_REFRESH, FILE_FORMATS, SERVER, isRemotePath, toAlias, type DbSource, type FileFormat, type FileSource, type RemoteOptions, type ServerKind } from '@/shared/project'
 
 type SheetRef = { ref: string; kind: 'sheet' | 'table' | 'name'; rows: number; columns: number }
 
@@ -187,6 +187,146 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
               <li key={t}>
                 <label className="flex cursor-pointer items-center gap-3 px-3 py-1.5 hover:bg-hover">
                   <input type="checkbox" checked={picked.has(t)} onChange={() => setPicked((s) => (s.has(t) ? new Set([...s].filter((x) => x !== t)) : new Set([...s, t])))} className="size-4 accent-[var(--accent)]" />
+                  <span className="text-[13px]">{t}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+const PLACEHOLDER = { http: 'https://example.com/data/sales.csv', s3: 's3://my-bucket/folder/sales.parquet', azure: 'az://container/folder/sales.csv' }
+const FORMAT_LABELS: Record<FileFormat, string> = { csv: 'CSV', tsv: 'TSV', json: 'JSON', jsonl: 'JSON Lines', parquet: 'Parquet', xlsx: 'Excel', ods: 'OpenDocument', xml2003: 'Excel XML 2003' }
+
+/** A file on the web, in S3 (or S3-compatible storage) or in Azure Blob storage. Secrets go to the keychain. */
+export function RemoteDialog() {
+  const [provider, setProvider] = useState<RemoteOptions['provider']>('http')
+  const [f, setF] = useState({ url: '', format: '' as FileFormat | '', region: '', endpoint: '', pathStyle: false, keyId: '', secret: '' })
+  const [tables, setTables] = useState<string[] | null>(null)
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [id] = useState(newId)
+  const upd = (patch: Partial<typeof f>) => {
+    setF((x) => ({ ...x, ...patch }))
+    setTables(null)
+    setError('')
+  }
+  const url = f.url.trim()
+  const ext = url.split(/[?#]/)[0].split('.').pop()?.toLowerCase() ?? ''
+  const format = f.format || FILE_FORMATS[ext] || ''
+  const sheets = format === 'xlsx' || format === 'ods' || format === 'xml2003'
+  const scheme = provider === 'http' ? /^https?:\/\//i : provider === 's3' ? /^(s3|s3a|s3n|r2|gcs|gs):\/\//i : /^(az|azure|abfss):\/\//i
+  const urlProblem = !url ? '' : !isRemotePath(url) || !scheme.test(url) ? `The address should start with ${provider === 'http' ? 'https://' : provider === 's3' ? 's3://' : 'az://'}` : /[\s'"\\]/.test(url) ? 'The address can’t contain spaces or quotes.' : !format ? 'Choose the file format.' : ''
+  const source = (): FileSource => {
+    const remote: RemoteOptions = provider === 's3' ? { provider, region: f.region.trim() || undefined, endpoint: f.endpoint.trim() || undefined, urlStyle: f.pathStyle ? 'path' : undefined, keyId: f.keyId.trim() || undefined, hasSecret: !!f.secret } : { provider, hasSecret: !!f.secret }
+    const name = decodeURIComponent(url.split(/[?#]/)[0].split('/').filter(Boolean).pop() ?? 'data')
+    return { id, kind: 'file', name, format: format as FileFormat, path: url, remote, tables: [], refresh: { ...DEFAULT_REFRESH, watch: false } }
+  }
+  const test = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      const t = await window.simpleViz.connectionTables({ source: source(), password: f.secret || undefined })
+      setTables(t)
+      setPicked(new Set(sheets ? t.slice(0, 1) : t))
+    } catch (e) {
+      setError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const add = async () => {
+    if (f.secret) await window.simpleViz.credentialSet(id, f.secret)
+    const taken = P.usedNames()
+    const tablesOut = [...picked].map((ref) => {
+      const alias = P.uniqueAlias(toAlias(ref.split('!')[0]), taken)
+      taken.add(alias)
+      return sheets ? { alias, ref } : { alias }
+    })
+    P.addSource({ ...source(), tables: tablesOut })
+    close()
+  }
+  const secretLabel = provider === 's3' ? 'Secret access key' : provider === 'azure' ? 'Connection string' : 'Access token (optional)'
+  return (
+    <Modal
+      open
+      onOpenChange={(o) => !o && close()}
+      title={
+        <span className="flex items-center gap-2">
+          <Globe2 className="size-4 text-accent-ink" /> Add a file from the web or cloud storage
+        </span>
+      }
+      description="Read on open and when you refresh; it is never changed. Keys and tokens are kept in your system keychain, never in the project file."
+      width={580}
+      footer={
+        <>
+          <Btn onClick={close}>Cancel</Btn>
+          {tables ? (
+            <Btn variant="primary" disabled={!picked.size} onClick={add} data-testid="remote-add">
+              Add
+            </Btn>
+          ) : (
+            <Btn variant="primary" disabled={busy || !url || !!urlProblem} onClick={test} data-testid="remote-test">
+              {busy && <Loader2 className="size-4 animate-spin" />} Connect
+            </Btn>
+          )}
+        </>
+      }
+    >
+      <Segmented value={provider} onChange={(v) => (setProvider(v), setTables(null), setError(''))} label="Where the file is" options={[{ value: 'http', label: 'Web address' }, { value: 's3', label: 'Amazon S3 & compatible' }, { value: 'azure', label: 'Azure Blob' }]} />
+      <div className="mt-3 grid grid-cols-[1fr_150px] gap-3">
+        <Field label="Address" hint={urlProblem || undefined}>
+          <input className={inputCls} value={f.url} placeholder={PLACEHOLDER[provider]} onChange={(e) => upd({ url: e.target.value })} aria-label="Address" spellCheck={false} data-testid="remote-url" />
+        </Field>
+        <Field label="Format">
+          <select className={inputCls} value={f.format} onChange={(e) => upd({ format: e.target.value as FileFormat | '' })} aria-label="Format" data-testid="remote-format">
+            <option value="">{FILE_FORMATS[ext] ? `Automatic (${FORMAT_LABELS[FILE_FORMATS[ext]]})` : 'Choose…'}</option>
+            {(Object.keys(FORMAT_LABELS) as FileFormat[]).map((k) => (
+              <option key={k} value={k}>
+                {FORMAT_LABELS[k]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {provider === 's3' && (
+          <>
+            <Field label="Access key ID">
+              <input className={inputCls} value={f.keyId} onChange={(e) => upd({ keyId: e.target.value })} aria-label="Access key ID" autoComplete="off" spellCheck={false} data-testid="remote-key-id" />
+            </Field>
+            <Field label="Region">
+              <input className={inputCls} value={f.region} placeholder="us-east-1" onChange={(e) => upd({ region: e.target.value })} aria-label="Region" data-testid="remote-region" />
+            </Field>
+            <Field label="Endpoint (S3-compatible services only)" hint="For example MinIO, Cloudflare R2, or storage.googleapis.com">
+              <input className={inputCls} value={f.endpoint} placeholder="Amazon S3" onChange={(e) => upd({ endpoint: e.target.value })} aria-label="Endpoint" spellCheck={false} data-testid="remote-endpoint" />
+            </Field>
+            <label className="mt-6 flex items-center gap-2 text-[12.5px]">
+              <input type="checkbox" className="size-4 accent-[var(--accent)]" checked={f.pathStyle} onChange={(e) => upd({ pathStyle: e.target.checked })} /> Path-style addresses
+            </label>
+          </>
+        )}
+      </div>
+      <div className="mt-3">
+        <Field label={secretLabel} hint={provider === 'azure' ? 'From the storage account’s Access keys page.' : undefined}>
+          <input className={inputCls} type="password" value={f.secret} onChange={(e) => upd({ secret: e.target.value })} aria-label={secretLabel} autoComplete="off" data-testid="remote-secret" />
+        </Field>
+      </div>
+      {error && (
+        <p className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-[12.5px] text-danger" role="alert" data-testid="remote-error">
+          {error}
+        </p>
+      )}
+      {tables && (
+        <div className="mt-4">
+          <div className="mb-1.5 text-[12px] font-medium text-text-2">{sheets ? 'Sheets and tables' : 'Ready to add'}</div>
+          <ul className="max-h-[200px] overflow-y-auto rounded-lg border border-border" data-testid="remote-tables">
+            {tables.map((t) => (
+              <li key={t}>
+                <label className="flex cursor-pointer items-center gap-3 px-3 py-1.5 hover:bg-hover">
+                  <input type="checkbox" checked={picked.has(t)} onChange={() => setPicked((x) => (x.has(t) ? new Set([...x].filter((y) => y !== t)) : new Set([...x, t])))} className="size-4 accent-[var(--accent)]" />
                   <span className="text-[13px]">{t}</span>
                 </label>
               </li>

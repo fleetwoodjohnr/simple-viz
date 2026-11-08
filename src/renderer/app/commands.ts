@@ -132,6 +132,7 @@ def({ id: 'nav.analytics', label: 'Go to Analytics', group: 'go', global: true, 
 
 def({ id: 'data.add', label: 'Add data file…', keywords: 'import excel csv parquet json sqlite duckdb', run: () => pickDataFiles() })
 def({ id: 'data.connect', label: 'Connect to PostgreSQL…', keywords: 'database server postgres', run: () => set({ dialog: { kind: 'connect-db', kind2: 'postgres' } }) })
+def({ id: 'data.remote', label: 'Add a file from the web or cloud storage…', keywords: 'url http s3 azure bucket blob cloud', run: () => set({ dialog: { kind: 'connect-remote' } }) })
 def({ id: 'data.connect-mysql', label: 'Connect to MySQL or MariaDB…', keywords: 'database server mysql mariadb', run: () => set({ dialog: { kind: 'connect-db', kind2: 'mysql' } }) })
 def({ id: 'data.refresh', label: 'Refresh all data', needsProject: true, keywords: 'reload update', run: () => P.refreshSources(undefined, true) })
 

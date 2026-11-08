@@ -4,7 +4,7 @@ import { promises as fs, existsSync } from 'node:fs'
 import path from 'node:path'
 import type { ConnectionDraft, OpenedFile, RecentFile, Settings } from '../shared/ipc-types'
 import type { EngineConfig, ResolvedSource } from '../shared/engine-protocol'
-import { DATA_EXTENSIONS, FILE_FORMATS, PROJECT_EXTENSION, SERVER, isServer, type Project, type Source } from '../shared/project'
+import { DATA_EXTENSIONS, FILE_FORMATS, PROJECT_EXTENSION, SERVER, isServer, isRemotePath, type Project, type Source } from '../shared/project'
 import * as store from './store'
 import * as creds from './credentials'
 import { EngineHost } from './engine-host'
@@ -98,7 +98,14 @@ async function addTrust(keys: string[]) {
   keys.forEach((k) => t.add(k))
   await store.atomicWrite(trustFile(), JSON.stringify([...t]))
 }
-const sourceKey = (s: Source) => ((s.kind === 'postgres' || s.kind === 'mysql') ? `${s.kind}:${s.user ?? ''}@${s.host ?? ''}:${s.port ?? SERVER[s.kind].port}/${s.database ?? ''}` : `file:${path.resolve(s.path ?? '')}`)
+const sourceKey = (s: Source) =>
+  s.kind === 'postgres' || s.kind === 'mysql'
+    ? `${s.kind}:${s.user ?? ''}@${s.host ?? ''}:${s.port ?? SERVER[s.kind].port}/${s.database ?? ''}`
+    : s.kind === 'file' && isRemotePath(s.path)
+      ? `url:${s.remote?.provider ?? 'http'}:${s.remote?.endpoint ?? ''}:${s.remote?.keyId ?? ''}:${s.path}`
+      : `file:${path.resolve(s.path ?? '')}`
+/** A storage address from a project file: plain characters only (it becomes an SQL literal and an allow-list entry). */
+const safeAddress = (v: unknown, max = 2048) => typeof v === 'string' && v.length <= max && !/[\s'"\\\u0000-\u001f]/.test(v)
 
 function checkSource(x: unknown): Source {
   const s = x as Source & Record<string, unknown>
@@ -108,6 +115,10 @@ function checkSource(x: unknown): Source {
   if (s.kind === 'postgres' || s.kind === 'mysql') {
     if (typeof s.host !== 'string' || s.host.length > 255 || /[\s'"\\]/.test(s.host)) throw new Error('Invalid host')
     if (s.port !== undefined && !(Number.isInteger(s.port) && s.port > 0 && s.port < 65536)) throw new Error('Invalid port')
+  } else if (s.kind === 'file' && isRemotePath(s.path)) {
+    if (!safeAddress(s.path)) throw new Error('Invalid address')
+    const r = s.remote
+    if (r && (typeof r !== 'object' || !['http', 's3', 'azure'].includes(r.provider) || ![r.region, r.endpoint, r.keyId].every((v) => v === undefined || safeAddress(v, 512)) || (r.urlStyle !== undefined && !['vhost', 'path'].includes(r.urlStyle)))) throw new Error('Invalid storage settings')
   } else if (!isAbs(s.path)) throw new Error('Invalid path')
   if (s.kind === 'file' && !Object.values(FILE_FORMATS).includes(s.format)) throw new Error('Invalid format')
   return s
@@ -115,6 +126,10 @@ function checkSource(x: unknown): Source {
 
 async function resolveSource(s: Source, settings: Settings): Promise<ResolvedSource> {
   const base: ResolvedSource = { id: s.id, kind: s.kind, tables: s.tables, mode: 'extract', timeoutSec: settings.refreshTimeoutSec, onOpen: s.refresh?.onOpen !== false }
+  if (s.kind === 'file' && isRemotePath(s.path)) {
+    const r = s.remote ?? { provider: 'http' as const }
+    return { ...base, format: s.format, path: s.path, header: s.header, remote: { provider: r.provider, region: r.region, endpoint: r.endpoint, urlStyle: r.urlStyle, useSsl: r.useSsl, keyId: r.keyId }, password: r.hasSecret ? await creds.getPassword(s.id) : undefined }
+  }
   if (s.kind === 'file') return { ...base, format: s.format, path: path.resolve(s.path), header: s.header }
   return {
     ...base,
@@ -139,12 +154,12 @@ async function configureEngine(p: Pick<Project, 'id' | 'sources' | 'datasets'>):
   const sources = p.sources.map(checkSource)
   for (const d of p.datasets) if (!isName(d?.name) || typeof d.sql !== 'string' || d.sql.length > 1_000_000) throw new Error(`Invalid dataset “${String(d?.name)}”`)
   const t = await trust()
-  const isOk = (s: Source) => (s.kind === 'postgres' || s.kind === 'mysql' ? t.has(sourceKey(s)) : granted.has(path.resolve(s.path!)) || t.has(sourceKey(s)))
+  const isOk = (s: Source) => (s.kind === 'postgres' || s.kind === 'mysql' || isRemotePath(s.path) ? t.has(sourceKey(s)) : granted.has(path.resolve(s.path!)) || t.has(sourceKey(s)))
   const unknown = sources.filter((s) => !isOk(s))
   const problems: string[] = []
   let allowed = sources
   if (unknown.length && mainWindow) {
-    const list = unknown.map((s) => (s.kind === 'postgres' || s.kind === 'mysql' ? `• ${SERVER[s.kind].label} ${s.user ? `${s.user}@` : ''}${s.host}:${s.port ?? SERVER[s.kind].port}/${s.database ?? ''}` : `• ${s.path}`)).join('\n')
+    const list = unknown.map((s) => (s.kind === 'postgres' || s.kind === 'mysql' ? `• ${SERVER[s.kind].label} ${s.user ? `${s.user}@` : ''}${s.host}:${s.port ?? SERVER[s.kind].port}/${s.database ?? ''}` : `• ${s.path}${s.kind === 'file' && s.remote?.endpoint ? ` (through ${s.remote.endpoint})` : ''}`)).join('\n')
     const { response } = await dialog.showMessageBox(mainWindow, {
       type: 'question',
       message: 'Allow this project to read these data sources?',
@@ -154,7 +169,7 @@ async function configureEngine(p: Pick<Project, 'id' | 'sources' | 'datasets'>):
       cancelId: 1
     })
     if (response === 0) {
-      unknown.forEach((s) => s.path && grant(s.path))
+      unknown.forEach((s) => s.path && !isRemotePath(s.path) && grant(s.path))
       await addTrust(unknown.map(sourceKey))
     } else {
       allowed = sources.filter(isOk)
@@ -426,7 +441,7 @@ function registerIpc() {
   })
   handle('connection:tables', async (_e, draft: ConnectionDraft) => {
     const s = checkSource(draft?.source)
-    if (s.path) assertGranted(s.path)
+    if (s.path && !isRemotePath(s.path)) assertGranted(s.path)
     const settings = await store.getSettings()
     const resolved = await resolveSource(s, settings)
     if (typeof draft.password === 'string') resolved.password = draft.password

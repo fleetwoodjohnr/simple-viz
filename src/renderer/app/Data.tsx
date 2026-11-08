@@ -11,7 +11,7 @@ import { SourceBadge, timeAgo } from './RefreshStatus'
 import { Btn, IconBtn, Menu, MenuContent, MenuItem, MenuSep, MenuTrigger, MenuCheck, SubMenu, Modal, Field, cx, inputCls } from '../ui'
 import { DataGrid, typeLabel, type GridSource } from '../ui/DataGrid'
 import { profileSql, readProfile, type Profile } from '@/core/profile'
-import type { Source } from '@/shared/project'
+import { isRemotePath, type Source } from '@/shared/project'
 import type { RelationInfo } from '@/shared/engine-protocol'
 import { openInSql } from './SqlEditor'
 import { ModelEditor } from './ModelEditor'
@@ -67,6 +67,9 @@ export function DataView() {
               <MenuContent align="end">
                 <MenuItem icon={<FileSpreadsheet />} onSelect={() => void pickDataFiles()} data-testid="add-file">
                   File (Excel, CSV, Parquet…)
+                </MenuItem>
+                <MenuItem icon={<Globe2 />} onSelect={() => runCommand('data.remote')} data-testid="add-remote">
+                  File on the web or in cloud storage (S3, Azure)
                 </MenuItem>
                 <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect')} data-testid="add-postgres">
                   PostgreSQL database
@@ -460,7 +463,7 @@ function SourceMenu({ s }: { s: Source }) {
           <MenuCheck checked={s.refresh.onOpen} onCheckedChange={(v) => setPolicy({ onOpen: !!v })}>
             When the project opens
           </MenuCheck>
-          {s.kind !== 'postgres' && s.kind !== 'mysql' && (
+          {s.kind !== 'postgres' && s.kind !== 'mysql' && !isRemotePath(s.path) && (
             <MenuCheck checked={s.refresh.watch} onCheckedChange={(v) => setPolicy({ watch: !!v })}>
               When the file changes
             </MenuCheck>
@@ -480,12 +483,12 @@ function SourceMenu({ s }: { s: Source }) {
             {s.mode === 'live' ? 'Switch to extract (local copy)' : 'Switch to live queries'}
           </MenuItem>
         )}
-        {s.path && (
+        {s.path && !isRemotePath(s.path) && (
           <MenuItem icon={<FolderSearch />} onSelect={() => set({ dialog: { kind: 'relink', sourceId: s.id } })}>
             Change file location…
           </MenuItem>
         )}
-        {s.path && (
+        {s.path && !isRemotePath(s.path) && (
           <MenuItem icon={<FolderSearch />} onSelect={() => window.simpleViz.showInFolder(s.path!)}>
             Show in folder
           </MenuItem>

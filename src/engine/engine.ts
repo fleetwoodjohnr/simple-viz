@@ -10,13 +10,14 @@ import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import type { ColumnInfo, EngineConfig, QueryResult, RelationInfo, ResolvedSource, ResultPage, SourceStatus } from '../shared/engine-protocol'
-import { SERVER, isServer } from '../shared/project'
+import { SERVER, isServer, isRemotePath } from '../shared/project'
+import { readWorkbook, listTables, type SheetFormat } from '../core/sheets/rows'
 import { gateProblems, collectRefs, SAFE_TABLE_FUNCTIONS } from '../core/sql/ast'
 import { explainError } from '../core/errors'
 import { numberFromText } from '../core/profile'
 import { MACROS } from '../core/calc/macros'
 import { extractName, ident, isSafeType, lit, trimStatement } from './sql'
-import { extractSelect, sourceStat, type Memo, type Stat } from './ingest'
+import { extractSelect, sourceStat, readBytes, type Memo, type Stat } from './ingest'
 
 type Value = string | number | boolean | null
 
@@ -130,10 +131,15 @@ export class Engine {
     // 1. Extensions, from the app's own resources (never downloaded).
     const kinds = new Set(config.sources.map((s) => s.kind))
     const exts = [...(kinds.has('postgres') ? ['postgres_scanner'] : []), ...(kinds.has('mysql') ? ['mysql_scanner'] : []), ...(kinds.has('sqlite') ? ['sqlite_scanner'] : [])]
-    for (const e of exts) {
+    for (const e of [...exts, ...remoteExtensions(config.sources)]) {
       if (!config.extensionsDir) throw new Error(`The ${e} extension is not bundled with this build.`)
       await c.run(`LOAD ${lit(path.join(config.extensionsDir, `${e}.duckdb_extension`))}`)
     }
+    // Secrets live only in memory: never DuckDB's own secret folder (~/.duckdb), which the lockdown would refuse
+    // anyway. Initialised now, once, rather than lazily by the first remote read (after lockdown, possibly twice).
+    await c.run('SET allow_persistent_secrets = false')
+    await c.run('FROM duckdb_secrets()')
+    for (const s of config.sources) if (isRemotePath(s.path)) await remoteSecret(c, s)
 
     // 2. The cache: extracts of every source table, also the last-known-good copy when a refresh fails.
     const cacheFile = path.join(cacheDir, `${config.projectId.replace(/[^A-Za-z0-9_-]/g, '')}.duckdb`)
@@ -170,7 +176,8 @@ export class Engine {
 
     // 4. Lock down: user SQL may touch only the project's files and the cache directory, and can change no setting.
     // A DuckDB database file is opened together with its write-ahead log.
-    const files = config.sources.filter((s) => s.path).flatMap((s) => (s.kind === 'duckdb' ? [path.resolve(s.path!), `${path.resolve(s.path!)}.wal`] : [path.resolve(s.path!)]))
+    // A remote file is allowed by its exact URL: no other address can be read.
+    const files = config.sources.filter((s) => s.path).flatMap((s) => (isRemotePath(s.path) ? [s.path!] : s.kind === 'duckdb' ? [path.resolve(s.path!), `${path.resolve(s.path!)}.wal`] : [path.resolve(s.path!)]))
     await c.run(`SET allowed_directories = [${[cacheDir + path.sep].map(lit).join(', ')}]`)
     if (files.length) await c.run(`SET allowed_paths = [${files.map(lit).join(', ')}]`)
     await c.run('SET enable_external_access = false')
@@ -617,6 +624,17 @@ export class Engine {
         await c.run(`ATTACH ${lit(s.path!)} AS ${ident(`db_${s.id}`)} (TYPE sqlite, READ_ONLY)`)
       } else if (s.kind === 'duckdb') {
         await c.run(`ATTACH ${lit(s.path!)} AS ${ident(`db_${s.id}`)} (READ_ONLY)`)
+      } else if (s.kind === 'file' && isRemotePath(s.path)) {
+        // A file on the web or in cloud storage: can it be read, and what tables does it hold?
+        for (const e of remoteExtensions([s])) {
+          if (!extensionsDir) throw new Error(`The ${e} extension is not bundled with this build.`)
+          await c.run(`LOAD ${lit(path.join(extensionsDir, `${e}.duckdb_extension`))}`)
+        }
+        await remoteSecret(c, s)
+        if (s.format === 'xlsx' || s.format === 'ods' || s.format === 'xml2003') return { tables: listTables(readWorkbook(await readBytes(c, s.path!), s.format as SheetFormat)).map((t) => t.ref) }
+        const { select } = await extractSelect(c, s, undefined)
+        await c.run(`DESCRIBE ${select}`)
+        return { tables: [decodeURIComponent(s.path!.split(/[/?#]/).filter(Boolean).pop() ?? 'data').replace(/\.[a-z0-9]+$/i, '')] }
       }
       const rows = (await c.runAndReadAll(`SELECT schema_name, table_name FROM duckdb_tables() WHERE database_name = ${lit(`db_${s.id}`)} UNION ALL SELECT schema_name, view_name FROM duckdb_views() WHERE database_name = ${lit(`db_${s.id}`)} AND NOT internal ORDER BY 1, 2`)).getRows()
       return { tables: rows.map(([sch, t]) => (isServer(s.kind) || (s.kind === 'duckdb' && sch !== 'main') ? `${sch}.${t}` : String(t))) }
@@ -682,3 +700,30 @@ export function toPage(reader: DuckDBResultReader, offset: number, limit: number
   return { columns, rows, offset }
 }
 
+
+/** Extensions remote files need: httpfs (web, S3 and compatible), azure (Azure Blob / Data Lake). */
+function remoteExtensions(sources: ResolvedSource[]): string[] {
+  const remote = sources.filter((s) => isRemotePath(s.path))
+  return [...(remote.some((s) => !/^(az|azure|abfss):/i.test(s.path!)) ? ['httpfs'] : []), ...(remote.some((s) => /^(az|azure|abfss):/i.test(s.path!)) ? ['azure'] : [])]
+}
+
+/** Credentials for one remote file, as a temporary secret scoped to its URL (nothing is written to disk). */
+async function remoteSecret(c: DuckDBConnection, s: ResolvedSource) {
+  const r = s.remote
+  if (!r) return
+  const name = ident(`rs_${s.id}`)
+  const scope = `SCOPE ${lit(s.path!)}`
+  if (r.provider === 's3' && (r.keyId || r.region || r.endpoint)) {
+    const parts = ['TYPE s3', scope]
+    if (r.keyId) parts.push(`KEY_ID ${lit(r.keyId)}`)
+    if (s.password) parts.push(`SECRET ${lit(s.password)}`)
+    if (r.region) parts.push(`REGION ${lit(r.region)}`)
+    if (r.endpoint) parts.push(`ENDPOINT ${lit(r.endpoint.replace(/^https?:\/\//, '').replace(/\/+$/, ''))}`, `USE_SSL ${r.useSsl === false || /^http:\/\//.test(r.endpoint) ? 'false' : 'true'}`)
+    if (r.urlStyle) parts.push(`URL_STYLE ${lit(r.urlStyle)}`)
+    await c.run(`CREATE OR REPLACE TEMPORARY SECRET ${name} (${parts.join(', ')})`)
+  } else if (r.provider === 'azure' && s.password) {
+    await c.run(`CREATE OR REPLACE TEMPORARY SECRET ${name} (TYPE azure, CONNECTION_STRING ${lit(s.password)}, ${scope})`)
+  } else if (r.provider === 'http' && s.password) {
+    await c.run(`CREATE OR REPLACE TEMPORARY SECRET ${name} (TYPE http, BEARER_TOKEN ${lit(s.password)}, ${scope})`)
+  }
+}

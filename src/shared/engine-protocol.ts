@@ -1,7 +1,7 @@
 // Messages between the renderer / main process and the engine (a utility process running DuckDB).
 // The renderer's port carries only RendererRequest; sources, paths and credentials arrive from main alone.
 
-import type { DbKind, FileFormat } from './project'
+import type { DbKind, FileFormat, RemoteOptions } from './project'
 
 export interface ColumnInfo {
   name: string
@@ -67,6 +67,8 @@ export interface ResolvedSource {
   user?: string
   password?: string
   sslmode?: string
+  /** Files on the web or in cloud storage (the secret, if any, is in `password`). */
+  remote?: RemoteOptions
 }
 
 export interface EngineConfig {

@@ -5,7 +5,7 @@
 import { promises as fs } from 'node:fs'
 import { dateValue, timestampValue, type DuckDBConnection } from '@duckdb/node-api'
 import type { ResolvedSource } from '../shared/engine-protocol'
-import { isServer } from '../shared/project'
+import { isServer, isRemotePath } from '../shared/project'
 import { readWorkbook, tableRows, type SheetFormat } from '../core/sheets/rows'
 import type { Workbook } from '../core/sheets/model/workbook'
 import { ident, lit } from './sql'
@@ -17,7 +17,7 @@ export interface Stat {
 
 /** Size and modification time of a file-backed source (null for servers). */
 export async function sourceStat(s: ResolvedSource): Promise<Stat | null> {
-  if (!s.path || isServer(s.kind)) return null
+  if (!s.path || isServer(s.kind) || isRemotePath(s.path)) return null
   const st = await fs.stat(s.path)
   if (!st.isFile()) throw new Error(`ENOENT: not a file: ${s.path}`)
   return { size: st.size, mtime: Math.round(st.mtimeMs) }
@@ -66,6 +66,7 @@ export async function extractSelect(conn: DuckDBConnection, s: ResolvedSource, r
 /** Loads one sheet table into a staging table with an appender; the caller copies it into the cache. */
 async function stageSheet(conn: DuckDBConnection, s: ResolvedSource, ref: string | undefined, memo: Memo) {
   memo.book ??= (async () => {
+    if (isRemotePath(s.path)) return readWorkbook(await readBytes(conn, s.path!), s.format as SheetFormat)
     const st = await fs.stat(s.path!)
     if (st.size > MAX_SHEET_BYTES) throw new Error('The workbook is larger than 512 MB.')
     return readWorkbook(new Uint8Array(await fs.readFile(s.path!)), s.format as SheetFormat)
@@ -95,4 +96,14 @@ async function stageSheet(conn: DuckDBConnection, s: ResolvedSource, ref: string
     app.closeSync()
   }
   return { select: `SELECT * FROM ${q}`, cleanup: async () => void (await conn.run(`DROP TABLE IF EXISTS ${q}`).catch(() => {})) }
+}
+
+/** A remote file's bytes, through DuckDB (so the same URL allow-list and credentials apply). */
+export async function readBytes(conn: DuckDBConnection, url: string): Promise<Uint8Array> {
+  const r = await conn.runAndReadAll(`SELECT size, content FROM read_blob(${lit(url)})`)
+  const [size, content] = r.getRows()[0] ?? []
+  if (Number(size) > MAX_SHEET_BYTES) throw new Error('The workbook is larger than 512 MB.')
+  const b = content as { bytes?: Uint8Array } | Uint8Array | undefined
+  if (!b) throw new Error(`Nothing was read from ${url}.`)
+  return b instanceof Uint8Array ? b : (b.bytes ?? new Uint8Array())
 }

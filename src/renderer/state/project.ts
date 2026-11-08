@@ -4,7 +4,7 @@
 import { get, set, toast } from './store'
 import { describe, holdRequestsUntil, onEngineConnected } from './engine'
 import { newProject as blankProject, newId, packProject, unpackProject } from '@/core/project/sviz'
-import { DEFAULT_REFRESH, FILE_FORMATS, PROJECT_EXTENSION, toAlias, type Dataset, type FileSource, type Project, type Source } from '@/shared/project'
+import { DEFAULT_REFRESH, FILE_FORMATS, PROJECT_EXTENSION, isRemotePath, toAlias, type Dataset, type FileSource, type Project, type Source } from '@/shared/project'
 import type { OpenedFile, RecoveryEntry } from '@/shared/ipc-types'
 import type { SourceStatus } from '@/shared/engine-protocol'
 
@@ -150,7 +150,7 @@ export async function refreshSources(ids?: string[], force = false) {
   }
 }
 
-const watchedPaths = () => (get().project?.sources ?? []).filter((s) => s.path && s.refresh.watch).map((s) => s.path!)
+const watchedPaths = () => (get().project?.sources ?? []).filter((s) => s.path && !isRemotePath(s.path) && s.refresh.watch).map((s) => s.path!)
 
 export function onFileChanged(file: string) {
   const ids = (get().project?.sources ?? []).filter((s) => s.path === file && s.refresh.watch).map((s) => s.id)

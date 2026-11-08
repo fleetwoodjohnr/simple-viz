@@ -6,7 +6,7 @@ import * as P from '../state/project'
 import { allCommands, eventToShortcut, formatShortcut, getCommand, runCommand, shortcutFor, shortcutsFor } from './commands'
 import { EDITOR_SHORTCUTS } from './shortcuts'
 import { Btn, Kbd, Modal, Segmented, Switch, cx, inputCls } from '../ui'
-import { SheetPicker, ConnectDialog, RelinkDialog } from './Connect'
+import { SheetPicker, ConnectDialog, RelinkDialog, RemoteDialog } from './Connect'
 
 export const close = () => flushSync(() => set({ dialog: null }))
 
@@ -26,6 +26,8 @@ export function Dialogs() {
       return <AboutDialog />
     case 'sheet-picker':
       return <SheetPicker path={d.path} />
+    case 'connect-remote':
+      return <RemoteDialog />
     case 'connect-db':
       return <ConnectDialog kind={d.kind2} key={d.kind2} />
     case 'relink':
