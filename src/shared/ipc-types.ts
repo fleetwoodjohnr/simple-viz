@@ -90,6 +90,10 @@ export interface SimpleVizApi {
   readFile(path: string): Promise<OpenedFile>
   saveDialog(defaultName: string, extensions: string[]): Promise<string | null>
   writeFile(path: string, data: Uint8Array): Promise<{ mtime: number }>
+  /** Portable packages: each table's cached copy as Parquet, by `sourceId__alias`. */
+  packageData(tables: { sourceId: string; ref?: string; alias: string }[]): Promise<Record<string, Uint8Array>>
+  /** Keeps a portable package's data for a project (the engine starts from it where nothing is cached). */
+  storePackagedData(projectId: string, files: Record<string, Uint8Array>): Promise<void>
   /** Resolve a dropped File to its path and grant access to it. */
   grantDroppedFile(file: File): string | null
   fileExists(path: string): Promise<boolean>

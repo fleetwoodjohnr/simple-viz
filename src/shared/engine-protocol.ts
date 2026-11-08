@@ -75,6 +75,9 @@ export interface EngineConfig {
   projectId: string
   /** DuckDB's memory limit (e.g. "2GB"); default 40% of RAM. Past it, large sorts and joins spill to the cache's tmp folder. */
   memoryLimit?: string
+  /** Data packaged in a portable project (Parquet files in the cache folder), by `sourceId__alias`: it seeds a table
+   * that has no cached copy yet, and stays the last good data until the source itself can be read. */
+  packaged?: Record<string, string>
   /** userData/cache: holds <projectId>.duckdb, spill files, and export staging. */
   cacheDir: string
   /** Bundled DuckDB extensions for this platform (null in tests that don't need them). */
@@ -102,6 +105,8 @@ export type ControlRequest =
   | { op: 'export'; sql: string; format: 'csv' | 'parquet'; file: string }
   | { op: 'tables'; source: ResolvedSource }
   | { op: 'sheets'; path: string; format: FileFormat }
+  /** Each table's cached copy as Parquet (for a portable package); returns the staged files by `sourceId__alias`. */
+  | { op: 'package'; tables: { sourceId: string; ref?: string; alias: string }[] }
 
 export type ControlMessage = ControlRequest & { id: number }
 

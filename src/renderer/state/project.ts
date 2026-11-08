@@ -217,7 +217,11 @@ const titleFrom = (name: string) => name.replace(/\.[^.]+$/, '')
 async function openProject(file: OpenedFile) {
   if (!whenClosed({ open: file.path })) return
   try {
-    const { project } = unpackProject(file.data)
+    const { project, files } = unpackProject(file.data)
+    // A portable package: its data is kept for the engine before the project loads (tables without a cached copy
+    // start from it; the sources are still read when they can be).
+    const packaged = Object.fromEntries(Object.entries(files).filter(([k]) => /^extracts\/[A-Za-z0-9_-]+\.parquet$/.test(k)).map(([k, v]) => [k.slice(9, -8), v]))
+    if (Object.keys(packaged).length) await api().storePackagedData(project.id, packaged)
     load(project, file.path)
     set({ recents: await api().recentAdd({ path: file.path, name: file.name, openedAt: Date.now() }) })
   } catch (e) {
@@ -290,6 +294,25 @@ export async function save(as = false): Promise<boolean> {
   } catch (e) {
     set({ status: 'error', saveError: (e as Error).message })
     toast(`Couldn’t save: ${(e as Error).message}`, 'error')
+    return false
+  }
+}
+
+/** Saves a copy of the project with its data inside (Parquet), to open on a computer without the sources. */
+export async function savePortable(): Promise<boolean> {
+  const p = get().project
+  if (!p) return false
+  const path = await api().saveDialog(`${p.title} (with data).${PROJECT_EXTENSION}`, [PROJECT_EXTENSION])
+  if (!path) return false
+  try {
+    const data = await api().packageData(p.sources.flatMap((s) => s.tables.map((t) => ({ sourceId: s.id, ref: t.ref, alias: t.alias }))))
+    const extras = Object.fromEntries(Object.entries(data).map(([k, v]) => [`extracts/${k}.parquet`, v]))
+    await api().writeFile(path, packProject(p, extras))
+    const missing = p.sources.flatMap((s) => s.tables).length - Object.keys(data).length
+    toast(`Saved a portable copy with the data of ${Object.keys(data).length} table${Object.keys(data).length === 1 ? '' : 's'}${missing ? ` (${missing} live or not yet loaded: not included)` : ''}`, 'success')
+    return true
+  } catch (e) {
+    toast(`Couldn’t save the portable copy: ${(e as Error).message}`, 'error')
     return false
   }
 }

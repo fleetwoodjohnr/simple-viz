@@ -124,6 +124,16 @@ function checkSource(x: unknown): Source {
   return s
 }
 
+/** A portable project's packaged data, if it was opened from a package (written by project:store-packaged). */
+async function packagedFiles(projectId: string): Promise<Record<string, string>> {
+  const dir = path.join(app.getPath('userData'), 'cache', 'packaged', projectId)
+  try {
+    return Object.fromEntries((await fs.readdir(dir)).filter((f) => f.endsWith('.parquet')).map((f) => [f.slice(0, -8), path.join(dir, f)]))
+  } catch {
+    return {}
+  }
+}
+
 async function resolveSource(s: Source, settings: Settings): Promise<ResolvedSource> {
   const base: ResolvedSource = { id: s.id, kind: s.kind, tables: s.tables, mode: 'extract', timeoutSec: settings.refreshTimeoutSec, onOpen: s.refresh?.onOpen !== false }
   if (s.kind === 'file' && isRemotePath(s.path)) {
@@ -180,6 +190,7 @@ async function configureEngine(p: Pick<Project, 'id' | 'sources' | 'datasets'>):
   const config: EngineConfig = {
     projectId: p.id,
     cacheDir: path.join(app.getPath('userData'), 'cache'),
+    packaged: await packagedFiles(p.id),
     extensionsDir: extensionsDir(),
     sources: await Promise.all(allowed.map((s) => resolveSource(s, settings))),
     datasets: p.datasets.map((d) => ({ name: d.name, sql: d.sql }))
@@ -280,6 +291,7 @@ function buildMenu() {
         { type: 'separator' },
         { label: 'Save', click: send('file.save') },
         { label: 'Save As…', click: send('file.saveAs') },
+        { label: 'Save a Portable Copy (with Data)…', click: send('file.savePortable') },
         { type: 'separator' },
         { label: 'Add Data…', click: send('data.add') },
         { label: 'Refresh All', click: send('data.refresh') },
@@ -431,6 +443,25 @@ function registerIpc() {
   handle('engine:refresh', (_e, ids: unknown, force: unknown) => {
     if (ids !== undefined && (!Array.isArray(ids) || !ids.every(isId))) throw new Error('Invalid sources')
     return engine.request({ op: 'refresh', sourceIds: ids as string[] | undefined, force: !!force })
+  })
+  handle('project:package', async (_e, tables: unknown) => {
+    if (!Array.isArray(tables) || tables.length > 2000 || !tables.every((t) => t && isId(t.sourceId) && isName(t.alias) && (t.ref === undefined || (typeof t.ref === 'string' && t.ref.length <= 500)))) throw new Error('Invalid tables')
+    const staged = await engine.request<Record<string, string>>({ op: 'package', tables })
+    const out: Record<string, Uint8Array> = {}
+    for (const [key, file] of Object.entries(staged)) {
+      out[key] = new Uint8Array(await fs.readFile(file))
+      await fs.rm(file, { force: true })
+    }
+    return out
+  })
+  handle('project:store-packaged', async (_e, id: unknown, files: unknown) => {
+    if (!isId(id) || !files || typeof files !== 'object') throw new Error('Invalid package')
+    const entries = Object.entries(files as Record<string, unknown>)
+    if (entries.length > 2000 || !entries.every(([k, v]) => /^[A-Za-z0-9_-]{1,200}$/.test(k) && v instanceof Uint8Array)) throw new Error('Invalid package')
+    const dir = path.join(app.getPath('userData'), 'cache', 'packaged', id)
+    await fs.rm(dir, { recursive: true, force: true })
+    await fs.mkdir(dir, { recursive: true })
+    for (const [k, v] of entries) await fs.writeFile(path.join(dir, `${k}.parquet`), v as Uint8Array)
   })
   handle('engine:export', async (_e, sql: unknown, format: unknown, target: unknown) => {
     if (typeof sql !== 'string' || (format !== 'csv' && format !== 'parquet')) throw new Error('Invalid export')

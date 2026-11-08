@@ -120,6 +120,7 @@ def({ id: 'file.new', label: 'New project', global: true, run: () => P.newProjec
 def({ id: 'file.open', label: 'Open project…', global: true, run: () => P.openDialog() })
 def({ id: 'file.save', label: 'Save', global: true, needsProject: true, run: () => P.save() })
 def({ id: 'file.saveAs', label: 'Save as…', global: true, needsProject: true, run: () => P.save(true) })
+def({ id: 'file.savePortable', label: 'Save a portable copy (with data)…', keywords: 'package export share offline', needsProject: true, run: () => P.savePortable() })
 def({ id: 'file.close', label: 'Close project', global: true, needsProject: true, run: () => P.closeProject() })
 def({ id: 'edit.undo', label: 'Undo', needsProject: true, run: () => P.undo() })
 def({ id: 'edit.redo', label: 'Redo', needsProject: true, run: () => P.redo() })

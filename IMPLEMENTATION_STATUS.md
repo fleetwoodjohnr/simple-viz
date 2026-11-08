@@ -54,6 +54,7 @@ Linux, Windows and macOS._
 | A project from another computer asks before reading its sources (native dialog); refused sources stay unloaded; allowed ones aren't asked again | e2e `projects` |
 | Relink: a moved file is reported, and found again from the refresh status | e2e `projects` |
 | Crash recovery: unsaved work restored after the app is killed | e2e `projects` |
+| Portable copy (File → Save a Portable Copy): each table's cached data inside the `.sviz` as Parquet; on another computer it seeds the cache and stays the last good data until the sources can be read (live tables aren't included) | integration `formats`; UI path not yet covered by an e2e test |
 | SQL editor: schema completion, formatting, plan, history, saved queries (in the project), CSV and Excel export | e2e `sqleditor` |
 
 ## M2 — Charts and calculations ✅

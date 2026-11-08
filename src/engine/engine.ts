@@ -185,7 +185,44 @@ export class Engine {
     await c.run('SET lock_configuration = true')
 
     await this.loadMeta()
+    await this.seedPackaged(c, config)
     await this.syncViews()
+  }
+
+  /** Tables of a portable project with no cached copy yet start from the data packaged with it. */
+  private async seedPackaged(c: DuckDBConnection, config: EngineConfig) {
+    const cacheDir = path.resolve(config.cacheDir) + path.sep
+    for (const s of config.sources)
+      for (const t of s.tables) {
+        const file = config.packaged?.[`${s.id}__${t.alias}`]
+        const name = extractName(s.id, t.ref)
+        if (!file || this.metaCache.has(name) || !path.resolve(file).startsWith(cacheDir)) continue
+        try {
+          await c.run(`CREATE OR REPLACE TABLE cache.main.${ident(name)} AS SELECT * FROM read_parquet(${lit(path.resolve(file))})`)
+          const [n, fp] = (await c.runAndReadAll(`SELECT count(*)::BIGINT, coalesce(sum(hash(t)), 0)::VARCHAR FROM cache.main.${ident(name)} t`)).getRows()[0]
+          const meta: Meta = { size: null, mtime: null, fingerprint: `${this.version}:${String(n)}:${String(fp)}`, refreshedAt: Date.now(), rows: Number(n) }
+          await c.run(`INSERT OR REPLACE INTO cache.main.__meta VALUES (${lit(name)}, NULL, NULL, ${lit(meta.fingerprint)}, ${meta.refreshedAt}, ${meta.rows})`)
+          this.metaCache.set(name, meta)
+        } catch (e) {
+          this.onLog('warn', `Packaged data for ${t.alias} couldn’t be read: ${(e as Error).message}`)
+        }
+      }
+  }
+
+  /** Each table's cached copy as Parquet in the staging folder (for a portable package). */
+  async packageTables(tables: { sourceId: string; ref?: string; alias: string }[]): Promise<Record<string, string>> {
+    const out: Record<string, string> = {}
+    const dir = path.join(path.resolve(this.config!.cacheDir), 'out')
+    for (const t of tables) {
+      const name = extractName(t.sourceId, t.ref)
+      if (!this.metaCache.has(name)) continue
+      const key = `${t.sourceId}__${t.alias}`
+      if (!/^[A-Za-z0-9_-]+$/.test(key)) continue
+      const file = path.join(dir, `pkg-${process.pid}-${Date.now()}-${key}.parquet`)
+      await this.conn().run(`COPY (SELECT * FROM cache.main.${ident(name)}) TO ${lit(file)} (FORMAT parquet, COMPRESSION zstd)`)
+      out[key] = file
+    }
+    return out
   }
 
   private async attachServer(c: DuckDBConnection, s: ResolvedSource) {

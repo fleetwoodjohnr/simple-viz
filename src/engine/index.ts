@@ -39,6 +39,8 @@ async function control(m: ControlMessage): Promise<unknown> {
       return engine.refresh(m.sourceIds, m.force)
     case 'export':
       return engine.work(() => engine.exportTo(m.sql, m.format, m.file))
+    case 'package':
+      return engine.work(() => engine.packageTables(m.tables))
     case 'tables':
       return (await Engine.probe(m.source, extensionsDir)).tables
     case 'sheets': {
