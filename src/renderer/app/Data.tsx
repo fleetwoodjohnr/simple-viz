@@ -259,8 +259,8 @@ function EmptyPane({ name }: { name: string | null }) {
             <AlertTriangle className="mx-auto mb-2 size-6 text-danger" />
             <div className="text-[14px] font-semibold">{src!.name} isn’t available</div>
             <p className="mt-1 select-text text-[12.5px] text-text-2">{st.error}</p>
-            {src?.path && (
-              <Btn className="mt-3" onClick={() => set({ dialog: { kind: 'relink', sourceId: src.id } })}>
+            {src?.path && !isRemotePath(src.path) && (
+              <Btn className="mt-3" onClick={() => set({ dialog: { kind: 'relink', sourceId: src.id } })} data-testid="find-file">
                 <FolderSearch className="size-4" /> Find the file…
               </Btn>
             )}

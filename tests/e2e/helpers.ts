@@ -13,7 +13,13 @@ export const test = base.extend<{ cleanup: void }>({
   cleanup: [
     async ({}, use) => {
       await use()
-      for (const a of open) a.process().kill('SIGKILL')
+      for (const a of open) {
+        try {
+          a.process().kill('SIGKILL')
+        } catch {
+          /* already gone (a test may kill its app itself) */
+        }
+      }
       open.clear()
     },
     { auto: true }
@@ -77,9 +83,19 @@ export async function stubDialogs(app: ElectronApplication, d: { save?: string |
       const opens = (Array.isArray(d.open[0]) ? d.open : [d.open]) as string[][]
       dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: opens.length > 1 ? opens.shift() : opens[0] })) as never
     }
-    if (d.message !== undefined) dialog.showMessageBox = (async () => ({ response: d.message, checkboxChecked: false })) as never
+    // Message boxes are answered and recorded: messagesShown() lists them.
+    if (d.message !== undefined)
+      dialog.showMessageBox = (async (...args: unknown[]) => {
+        const opts = (args.length > 1 ? args[1] : args[0]) as { message?: string; detail?: string }
+        const g = globalThis as unknown as { __messages?: unknown[] }
+        ;(g.__messages ??= []).push({ message: opts?.message, detail: opts?.detail })
+        return { response: d.message, checkboxChecked: false }
+      }) as never
   }, d)
 }
+
+/** The message boxes stubDialogs answered, in order. */
+export const messagesShown = (app: ElectronApplication) => app.evaluate(() => ((globalThis as Record<string, unknown>).__messages ?? []) as { message?: string; detail?: string }[])
 
 /** Every test fails on a Content-Security-Policy violation or an uncaught renderer error. */
 export async function quit(app: ElectronApplication) {

@@ -1,6 +1,6 @@
 # Implementation status
 
-_Last updated: 2026-11-05 · M0–M7 complete (with the limits listed), M1 has items pending tests; M8–M9 not started ·
+_Last updated: 2026-11-05 · M0–M7 complete (with the limits listed); M8 in progress; M9 not started ·
 version 0.1.0 (unreleased) · verified with automated tests on Linux (Fedora 44); CI builds, packages and tests on
 Linux, Windows and macOS._
 
@@ -51,13 +51,10 @@ Linux, Windows and macOS._
 | Reboot while a refresh runs | integration `reboot` |
 | Malformed CSV, non-ZIP xlsx, zip bomb | integration `engine › flat files` |
 | `.sviz` save/open, recents, schema version and migrations, no credentials | e2e `data`, unit `project` |
-
-### Still to do in M1
-
-- Source approval prompt for projects from another computer: implemented, test pending.
-- Relink wizard: implemented, test pending.
-- SQL editor completion, formatting, history, saved queries, plan, export: implemented, manual check; tests pending.
-- Crash recovery for projects: implemented (shell), test pending.
+| A project from another computer asks before reading its sources (native dialog); refused sources stay unloaded; allowed ones aren't asked again | e2e `projects` |
+| Relink: a moved file is reported, and found again from the refresh status | e2e `projects` |
+| Crash recovery: unsaved work restored after the app is killed | e2e `projects` |
+| SQL editor: schema completion, formatting, plan, history, saved queries (in the project), CSV and Excel export | e2e `sqleditor` |
 
 ## M2 — Charts and calculations ✅
 
@@ -73,9 +70,9 @@ Linux, Windows and macOS._
 | Chart types: bar (grouped, stacked, 100%, horizontal), line, area, combo/dual axis, pie/donut, scatter/bubble, histogram, box plot, heat map, treemap, KPI card, table, crosstab | unit `charts`, e2e `charts` (bar, line, KPI drawn values = SQL) |
 | Recommended chart type from the fields | unit `charts`, e2e `charts` |
 | Drag and drop onto shelves; the same from each field's menu (keyboard) | e2e `charts` |
-| Number formats, reference lines (average, median, min, max), trend line with R² | unit `charts` (option builders); manual check |
+| Number formats, reference lines (average, median, min, max), trend line with R² | unit `charts` (option builders), e2e `layout` (average line in the app) |
 | Theme-aware charts (CSS tokens), tooltips escape data (no HTML injection) | unit `charts`, e2e `charts` |
-| PNG (3×) / SVG / CSV export of a chart | manual check; tests pending |
+| PNG (high resolution) / SVG / CSV export of a chart | e2e `layout` |
 
 ### Known limitations
 
@@ -91,12 +88,12 @@ Linux, Windows and macOS._
 |---|---|
 | **Acceptance scenario, all 24 steps** (Excel + PostgreSQL → SQL dataset → charts → dashboard with a region filter → save → workbook changed → reopen with refreshed figures → dark/light → PDF → update check) | e2e `acceptance` |
 | Dashboard canvas: add from the palette (free spot), drag charts in, move, resize (8 handles), 8 px grid snap, undo/redo | e2e `dashboards` |
-| Align, distribute, group, lock, duplicate, delete; keyboard nudging | unit `charts › dashboard layout`; manual check |
+| Align, distribute, group, lock, duplicate, delete; keyboard nudging | unit `charts › dashboard layout`, e2e `layout` |
 | Layout containers (row/column), text with live values (`{region}`), images, shapes, buttons (reset, refresh, go to dashboard, present) | unit `dynamic titles`, e2e `dashboards` (dynamic text); others manual |
 | Filter controls (list, dropdown, search, number range, date range) affecting every chart with the field | e2e `acceptance` |
 | Cross-filtering by clicking marks, highlight actions, drill-through (go to dashboard with the selection), reset | unit `dashboard filtering`, e2e `dashboards` |
 | Drill-down through a field path (categories or date grains), drill up | e2e `dashboards` |
-| Sizes (desktop, laptop, tablet, phone, A4, Letter), fit-to-window, presentation mode with tabs | manual check |
+| Sizes (desktop, laptop, tablet, phone, A4, Letter), fit-to-window, presentation mode with tabs | e2e `layout` (size preset keeps tiles inside, presentation and Escape); fit-to-window manual |
 | Refresh on open, on file change, on focus, on a timer, per source; per-dashboard timer; status and stale badges; last good data kept | integration `engine`, `postgres`; e2e `acceptance` |
 | Password asked again when the keychain can't keep it or the server refuses it | e2e `acceptance` (CI has no keychain) |
 | PDF export (exact page size, charts as images), PNG export | e2e `acceptance` (PDF, text checked with pdftotext), e2e `dashboards` (PNG) |
@@ -119,7 +116,7 @@ Linux, Windows and macOS._
 | Visual transforms: keep columns, rename, filter, calculated column, change type, fill empty, clean text, split, remove duplicates, sort, group and summarize, join, append (union), pivot, unpivot, custom SQL — each step previewed | integration `transform`, e2e `model` |
 | Steps ⇄ SQL: the SQL view shows the generated SQL; "Edit as SQL" converts, and undo brings the steps back | e2e `model` |
 | Date table (one row per day with year, quarter, month, week, weekday) | integration `transform` |
-| Hierarchies: save a drill path, reuse it on any chart of the same data | manual check; test pending |
+| Hierarchies: save a drill path, reuse it on any chart of the same data | e2e `layout` |
 
 ### Known limitations
 

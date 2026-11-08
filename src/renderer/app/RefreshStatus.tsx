@@ -1,9 +1,10 @@
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
-import { useApp } from '../state/store'
+import { useApp, set } from '../state/store'
 import { refreshSources, enterPassword } from '../state/project'
 import { Pop, PopContent, PopTrigger, Btn, cx } from '../ui'
 import type { SourceStatus } from '@/shared/engine-protocol'
+import { isRemotePath } from '@/shared/project'
 
 export function timeAgo(ts: number | null | undefined): string {
   if (!ts) return 'never'
@@ -58,6 +59,11 @@ export function RefreshStatus() {
               {st?.auth && (
                 <Btn size="sm" className="mt-1.5" onClick={() => void enterPassword(src.id)} data-testid="enter-password">
                   Enter password…
+                </Btn>
+              )}
+              {st?.state === 'error' && src.path && !isRemotePath(src.path) && /missing|moved|renamed/i.test(st.error ?? '') && (
+                <Btn size="sm" className="mt-1.5" onClick={() => set({ dialog: { kind: 'relink', sourceId: src.id } })} data-testid="relink-source">
+                  Find the file…
                 </Btn>
               )}
             </li>
