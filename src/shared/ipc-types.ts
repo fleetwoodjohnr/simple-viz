@@ -37,6 +37,8 @@ export interface Settings {
   autosaveIntervalSec: number
   recoveryIntervalSec: number
   reduceMotion: boolean
+  /** Charts add patterns to their colors (series can be told apart without color). */
+  chartPatterns: boolean
   uiScale: number
   shortcuts: Record<string, string>
   /** Rows shown in data previews and the first page of query results. */
@@ -61,6 +63,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autosaveIntervalSec: 30,
   recoveryIntervalSec: 5,
   reduceMotion: false,
+  chartPatterns: false,
   uiScale: 1,
   shortcuts: {},
   previewRows: 1000,

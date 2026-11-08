@@ -145,3 +145,22 @@ describe('chart analytics overlays', () => {
     expect(area[1].yAxis).toBeCloseTo(2.5 + sd, 10)
   })
 })
+
+describe('reduced motion', () => {
+  it('charts animate unless the system asks for reduced motion', () => {
+    const d: ChartData = { fields: [f('d0', 'region', 'dim', 'x'), f('m0', 'revenue', 'measure', 'y')], rows: [['East', 1]], truncated: false, options: {} }
+    expect((plugin('bar').option!(d, LIGHT) as { animation: boolean }).animation).toBe(true)
+    expect((plugin('bar').option!(d, { ...LIGHT, motion: false }) as { animation: boolean }).animation).toBe(false)
+    expect((plugin('map').option!({ ...d, geo: { map: 'world', lookup: new Map() } }, { ...LIGHT, motion: false }) as { animation: boolean }).animation).toBe(false)
+  })
+})
+
+describe('patterns', () => {
+  it('series get patterns as well as colors when asked', () => {
+    const d: ChartData = { fields: [f('d0', 'region', 'dim', 'x'), f('m0', 'revenue', 'measure', 'y')], rows: [['East', 1]], truncated: false, options: {} }
+    type A = { aria: { decal: { show: boolean } } }
+    expect((plugin('bar').option!(d, LIGHT) as A).aria.decal.show).toBe(false)
+    expect((plugin('pie').option!(d, { ...LIGHT, patterns: true }) as A).aria.decal.show).toBe(true)
+    expect((plugin('waterfall').option!(d, LIGHT) as A).aria.decal.show).toBe(false)
+  })
+})

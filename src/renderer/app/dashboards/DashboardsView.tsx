@@ -81,10 +81,10 @@ export function DashboardsView() {
             </MenuContent>
           </Menu>
         </div>
-        <ul className="space-y-0.5 px-2" role="tablist" aria-label="Dashboards">
+        <ul className="space-y-0.5 px-2" aria-label="Dashboards">
           {project.dashboards.map((x) => (
             <li key={x.id} className="group flex items-center rounded-lg hover:bg-hover">
-              <button role="tab" aria-selected={d?.id === x.id} onClick={() => setDash({ active: x.id, selected: [] })} className={cx('flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-[12.5px]', d?.id === x.id ? 'bg-accent-soft font-medium text-accent-ink' : 'text-text-2')} data-testid="dashboard-item">
+              <button aria-current={d?.id === x.id ? 'page' : undefined} onClick={() => setDash({ active: x.id, selected: [] })} className={cx('flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-[12.5px]', d?.id === x.id ? 'bg-accent-soft font-medium text-accent-ink' : 'text-text-2')} data-testid="dashboard-item">
                 <LayoutDashboard className="size-3.5 shrink-0" />
                 <span className="truncate">{x.name}</span>
                 {x.favorite && <Star className="size-3 shrink-0 fill-current" />}

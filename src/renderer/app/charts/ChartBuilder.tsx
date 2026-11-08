@@ -452,7 +452,7 @@ function Shelf({ shelf, chart, fields, onAdd, onMove, onFilter, compact }: { she
       }}
       onDragLeave={() => setOver(false)}
       onDrop={drop}
-      className={cx('flex min-h-[32px] min-w-0 items-center gap-1.5 overflow-hidden rounded-lg border px-1.5 py-1 transition-colors', over ? 'border-accent bg-accent-soft' : 'border-border bg-panel', !hint && shelf.role !== 'filters' && 'opacity-60')}
+      className={cx('flex min-h-[32px] min-w-0 items-center gap-1.5 overflow-hidden rounded-lg border px-1.5 py-1 transition-colors', over ? 'border-accent bg-accent-soft' : 'border-border bg-panel', !hint && shelf.role !== 'filters' && 'border-dashed')}
       data-testid={`shelf-${shelf.role}`}
       aria-label={`${shelf.label} shelf`}
     >
@@ -484,7 +484,7 @@ function Pill({ r, role, index, chart, field }: { r: FieldRef; role: Role; index
         <button
           draggable
           onDragStart={(e) => e.dataTransfer.setData(DRAG, JSON.stringify({ field: r.field, from: { role, index } }))}
-          className={cx('flex h-6 min-w-0 max-w-full items-center gap-1 rounded-md px-2 text-[12px] font-medium text-white shadow-sm', measure ? 'bg-[color:var(--chart-3)]' : 'bg-[color:var(--chart-1)]', !field && 'bg-danger')}
+          className={cx('flex h-6 min-w-0 max-w-full items-center gap-1 rounded-md px-2 text-[12px] font-medium shadow-sm', !field ? 'bg-danger-strong text-white' : measure ? 'bg-[color:var(--pill-measure)] text-[color:var(--pill-text)]' : 'bg-[color:var(--pill-dim)] text-[color:var(--pill-text)]')}
           data-testid={`pill-${role}-${index}`}
           title={!field ? `${r.field} is not in this data` : undefined}
         >

@@ -201,7 +201,7 @@ function Editor({ tab, onRun }: { tab: Tab; onRun: (text: string) => void }) {
             '.cm-tooltip': { backgroundColor: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '8px' },
             '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--accent-soft)', color: 'var(--accent-ink)' },
             '.cm-diagnostic-error': { borderLeft: '3px solid var(--danger)' },
-            '.cm-placeholder': { color: 'var(--text-3)' }
+            '.cm-placeholder': { color: 'var(--text-2)' }
           })
         ]
       })
@@ -277,17 +277,20 @@ export function SqlEditor() {
         <div className="min-h-0 flex-1 overflow-y-auto p-2">{side === 'schema' ? <SchemaTree /> : side === 'saved' ? <SavedList /> : <HistoryList />}</div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-1 border-b border-border bg-bg px-2 pt-1.5" role="tablist" aria-label="Query tabs">
+        <div className="flex items-center gap-1 border-b border-border bg-bg px-2 pt-1.5">
+          <div className="flex min-w-0 items-center gap-1" role="tablist" aria-label="Query tabs">
           {tabs.map((t) => (
-            <div key={t.id} role="tab" aria-selected={t.id === tab.id} tabIndex={0} onClick={() => setSql({ active: t.id })} onKeyDown={(e) => e.key === 'Enter' && setSql({ active: t.id })} className={cx('group flex h-8 max-w-[200px] cursor-default items-center gap-1.5 rounded-t-lg border border-b-0 px-3 text-[12.5px]', t.id === tab.id ? 'border-border bg-panel font-medium' : 'border-transparent text-text-2 hover:bg-hover')}>
+            <div key={t.id} role="tab" aria-selected={t.id === tab.id} tabIndex={0} title={`${t.title} — Delete closes the tab`} onClick={() => setSql({ active: t.id })} onKeyDown={(e) => (e.key === 'Enter' ? setSql({ active: t.id }) : e.key === 'Delete' && close(t.id))} className={cx('group flex h-8 max-w-[200px] cursor-default items-center gap-1.5 rounded-t-lg border border-b-0 px-3 text-[12.5px]', t.id === tab.id ? 'border-border bg-panel font-medium' : 'border-transparent text-text-2 hover:bg-hover')}>
               {t.datasetId || t.asDataset ? <Layers className="size-3.5 shrink-0 text-text-3" /> : null}
               <span className="truncate">{t.title}</span>
               {t.running && <Loader2 className="size-3 animate-spin text-text-3" />}
-              <button aria-label={`Close ${t.title}`} onClick={(e) => (e.stopPropagation(), close(t.id))} className="-mr-1.5 flex size-5 items-center justify-center rounded text-text-3 opacity-0 hover:bg-active focus-visible:opacity-100 group-hover:opacity-100">
+              {/* A mouse affordance: from the keyboard, Delete on the tab closes it (no control inside a tab). */}
+              <span aria-hidden="true" onClick={(e) => (e.stopPropagation(), close(t.id))} className="-mr-1.5 flex size-5 items-center justify-center rounded text-text-3 opacity-0 hover:bg-active group-hover:opacity-100">
                 <X className="size-3" />
-              </button>
+              </span>
             </div>
           ))}
+          </div>
           <IconBtn label="New query tab" shortcut="Mod-t" onClick={() => {
             const t = newTab()
             setSql((s) => ({ tabs: [...s.tabs, t], active: t.id }))
@@ -447,7 +450,7 @@ function SchemaTree() {
               {r.columns.map((c) => (
                 <li key={c.name}>
                   <button onClick={() => insert(/^[a-z_][a-z0-9_]*$/.test(c.name) ? c.name : `"${c.name}"`)} className="flex h-6 w-full items-center gap-2 rounded px-1.5 text-left hover:bg-hover" title={`${c.name} · ${c.type}`}>
-                    <span className="w-7 shrink-0 font-mono text-[9.5px] text-text-3">{typeLabel(c.type)}</span>
+                    <span className="w-7 shrink-0 font-mono text-[9.5px] text-text-2">{typeLabel(c.type)}</span>
                     <span className="truncate font-mono text-[11.5px] text-text-2">{c.name}</span>
                   </button>
                 </li>

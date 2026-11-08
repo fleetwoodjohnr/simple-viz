@@ -47,8 +47,7 @@ export const waterfall: Build = (d, t) => {
     series: [
       { type: 'bar', stack: 'w', stackStrategy: 'all', silent: true, itemStyle: { color: 'transparent' }, emphasis: { disabled: true }, data: lo, tooltip: { show: false } },
       { type: 'bar', stack: 'w', stackStrategy: 'all', name: m?.title, barMaxWidth: 48, label: d.options.labels ? { show: true, position: 'top', color: t.text2, formatter: (p: { dataIndex: number }) => fmt(p.dataIndex < vals.length ? vals[p.dataIndex] : run, m, 'axis') } : undefined, data: len.map((v, i) => ({ value: v, itemStyle: { color: color[kind[i]] }, decal: kind[i] === 'down' ? { symbol: 'rect', dashArrayX: [1, 0], dashArrayY: [2, 4], rotation: -Math.PI / 4 } : undefined })) }
-    ],
-    aria: { enabled: true, decal: { show: true } }
+    ]
   }
 }
 

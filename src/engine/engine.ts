@@ -116,7 +116,7 @@ export class Engine {
     mkdirSync(tmp, { recursive: true })
     mkdirSync(out, { recursive: true })
 
-    const memoryLimit = `${Math.max(1, Math.floor((os.totalmem() * 0.4) / 2 ** 30))}GB`
+    const memoryLimit = config.memoryLimit && /^\d{1,6}(MB|GB)$/.test(config.memoryLimit) ? config.memoryLimit : `${Math.max(1, Math.floor((os.totalmem() * 0.4) / 2 ** 30))}GB`
     const instance = await DuckDBInstance.create(':memory:', {
       autoinstall_known_extensions: 'false',
       autoload_known_extensions: 'false',

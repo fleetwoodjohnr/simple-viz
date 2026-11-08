@@ -23,7 +23,7 @@ async function boot() {
 }
 
 function useTheme() {
-  const { theme, accent, reduceMotion } = useApp(useShallow((s) => ({ theme: s.settings.theme, accent: s.settings.accent, reduceMotion: s.settings.reduceMotion })))
+  const { theme, accent, reduceMotion, chartPatterns } = useApp(useShallow((s) => ({ theme: s.settings.theme, accent: s.settings.accent, reduceMotion: s.settings.reduceMotion, chartPatterns: s.settings.chartPatterns })))
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     const apply = () => {
@@ -40,6 +40,9 @@ function useTheme() {
   useEffect(() => {
     document.documentElement.classList.toggle('reduce-motion', reduceMotion)
   }, [reduceMotion])
+  useEffect(() => {
+    document.documentElement.classList.toggle('chart-patterns', chartPatterns)
+  }, [chartPatterns])
 }
 
 function Toasts() {

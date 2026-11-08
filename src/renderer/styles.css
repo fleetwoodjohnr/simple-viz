@@ -22,6 +22,7 @@
   --color-accent-ink: var(--accent-ink);
   --color-workspace: var(--workspace);
   --color-danger: var(--danger);
+  --color-danger-strong: var(--danger-strong);
   --color-success: var(--success);
   --color-warn: var(--warn);
 }
@@ -44,7 +45,8 @@
   /* accent-colored text: ≥4.5:1 on panels and on --accent-soft */
   --accent-ink: color-mix(in oklab, var(--accent) 80%, black);
   --workspace: #eeeef1;
-  --danger: #d93f4c;
+  --danger: #c42f3d; /* text and icons: ≥5:1 on light surfaces */
+  --danger-strong: #c42f3d; /* behind white text: 5.5:1 */
   --success: #2f9e6b;
   --warn: #c98a12;
   --shadow-pop: 0 0 0 1px rgb(0 0 0 / 0.05), 0 8px 24px -4px rgb(0 0 0 / 0.14), 0 2px 6px rgb(0 0 0 / 0.06);
@@ -61,6 +63,7 @@
   --text: #ececf0;
   --text-2: #a7a7b1;
   --text-3: #8a8a94; /* ≥4.5:1 on every dark surface */
+  --danger: #f27a83; /* text and icons: ≥5.9:1 on dark surfaces */
   --hover: rgb(255 255 255 / 0.055);
   --active: rgb(255 255 255 / 0.09);
   --accent-soft: color-mix(in oklab, var(--accent) 22%, transparent);
@@ -138,6 +141,10 @@ body {
    Chart colors: read by src/renderer/app/chartTheme.ts. Categorical palette checked for 3:1 contrast against the
    panel in both themes; series are also told apart by shape and dash where it matters (non-color encodings). */
 :root {
+  /* Field pills on the shelves: dimensions blue, measures green (≥5:1 with their text). */
+  --pill-dim: #2f6fde;
+  --pill-measure: #127a5a;
+  --pill-text: #ffffff;
   --chart-1: #2f6fde;
   --chart-2: #e8662a;
   --chart-3: #1b9e77;
@@ -153,6 +160,9 @@ body {
   --chart-seq-hi: #9a3412;
 }
 .dark {
+  --pill-dim: #6b9bf0;
+  --pill-measure: #3cc49b;
+  --pill-text: #0d0d0f;
   --chart-1: #6b9bf0;
   --chart-2: #f58a47;
   --chart-3: #3cc49b;

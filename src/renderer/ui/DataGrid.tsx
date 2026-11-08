@@ -106,7 +106,7 @@ export function DataGrid({ source, label, className }: { source: GridSource; lab
           <div className="sticky left-0 z-10 w-14 shrink-0 border-r border-border bg-panel-2" aria-hidden="true" />
           {source.columns.map((c, i) => (
             <div key={c.name + i} role="columnheader" title={`${c.name} · ${c.type}`} className="flex shrink-0 items-center gap-1.5 border-r border-border px-2" style={{ width: widths[i] }}>
-              <span className="shrink-0 rounded bg-hover px-1 font-mono text-[9.5px] text-text-3" aria-label={c.type}>
+              <span className="shrink-0 rounded bg-hover px-1 font-mono text-[9.5px] text-text-2" aria-label={c.type}>
                 {typeLabel(c.type)}
               </span>
               <span className="truncate">{c.name}</span>

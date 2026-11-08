@@ -50,6 +50,8 @@ export async function launch(opts: { userData?: string; settings?: Record<string
   }
   open.add(app)
   const page = await app.firstWindow()
+  // Charts honour reduced motion: without animations, marks are where a click expects them.
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   const violations: string[] = []
   page.on('console', (m) => {
     if (/Content.Security.Policy/i.test(m.text())) violations.push(m.text())

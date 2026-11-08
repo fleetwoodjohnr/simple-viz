@@ -36,7 +36,7 @@ export function Nav() {
             >
               <it.icon className="size-[18px] shrink-0" />
               {!collapsed && <span className="flex-1 truncate text-left">{it.label}</span>}
-              {!collapsed && sc && <span className="text-[10.5px] font-normal text-text-3">{formatShortcut(sc)}</span>}
+              {!collapsed && sc && <span className="text-[10.5px] font-normal text-text-2">{formatShortcut(sc)}</span>}
             </button>
           )
           return <li key={it.id}>{collapsed ? <Tip label={`${it.label} — ${it.hint}`} side="right">{btn}</Tip> : btn}</li>

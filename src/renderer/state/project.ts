@@ -113,18 +113,21 @@ export async function refreshDescribe() {
 }
 
 let describeTimer: ReturnType<typeof setTimeout> | undefined
+/** New data arrived since the last describe: charts re-query once it is described. */
+let pendingChange = false
 export function onEngineStatus(list: SourceStatus[]) {
   const before = get().sources
   const changed = list.some((s) => s.state === 'ok' && s.changed && before[s.id]?.state !== 'ok')
-  const done = list.some((s) => s.state !== 'checking' && before[s.id]?.state === 'checking')
   set({ sources: { ...before, ...Object.fromEntries(list.map((s) => [s.id, s])) } })
-  if (changed || done) {
-    clearTimeout(describeTimer)
-    describeTimer = setTimeout(async () => {
-      await refreshDescribe()
-      if (changed) set((s) => ({ dataVersion: s.dataVersion + 1 }))
-    }, 50)
-  }
+  // Describe again after every status event, not only on a transition seen here: status events and query replies
+  // travel on different channels, so a describe reply can land after the event it predates.
+  pendingChange ||= changed
+  clearTimeout(describeTimer)
+  describeTimer = setTimeout(async () => {
+    await refreshDescribe()
+    if (pendingChange) set((s) => ({ dataVersion: s.dataVersion + 1 }))
+    pendingChange = false
+  }, 50)
 }
 
 onEngineConnected(() => void refreshDescribe())

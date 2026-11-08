@@ -6,7 +6,7 @@ import * as echarts from 'echarts/core'
 import { BarChart, LineChart, PieChart, ScatterChart, HeatmapChart, TreemapChart, BoxplotChart, FunnelChart, GaugeChart, RadarChart, SankeyChart, GraphChart, SunburstChart, CandlestickChart, MapChart, CustomChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent, TitleComponent, VisualMapComponent, MarkLineComponent, MarkAreaComponent, AriaComponent, CalendarComponent, GeoComponent, RadarComponent } from 'echarts/components'
 import { CanvasRenderer, SVGRenderer } from 'echarts/renderers'
-import { AlertTriangle, Loader2 } from 'lucide-react'
+import { AlertTriangle, BarChart3, Loader2, Table2 } from 'lucide-react'
 import { useApp } from '../../state/store'
 import * as E from '../../state/engine'
 import { compileQuery, QueryError, type OutField } from '@/core/query/compile'
@@ -39,7 +39,10 @@ export function readTheme(dark: boolean): Theme {
     font: "'Inter Variable', system-ui, sans-serif",
     palette: [1, 2, 3, 4, 5, 6, 7, 8].map((i) => v(`--chart-${i}`, LIGHT.palette[i - 1])),
     seq: [v('--chart-seq-lo', LIGHT.seq[0]), v('--chart-seq-hi', LIGHT.seq[1])],
-    accent: v('--accent', LIGHT.accent)
+    accent: v('--accent', LIGHT.accent),
+    // The system setting, or Simple Viz's own (Settings → Reduce motion).
+    motion: !(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('reduce-motion')),
+    patterns: document.documentElement.classList.contains('chart-patterns')
   }
 }
 
@@ -128,6 +131,7 @@ export interface MarkClick {
 
 export function ChartView({ chart, extra, highlight, onMark, className, testid }: { chart: Chart; extra?: ChartFilter[]; highlight?: ChartData['highlight']; onMark?: (m: MarkClick) => void; className?: string; testid?: string }) {
   const { data, error, loading } = useChartData(chart, extra, highlight)
+  const [asTable, setAsTable] = useState(false)
   const p = plugin(chart.type)
   let body: ReactNode
   if (error) body = <Message icon={<AlertTriangle className="size-5 text-danger" />} text={error} />
@@ -136,10 +140,26 @@ export function ChartView({ chart, extra, highlight, onMark, className, testid }
   else if (p.render === 'kpi') body = <Kpi data={data} />
   else if (p.render === 'table') body = <TableView data={data} />
   else if (p.render === 'crosstab') body = <Crosstab data={data} />
+  else if (asTable) body = <TableView data={data} />
   else body = <EChart data={data} type={chart.type} onMark={onMark} />
+  // Every drawn chart can be read as a table (screen readers, keyboard, exact values). Wrapped charts (bins, density…)
+  // return other columns than their fields, so they keep only the chart's text summary.
+  const tableable = !!data?.rows.length && p.render === 'echarts' && !p.wrap
   return (
-    <div className={cx('relative flex h-full min-h-0 flex-col', className)} data-testid={testid ?? 'chart-view'} data-chart-state={error ? 'error' : loading ? 'loading' : data ? 'ready' : 'empty'}>
+    <div className={cx('group/chart relative flex h-full min-h-0 flex-col', className)} data-testid={testid ?? 'chart-view'} data-chart-state={error ? 'error' : loading ? 'loading' : data ? 'ready' : 'empty'}>
       {body}
+      {tableable && (
+        <button
+          onClick={() => setAsTable((v) => !v)}
+          aria-pressed={asTable}
+          aria-label={asTable ? 'Show the chart' : 'Show the data as a table'}
+          title={asTable ? 'Show the chart' : 'Show the data as a table'}
+          className="absolute right-1 top-1 z-10 flex size-7 items-center justify-center rounded-md bg-panel text-text-2 opacity-0 shadow-[0_0_0_1px_var(--border)] hover:bg-hover focus-visible:opacity-100 group-hover/chart:opacity-100"
+          data-testid="chart-as-table"
+        >
+          {asTable ? <BarChart3 className="size-3.5" /> : <Table2 className="size-3.5" />}
+        </button>
+      )}
       {data?.truncated && <div className="absolute bottom-1 left-2 rounded bg-warn/15 px-2 py-0.5 text-[11px] text-warn">Showing the first {MAX_MARKS.toLocaleString()} marks — add a filter to see the rest.</div>}
       {loading && data && <Loader2 className="absolute right-2 top-2 size-4 animate-spin text-text-3" aria-label="Updating" />}
     </div>
@@ -163,6 +183,8 @@ function EChart({ data, type, onMark }: { data: ChartData; type: string; onMark?
   const inst = useRef<echarts.ECharts | null>(null)
   const dark = useApp((s) => s.dark)
   const accent = useApp((s) => s.settings.accent)
+  const patterns = useApp((s) => s.settings.chartPatterns)
+  const calm = useApp((s) => s.settings.reduceMotion)
   const markRef = useRef(onMark)
   markRef.current = onMark
   const dataRef = useRef(data)
@@ -203,7 +225,7 @@ function EChart({ data, type, onMark }: { data: ChartData; type: string; onMark?
       inst.current?.clear()
       setDrawError((e as Error).message)
     }
-  }, [data, type, dark, accent])
+  }, [data, type, dark, accent, patterns, calm])
 
   return (
     <>

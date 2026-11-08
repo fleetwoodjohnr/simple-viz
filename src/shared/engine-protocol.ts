@@ -73,6 +73,8 @@ export interface ResolvedSource {
 
 export interface EngineConfig {
   projectId: string
+  /** DuckDB's memory limit (e.g. "2GB"); default 40% of RAM. Past it, large sorts and joins spill to the cache's tmp folder. */
+  memoryLimit?: string
   /** userData/cache: holds <projectId>.duckdb, spill files, and export staging. */
   cacheDir: string
   /** Bundled DuckDB extensions for this platform (null in tests that don't need them). */

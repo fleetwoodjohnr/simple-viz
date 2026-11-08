@@ -17,6 +17,10 @@ export interface Theme {
   palette: string[]
   seq: [string, string]
   accent: string
+  /** false when the system asks for reduced motion: charts appear without animation. */
+  motion?: boolean
+  /** Patterns (decals) as well as colors: series can be told apart without color. */
+  patterns?: boolean
 }
 
 export interface ChartData {

@@ -46,7 +46,7 @@ export const Btn = forwardRef<HTMLButtonElement, BtnProps>(function Btn({ varian
         variant === 'secondary' && 'border border-border bg-panel text-text shadow-[0_1px_1px_rgb(0_0_0/0.04)] hover:bg-hover',
         variant === 'ghost' && 'text-text-2 hover:bg-hover hover:text-text',
         variant === 'soft' && 'bg-accent-soft text-accent-ink hover:brightness-105',
-        variant === 'danger' && 'bg-danger text-white hover:brightness-110',
+        variant === 'danger' && 'bg-danger-strong text-white hover:brightness-110',
         className
       )}
     />

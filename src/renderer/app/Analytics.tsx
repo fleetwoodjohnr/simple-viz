@@ -92,15 +92,15 @@ export function Analytics() {
         {['Explore', 'Compare', 'Model'].map((g) => (
           <div key={g} className="mb-2">
             <div className="px-1.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-text-3">{g}</div>
-            <ul role="radiogroup" aria-label={g}>
+            <div role="radiogroup" aria-label={g}>
               {ANALYSES.filter((a) => a.group === g).map((a) => (
-                <li key={a.kind}>
+                <div key={a.kind}>
                   <button role="radio" aria-checked={kind === a.kind} onClick={() => (setKind(a.kind), setResult(null), setError(''))} title={a.describe} className={cx('w-full rounded-lg px-2.5 py-1.5 text-left text-[12.5px]', kind === a.kind ? 'bg-accent-soft font-medium text-accent-ink' : 'text-text-2 hover:bg-hover')} data-testid={`analysis-${a.kind}`}>
                     {a.label}
                   </button>
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         ))}
       </aside>
@@ -207,7 +207,7 @@ function Results({ r, onExport }: { r: AnalysisResult; onExport: () => void }) {
       <p className="select-text rounded-xl bg-accent-soft px-4 py-3 text-[13.5px] leading-relaxed" data-testid="analysis-summary">{r.summary}</p>
       {r.chart && <StatChartView c={r.chart} />}
       {r.tables.map((t, i) => (
-        <div key={i} className="overflow-x-auto rounded-xl bg-panel shadow-[0_0_0_1px_var(--border)]">
+        <div key={i} className="overflow-x-auto rounded-xl bg-panel shadow-[0_0_0_1px_var(--border)]" tabIndex={0} role="region" aria-label={t.title ?? r.title}>
           {t.title && <div className="border-b border-border px-3 py-2 text-[12.5px] font-semibold">{t.title}</div>}
           <table className="w-full text-[12.5px]" data-testid="analysis-table">
             <thead>
@@ -270,7 +270,7 @@ function StatChartView({ c }: { c: StatChart }) {
 
 function statOption(c: StatChart, t: ReturnType<typeof readTheme>): Record<string, unknown> {
   const axis = { axisLine: { lineStyle: { color: t.axis } }, axisLabel: { color: t.text2 }, splitLine: { lineStyle: { color: t.grid } }, nameTextStyle: { color: t.text2 } }
-  const base = { backgroundColor: 'transparent', color: t.palette, textStyle: { fontFamily: t.font, color: t.text2 }, title: { text: c.title, left: 10, top: 6, textStyle: { color: t.text, fontSize: 13, fontWeight: 600 } }, grid: { left: 16, right: 24, top: 44, bottom: 16, containLabel: true }, tooltip: { trigger: c.kind === 'scatter' || c.kind === 'heatmap' ? 'item' : 'axis', confine: true } }
+  const base = { backgroundColor: 'transparent', animation: t.motion !== false, color: t.palette, textStyle: { fontFamily: t.font, color: t.text2 }, title: { text: c.title, left: 10, top: 6, textStyle: { color: t.text, fontSize: 13, fontWeight: 600 } }, grid: { left: 16, right: 24, top: 44, bottom: 16, containLabel: true }, tooltip: { trigger: c.kind === 'scatter' || c.kind === 'heatmap' ? 'item' : 'axis', confine: true } }
   switch (c.kind) {
     case 'histogram': {
       const w = c.bins[0] ? c.bins[0].hi - c.bins[0].lo : 1

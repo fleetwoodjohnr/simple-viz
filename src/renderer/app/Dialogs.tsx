@@ -325,6 +325,9 @@ function SettingsDialog({ initial }: { initial?: string }) {
               <Row label="Reduce motion">
                 <Switch checked={s.reduceMotion} onChange={(v) => updateSettings({ reduceMotion: v })} label="Reduce motion" />
               </Row>
+              <Row label="Patterns in charts" hint="Bars, slices and areas get patterns as well as colors, so they can be told apart without color.">
+                <Switch checked={s.chartPatterns} onChange={(v) => updateSettings({ chartPatterns: v })} label="Patterns in charts" />
+              </Row>
             </>
           )}
           {section === 'data' && (

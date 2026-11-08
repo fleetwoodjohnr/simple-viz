@@ -10,9 +10,10 @@ export function base(t: Theme, d: ChartData): Option {
     backgroundColor: t.bg,
     color: t.palette,
     textStyle: { fontFamily: t.font, color: t.text2 },
+    animation: t.motion !== false,
     animationDuration: 300,
     title: d.options.title ? { text: d.options.title, subtext: d.options.subtitle, left: 8, top: 4, textStyle: { color: t.text, fontSize: 14, fontWeight: 600 }, subtextStyle: { color: t.text2 } } : undefined,
-    aria: { enabled: true, decal: { show: false } }
+    aria: { enabled: true, decal: { show: !!t.patterns } }
   }
 }
 
