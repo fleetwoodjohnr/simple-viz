@@ -1,4 +1,4 @@
-// A Feather file added like any other file: the engine's Arrow reader (and its LZ4 codec) loads in the app.
+// Feather and Excel 97–2003 files added like any other file: the engine's own readers load in the app.
 import { test, expect, launch, quit, stubDialogs, fixture } from './helpers'
 
 test('add an LZ4-compressed Feather file', async () => {
@@ -9,5 +9,22 @@ test('add an LZ4-compressed Feather file', async () => {
   await page.getByTestId('add-file').click()
   await page.getByTestId('relation-mixed_lz4').click()
   await expect(page.getByTestId('relation-rows')).toHaveText('4 rows')
+  await quit(app)
+})
+
+test('add an Excel 97–2003 workbook and pick its sheets', async () => {
+  const { app, page } = await launch()
+  await page.getByTestId('new-project').click()
+  await stubDialogs(app, { open: [fixture('Sales.xls')] })
+  await page.getByTestId('add-data').click()
+  await page.getByTestId('add-file').click()
+  // Every sheet is offered (and picked by default).
+  await expect(page.getByTestId('sheet-list')).toContainText('Transactions')
+  await expect(page.getByTestId('sheet-list')).toContainText('Notes')
+  await page.getByTestId('sheet-add').click()
+  await page.getByTestId('relation-transactions').click()
+  await expect(page.getByTestId('relation-rows')).toHaveText('1,000 rows')
+  await page.getByTestId('relation-notes').click()
+  await expect(page.getByTestId('relation-rows')).toHaveText('2,000 rows')
   await quit(app)
 })

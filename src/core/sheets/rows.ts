@@ -9,8 +9,9 @@ import { parseArea } from './refs'
 import { readXlsx } from './formats/xlsx/read'
 import { readOds } from './formats/ods/read'
 import { importXml2003 } from './formats/xml2003'
+import { importXls } from './formats/xls'
 
-export type SheetFormat = 'xlsx' | 'ods' | 'xml2003'
+export type SheetFormat = 'xlsx' | 'xls' | 'ods' | 'xml2003'
 export type ColumnType = 'BOOLEAN' | 'BIGINT' | 'DOUBLE' | 'VARCHAR' | 'DATE' | 'TIMESTAMP'
 
 export interface SheetColumn {
@@ -37,6 +38,7 @@ export interface SheetTableRef {
 export function readWorkbook(bytes: Uint8Array, format: SheetFormat): Workbook {
   if (format === 'xlsx') return readXlsx(bytes, { keepSpillValues: true }).workbook
   if (format === 'ods') return readOds(bytes).workbook
+  if (format === 'xls') return importXls(bytes).workbook
   return importXml2003(bytes).workbook
 }
 

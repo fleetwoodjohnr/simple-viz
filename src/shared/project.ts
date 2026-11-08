@@ -7,7 +7,7 @@ import type { FeatureCollection } from '../core/charts/geo'
 
 export const PROJECT_SCHEMA_VERSION = 1
 
-export type FileFormat = 'csv' | 'tsv' | 'json' | 'jsonl' | 'parquet' | 'arrow' | 'xlsx' | 'ods' | 'xml2003'
+export type FileFormat = 'csv' | 'tsv' | 'json' | 'jsonl' | 'parquet' | 'arrow' | 'xlsx' | 'xls' | 'ods' | 'xml2003'
 export type DbKind = 'postgres' | 'mysql' | 'sqlite' | 'duckdb'
 /** Database servers (host, port, user, password), as opposed to database files. */
 export type ServerKind = 'postgres' | 'mysql'
@@ -185,11 +185,15 @@ export const FILE_FORMATS: Record<string, FileFormat> = {
   xlsm: 'xlsx',
   xltx: 'xlsx',
   xltm: 'xlsx',
+  xls: 'xls',
   ods: 'ods',
   xml: 'xml2003'
 }
 
 /** Extensions the app opens as data sources, plus its own project files. */
+/** Formats with several sheets or tables to pick from (and ordinary XML, whose record element is picked). */
+export const isSheetFormat = (f: string | undefined) => f === 'xlsx' || f === 'xls' || f === 'ods' || f === 'xml2003'
+
 export const DATA_EXTENSIONS = [...Object.keys(FILE_FORMATS), 'sqlite', 'sqlite3', 'db', 'duckdb']
 export const PROJECT_EXTENSION = 'sviz'
 

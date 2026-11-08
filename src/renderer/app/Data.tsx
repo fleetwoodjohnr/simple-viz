@@ -11,7 +11,7 @@ import { SourceBadge, timeAgo } from './RefreshStatus'
 import { Btn, IconBtn, Menu, MenuContent, MenuItem, MenuSep, MenuTrigger, MenuCheck, SubMenu, Modal, Field, cx, inputCls } from '../ui'
 import { DataGrid, typeLabel, type GridSource } from '../ui/DataGrid'
 import { profileSql, readProfile, type Profile } from '@/core/profile'
-import { isRemotePath, type Source } from '@/shared/project'
+import { isRemotePath, isSheetFormat, type Source } from '@/shared/project'
 import type { RelationInfo } from '@/shared/engine-protocol'
 import { openInSql } from './SqlEditor'
 import { ModelEditor } from './ModelEditor'
@@ -25,7 +25,7 @@ const q = (s: string) => `"${s.replace(/"/g, '""')}"`
 function sourceIcon(s: Source) {
   if (s.kind === 'postgres' || s.kind === 'mysql') return <Server className="size-4" />
   if (s.kind === 'sqlite' || s.kind === 'duckdb') return <Database className="size-4" />
-  if (s.kind === 'file' && ['xlsx', 'ods', 'xml2003'].includes(s.format)) return <FileSpreadsheet className="size-4" />
+  if (s.kind === 'file' && isSheetFormat(s.format)) return <FileSpreadsheet className="size-4" />
   return <FileText className="size-4" />
 }
 

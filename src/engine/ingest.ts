@@ -7,6 +7,8 @@ import { dateValue, timestampValue, type DuckDBConnection } from '@duckdb/node-a
 import type { ResolvedSource } from '../shared/engine-protocol'
 import { isServer, isRemotePath } from '../shared/project'
 import { readArrow } from './arrow'
+import { isSpreadsheetXml, xmlRecords, xmlTables } from '../core/xmlrows'
+import { listTables } from '../core/sheets/rows'
 import { readWorkbook, tableRows, type SheetFormat } from '../core/sheets/rows'
 import type { Workbook } from '../core/sheets/model/workbook'
 import { ident, lit } from './sql'
@@ -50,9 +52,14 @@ export async function extractSelect(conn: DuckDBConnection, s: ResolvedSource, r
         const bytes = isRemotePath(s.path) ? await readBytes(conn, s.path!) : await readLocal(s.path!)
         return stageColumns(conn, readArrow(bytes))
       }
+      case 'xml2003': {
+        // Excel's XML spreadsheet format, or any other XML: its repeated elements are the rows.
+        const text = new TextDecoder().decode(isRemotePath(s.path) ? await readBytes(conn, s.path!) : await readLocal(s.path!))
+        return isSpreadsheetXml(text) ? stageSheet(conn, s, ref, memo) : stageColumns(conn, xmlRecords(text, ref))
+      }
       case 'xlsx':
+      case 'xls':
       case 'ods':
-      case 'xml2003':
         return stageSheet(conn, s, ref, memo)
     }
     throw new Error(`Unsupported file format: ${s.format}`)
@@ -71,10 +78,8 @@ export async function extractSelect(conn: DuckDBConnection, s: ResolvedSource, r
 /** Loads one sheet table into a staging table with an appender; the caller copies it into the cache. */
 async function stageSheet(conn: DuckDBConnection, s: ResolvedSource, ref: string | undefined, memo: Memo) {
   memo.book ??= (async () => {
-    if (isRemotePath(s.path)) return readWorkbook(await readBytes(conn, s.path!), s.format as SheetFormat)
-    const st = await fs.stat(s.path!)
-    if (st.size > MAX_SHEET_BYTES) throw new Error('The workbook is larger than 512 MB.')
-    return readWorkbook(new Uint8Array(await fs.readFile(s.path!)), s.format as SheetFormat)
+    const bytes = isRemotePath(s.path) ? await readBytes(conn, s.path!) : await readLocal(s.path!)
+    return readWorkbook(bytes, s.format as SheetFormat)
   })()
   const table = tableRows(await memo.book, ref, s.header !== false)
   if (!table.columns.length) throw new Error(`“${ref ?? 'The first sheet'}” is empty.`)
@@ -122,4 +127,13 @@ export async function readBytes(conn: DuckDBConnection, url: string): Promise<Ui
   const b = content as { bytes?: Uint8Array } | Uint8Array | undefined
   if (!b) throw new Error(`Nothing was read from ${url}.`)
   return b instanceof Uint8Array ? b : (b.bytes ?? new Uint8Array())
+}
+
+/** The tables a file offers (sheet picker, connection dialog): sheets and named tables, or an XML file's records. */
+export async function fileTables(bytes: Uint8Array, format: SheetFormat) {
+  if (format === 'xml2003') {
+    const text = new TextDecoder().decode(bytes)
+    if (!isSpreadsheetXml(text)) return xmlTables(text)
+  }
+  return listTables(readWorkbook(bytes, format))
 }

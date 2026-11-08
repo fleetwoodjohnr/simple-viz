@@ -7,7 +7,7 @@ import * as P from '../state/project'
 import { close } from './Dialogs'
 import { Btn, Field, Modal, Segmented, cx, inputCls } from '../ui'
 import { newId } from '@/core/project/sviz'
-import { DEFAULT_REFRESH, FILE_FORMATS, SERVER, isRemotePath, toAlias, type DbSource, type FileFormat, type FileSource, type RemoteOptions, type ServerKind } from '@/shared/project'
+import { DEFAULT_REFRESH, FILE_FORMATS, SERVER, isRemotePath, isSheetFormat, toAlias, type DbSource, type FileFormat, type FileSource, type RemoteOptions, type ServerKind } from '@/shared/project'
 
 type SheetRef = { ref: string; kind: 'sheet' | 'table' | 'name'; rows: number; columns: number }
 
@@ -199,7 +199,7 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
 }
 
 const PLACEHOLDER = { http: 'https://example.com/data/sales.csv', s3: 's3://my-bucket/folder/sales.parquet', azure: 'az://container/folder/sales.csv' }
-const FORMAT_LABELS: Record<FileFormat, string> = { csv: 'CSV', tsv: 'TSV', json: 'JSON', jsonl: 'JSON Lines', parquet: 'Parquet', arrow: 'Arrow / Feather', xlsx: 'Excel', ods: 'OpenDocument', xml2003: 'Excel XML 2003' }
+const FORMAT_LABELS: Record<FileFormat, string> = { csv: 'CSV', tsv: 'TSV', json: 'JSON', jsonl: 'JSON Lines', parquet: 'Parquet', arrow: 'Arrow / Feather', xlsx: 'Excel', xls: 'Excel 97–2003 (.xls)', ods: 'OpenDocument', xml2003: 'Excel XML 2003' }
 
 /** A file on the web, in S3 (or S3-compatible storage) or in Azure Blob storage. Secrets go to the keychain. */
 export function RemoteDialog() {
@@ -218,7 +218,7 @@ export function RemoteDialog() {
   const url = f.url.trim()
   const ext = url.split(/[?#]/)[0].split('.').pop()?.toLowerCase() ?? ''
   const format = f.format || FILE_FORMATS[ext] || ''
-  const sheets = format === 'xlsx' || format === 'ods' || format === 'xml2003'
+  const sheets = isSheetFormat(format)
   const scheme = provider === 'http' ? /^https?:\/\//i : provider === 's3' ? /^(s3|s3a|s3n|r2|gcs|gs):\/\//i : /^(az|azure|abfss):\/\//i
   const urlProblem = !url ? '' : !isRemotePath(url) || !scheme.test(url) ? `The address should start with ${provider === 'http' ? 'https://' : provider === 's3' ? 's3://' : 'az://'}` : /[\s'"\\]/.test(url) ? 'The address can’t contain spaces or quotes.' : !format ? 'Choose the file format.' : ''
   const source = (): FileSource => {

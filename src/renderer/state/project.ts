@@ -4,7 +4,7 @@
 import { get, set, toast } from './store'
 import { describe, holdRequestsUntil, onEngineConnected } from './engine'
 import { newProject as blankProject, newId, packProject, unpackProject } from '@/core/project/sviz'
-import { DEFAULT_REFRESH, FILE_FORMATS, PROJECT_EXTENSION, isRemotePath, toAlias, type Dataset, type FileSource, type Project, type Source } from '@/shared/project'
+import { DEFAULT_REFRESH, FILE_FORMATS, PROJECT_EXTENSION, isRemotePath, isSheetFormat, toAlias, type Dataset, type FileSource, type Project, type Source } from '@/shared/project'
 import type { OpenedFile, RecoveryEntry } from '@/shared/ipc-types'
 import type { SourceStatus } from '@/shared/engine-protocol'
 
@@ -337,7 +337,6 @@ export function uniqueAlias(base: string, taken: Set<string>): string {
   for (let i = 2; ; i++) if (!taken.has(`${a}_${i}`)) return `${a}_${i}`
 }
 
-const SHEET_FORMATS = new Set(['xlsx', 'ods', 'xml2003'])
 
 /** Adds data files: flat files directly, spreadsheets through the sheet picker (all sheets if there is one). */
 export async function addFiles(paths: string[]) {
@@ -354,7 +353,7 @@ export async function addFiles(paths: string[]) {
       toast(`${name}: this kind of file can’t be added as data.`, 'error')
       continue
     }
-    if (SHEET_FORMATS.has(format)) {
+    if (isSheetFormat(format)) {
       try {
         const tables = await api().sheetTables(path)
         const sheets = tables.filter((t) => t.kind === 'sheet')

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<shop name="Example">
+  <orders>
+    <order id="1" placed="2025-01-02"><customer>Ann</customer><amount>10.50</amount><paid>true</paid><ship><city>Austin</city><zip>78701</zip></ship></order>
+    <order id="2" placed="2025-01-03"><customer>Bo &amp; Co</customer><amount>7</amount><paid>false</paid><ship><city>Dallas</city><zip>75201</zip></ship></order>
+    <order id="3" placed="2025-02-10"><customer>Côte</customer><amount></amount><paid>true</paid></order>
+  </orders>
+</shop>

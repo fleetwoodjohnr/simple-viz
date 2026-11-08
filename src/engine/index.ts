@@ -5,7 +5,8 @@
 import { promises as fs } from 'node:fs'
 import { Engine } from './engine'
 import { checkRendererRequest, type ControlMessage, type EngineResponse } from '../shared/engine-protocol'
-import { readWorkbook, listTables, type SheetFormat } from '../core/sheets/rows'
+import type { SheetFormat } from '../core/sheets/rows'
+import { fileTables } from './ingest'
 
 interface PortLike {
   on(ev: 'message', cb: (e: { data: unknown; ports: PortLike[] }) => void): void
@@ -41,8 +42,7 @@ async function control(m: ControlMessage): Promise<unknown> {
     case 'tables':
       return (await Engine.probe(m.source, extensionsDir)).tables
     case 'sheets': {
-      const wb = readWorkbook(new Uint8Array(await fs.readFile(m.path)), m.format as SheetFormat)
-      return listTables(wb)
+      return fileTables(new Uint8Array(await fs.readFile(m.path)), m.format as SheetFormat)
     }
   }
 }

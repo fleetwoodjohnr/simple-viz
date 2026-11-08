@@ -4,7 +4,7 @@ import { promises as fs, existsSync } from 'node:fs'
 import path from 'node:path'
 import type { ConnectionDraft, OpenedFile, RecentFile, Settings } from '../shared/ipc-types'
 import type { EngineConfig, ResolvedSource } from '../shared/engine-protocol'
-import { DATA_EXTENSIONS, FILE_FORMATS, PROJECT_EXTENSION, SERVER, isServer, isRemotePath, type Project, type Source } from '../shared/project'
+import { DATA_EXTENSIONS, FILE_FORMATS, PROJECT_EXTENSION, SERVER, isServer, isRemotePath, isSheetFormat, type Project, type Source } from '../shared/project'
 import * as store from './store'
 import * as creds from './credentials'
 import { EngineHost } from './engine-host'
@@ -458,7 +458,7 @@ function registerIpc() {
   handle('sheet:tables', (_e, p: unknown) => {
     const file = assertGranted(p)
     const format = FILE_FORMATS[extOf(file)]
-    if (!['xlsx', 'ods', 'xml2003'].includes(format)) throw new Error('Not a spreadsheet')
+    if (!isSheetFormat(format)) throw new Error('Not a spreadsheet')
     return engine.request({ op: 'sheets', path: file, format })
   })
 
