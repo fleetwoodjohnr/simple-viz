@@ -6,7 +6,7 @@ import { dateValue, timestampValue, type DuckDBConnection } from '@duckdb/node-a
 import type { ResolvedSource } from '../shared/engine-protocol'
 import { ident } from './sql'
 
-type Duck = 'BOOLEAN' | 'BIGINT' | 'DOUBLE' | 'DATE' | 'TIMESTAMP' | 'VARCHAR'
+export type Duck = 'BOOLEAN' | 'BIGINT' | 'DOUBLE' | 'DATE' | 'TIMESTAMP' | 'VARCHAR'
 
 const base = (s: ResolvedSource, port: number) => `${s.sslmode === 'disable' ? 'http' : 'https'}://${s.host ?? 'localhost'}:${Number(s.port) || port}`
 const timeout = (s: ResolvedSource) => AbortSignal.timeout(Math.max(5, s.timeoutSec) * 6000)
@@ -412,33 +412,63 @@ export async function stageWarehouse(duck: DuckDBConnection, s: ResolvedSource, 
   return { select: `SELECT * FROM ${q}`, cleanup: async () => void (await duck.run(`DROP TABLE IF EXISTS ${q}`).catch(() => {})) }
 
   function append(values: unknown[]) {
-    const a = app!
-    values.forEach((v, i) => {
-      if (v === null || v === undefined) return a.appendNull()
-      switch (types[i]) {
-        case 'BOOLEAN':
-          return a.appendBoolean(v === true || v === 1 || v === 'true')
-        case 'BIGINT':
-          return a.appendBigInt(BigInt(v as string | number))
-        case 'DOUBLE':
-          return a.appendDouble(Number(v))
-        case 'DATE': {
-          const [y, m, d] = String(v).slice(0, 10).split('-').map(Number)
-          return a.appendDate(dateValue(Math.floor(Date.UTC(y, m - 1, d) / 86_400_000)))
-        }
-        case 'TIMESTAMP': {
-          // "2024-01-31 12:34:56.789" (any zone suffix dropped: shown as the server wrote it)
-          const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?/.exec(String(v))
-          if (!m) return a.appendNull()
-          const ms = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6])
-          return a.appendTimestamp(timestampValue(BigInt(ms) * 1000n + BigInt((m[7] ?? '').padEnd(6, '0') || 0)))
-        }
-        default:
-          return a.appendVarchar(typeof v === 'object' ? JSON.stringify(v) : String(v))
-      }
-    })
-    a.endRow()
+    appendValues(app!, types, values)
   }
+}
+
+/** One row into a staging appender, each value converted to its column's DuckDB type. */
+function appendValues(a: Appender, types: Duck[], values: unknown[]) {
+  values.forEach((v, i) => {
+    if (v === null || v === undefined) return a.appendNull()
+    switch (types[i]) {
+      case 'BOOLEAN':
+        return a.appendBoolean(v === true || v === 1 || v === 'true' || v === 't')
+      case 'BIGINT':
+        return a.appendBigInt(BigInt(v as string | number))
+      case 'DOUBLE':
+        return a.appendDouble(Number(v))
+      case 'DATE': {
+        const [y, m, d] = String(v).slice(0, 10).split('-').map(Number)
+        return a.appendDate(dateValue(Math.floor(Date.UTC(y, m - 1, d) / 86_400_000)))
+      }
+      case 'TIMESTAMP': {
+        // "2024-01-31 12:34:56.789" (any zone suffix dropped: shown as the server wrote it)
+        const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?/.exec(String(v))
+        if (!m) return a.appendNull()
+        const ms = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6])
+        return a.appendTimestamp(timestampValue(BigInt(ms) * 1000n + BigInt((m[7] ?? '').padEnd(6, '0') || 0)))
+      }
+      default:
+        return a.appendVarchar(typeof v === 'object' ? JSON.stringify(v) : String(v))
+    }
+  })
+  a.endRow()
+}
+
+/**
+ * Stages pages of rows from any reader: the first page's columns create the staging table. Used by drivers that
+ * produce rows (Redshift); the caller copies the staging table into the cache.
+ */
+export async function stageRows(duck: DuckDBConnection, ref: string, pages: () => AsyncGenerator<{ columns: { name: string; type: Duck }[]; rows: unknown[][] }>) {
+  const stage = `__stage_wh_${process.pid}_${++seq}`
+  const q = `memory.main.${ident(stage)}`
+  let app: Appender | null = null
+  let types: Duck[] = []
+  try {
+    for await (const p of pages()) {
+      if (!app) {
+        types = p.columns.map((c) => c.type)
+        await duck.run(`CREATE TABLE ${q} (${p.columns.map((c, i) => `${ident(c.name || `column${i + 1}`)} ${c.type}`).join(', ')})`)
+        app = (await duck.createAppender(stage, 'main', 'memory')) as unknown as Appender
+      }
+      for (const r of p.rows) appendValues(app, types, r)
+    }
+    if (!app) throw new Error(`“${ref}” returned no columns.`)
+    ;(app as Appender).flushSync()
+  } finally {
+    ;(app as Appender | null)?.closeSync()
+  }
+  return { select: `SELECT * FROM ${q}`, cleanup: async () => void (await duck.run(`DROP TABLE IF EXISTS ${q}`).catch(() => {})) }
 }
 
 type Appender = { appendNull(): void; appendBoolean(v: boolean): void; appendBigInt(v: bigint): void; appendDouble(v: number): void; appendDate(v: unknown): void; appendTimestamp(v: unknown): void; appendVarchar(v: string): void; endRow(): void; flushSync(): void; closeSync(): void }

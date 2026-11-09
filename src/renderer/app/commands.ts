@@ -136,6 +136,7 @@ def({ id: 'data.add', label: 'Add data file…', keywords: 'import excel csv par
 def({ id: 'data.connect', label: 'Connect to PostgreSQL…', keywords: 'database server postgres', run: () => set({ dialog: { kind: 'connect-db', kind2: 'postgres' } }) })
 def({ id: 'data.remote', label: 'Add a file from the web or cloud storage…', keywords: 'url http s3 azure bucket blob cloud', run: () => set({ dialog: { kind: 'connect-remote' } }) })
 def({ id: 'data.connect-sqlserver', label: 'Connect to SQL Server…', keywords: 'database server mssql microsoft azure sql', run: () => set({ dialog: { kind: 'connect-db', kind2: 'sqlserver' } }) })
+def({ id: 'data.connect-redshift', label: 'Connect to Amazon Redshift…', keywords: 'database warehouse aws amazon redshift', run: () => set({ dialog: { kind: 'connect-db', kind2: 'redshift' } }) })
 def({ id: 'data.connect-clickhouse', label: 'Connect to ClickHouse…', keywords: 'database server olap clickhouse cloud', run: () => set({ dialog: { kind: 'connect-db', kind2: 'clickhouse' } }) })
 def({ id: 'data.connect-bigquery', label: 'Connect to BigQuery…', keywords: 'database warehouse google cloud gcp bigquery', run: () => set({ dialog: { kind: 'connect-db', kind2: 'bigquery' } }) })
 def({ id: 'data.connect-snowflake', label: 'Connect to Snowflake…', keywords: 'database warehouse cloud snowflake', run: () => set({ dialog: { kind: 'connect-db', kind2: 'snowflake' } }) })

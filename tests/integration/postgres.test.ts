@@ -39,6 +39,24 @@ describe('PostgreSQL', () => {
       await engine.close()
     })
 
+  it('the Redshift reader (node-postgres, a read-only cursor) against PostgreSQL’s protocol: types, many fetches, tables', async (ctx) => {
+    if (!pg) return ctx.skip()
+    const { pgExec } = await import('./helpers')
+    await pgExec(pg, 'DROP TABLE IF EXISTS public.rs_numbers')
+    await pgExec(pg, "CREATE TABLE public.rs_numbers AS SELECT g AS n, g * 0.5 AS half, g % 2 = 0 AS even, DATE '2024-01-01' + g AS day, TIMESTAMP '2024-01-01 10:00:00' + g * INTERVAL '1 second' AS at FROM generate_series(1, 25000) g")
+    const rs = { ...pgSource(pg, 'extract', [{ alias: 'rs_customers', ref: 'public.customers' }, { alias: 'rs_numbers', ref: 'public.rs_numbers' }]), id: 'rs', kind: 'redshift' as const }
+    const { engine } = await bootEngine([rs])
+    expect(engine.statuses()[0].error ?? 'ok').toBe('ok')
+    expect(Number((await rows(engine, 'SELECT count(*) AS n FROM rs_customers'))[0].n)).toBe(expected().customers)
+    const types = Object.fromEntries((await rows(engine, 'SELECT column_name, column_type FROM (DESCRIBE rs_numbers)')).map((r) => [r.column_name, r.column_type]))
+    expect(types).toEqual({ n: 'BIGINT', half: 'DOUBLE', even: 'BOOLEAN', day: 'DATE', at: 'TIMESTAMP' })
+    const [r] = await rows(engine, 'SELECT count(*) AS c, sum(n) AS s, count(*) FILTER (WHERE even) AS e, max(day)::VARCHAR AS d, max("at")::VARCHAR AS t FROM rs_numbers')
+    expect([Number(r.c), Number(r.s), Number(r.e), r.d, r.t]).toEqual([25000, (25000 * 25001) / 2, 12500, new Date(Date.UTC(2024, 0, 1 + 25000)).toISOString().slice(0, 10), '2024-01-01 16:56:40'])
+    expect((await Engine.probe(rs, extensionsDir)).tables).toEqual(expect.arrayContaining(['public.customers', 'public.rs_numbers']))
+    await engine.close()
+    await pgExec(pg, 'DROP TABLE public.rs_numbers')
+  })
+
   it('explains a wrong password and keeps other sources working', async (ctx) => {
     if (!pg) return ctx.skip()
     const { engine } = await bootEngine([fileSource('xl', fixture('Sales.xlsx'), 'xlsx', [{ alias: 'transactions', ref: 'Transactions' }]), { ...pgSource(pg, 'extract'), password: 'wrong' }])

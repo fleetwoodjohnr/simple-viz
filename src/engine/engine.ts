@@ -20,6 +20,7 @@ import { extractName, ident, isSafeType, lit, trimStatement } from './sql'
 import { extractSelect, sourceStat, readBytes, fileTables, type Memo, type Stat } from './ingest'
 import { sqlServerTables } from './sqlserver'
 import { bigqueryTables, clickhouseTables, databricksTables, snowflakeTables, trinoTables } from './warehouses'
+import { redshiftTables } from './redshift'
 
 type Value = string | number | boolean | null
 
@@ -664,6 +665,8 @@ export class Engine {
     try {
       if (s.kind === 'sqlserver') {
         return { tables: await sqlServerTables(s) }
+      } else if (s.kind === 'redshift') {
+        return { tables: await redshiftTables(s) }
       } else if (s.kind === 'clickhouse') {
         return { tables: await clickhouseTables(s) }
       } else if (s.kind === 'trino') {

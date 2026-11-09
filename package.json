@@ -45,6 +45,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
@@ -72,6 +73,7 @@
     "@duckdb/node-api": "2.0.0-r.1",
     "apache-arrow": "^21.2.0",
     "electron-updater": "6.8.10",
+    "pg": "^8.23.1",
     "tedious": "^20.3.8"
   }
 }
