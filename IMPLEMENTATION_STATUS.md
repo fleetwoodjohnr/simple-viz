@@ -249,6 +249,8 @@ in regression, multiplicative seasonality, `.xlsb` files.
 
 Also done: viz in tooltip.
 
+Also done: reference lines, bands and trends over every mark of a pane (they used only the first color's values) or one per color in its color — unit `charts`, e2e `maps`.
+
 Also done: "compute using" several dimensions in a chosen order, restarting every one of them (datasets and models) — integration `charts`, e2e `charts`.
 
 Also done: `+` joins text next to calculated fields that return text — unit `calc`; filters bound to parameters (a value, a range's ends, top N; on datasets and models, where parameter filters had been ignored) and number parameters with a range (clamped, stepped, a slider on dashboards) — unit `charts`, integration `charts`, `model`, e2e `objects`.

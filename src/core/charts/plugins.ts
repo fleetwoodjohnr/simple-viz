@@ -102,6 +102,8 @@ function cartesianPanel(kind: 'bar' | 'line' | 'area' | 'combo'): NonNullable<Ch
     const fc = (kind === 'line' || kind === 'area') && stack === 'none' && !horizontal ? forecastSeries(d, t, catDim, cats, series) : null
     if (fc) cats.push(...fc.cats)
     const pct = stack === 'percent'
+    // Reference lines, bands and trends: over the pane's marks, or one set per color.
+    const perSeries = d.options.refScope === 'series' && series.length > 1
     const lineIdx = new Set(kind === 'combo' ? (d.options.lineSeries ?? [1]) : kind === 'bar' ? [] : series.map((_, i) => i))
     const right = new Set(d.options.rightAxis ?? (kind === 'combo' && ms.length > 1 ? [1] : []))
     const totals = pct ? cats.map((_, ci) => series.reduce((a, s) => a + Math.abs(s.values[ci] ?? 0), 0)) : []
@@ -143,10 +145,11 @@ function cartesianPanel(kind: 'bar' | 'line' | 'area' | 'combo'): NonNullable<Ch
             const value = pct && v !== null ? v / (totals[ci] || 1) : v
             return { value, row, itemStyle: row && dimmed(d, row) ? { opacity: 0.25 } : undefined }
           }),
-          markLine: si === 0 ? refLines(d, t, s.values) : undefined,
-          markArea: si === 0 ? refBands(d, t, s.values) : undefined
+          // Reference lines over every mark of the pane, or (one per color) over each series, in its color.
+          markLine: perSeries ? refLines(d, t, [s.values], t.palette[si % t.palette.length]) : si === 0 ? refLines(d, t, series.map((x) => x.values)) : undefined,
+          markArea: perSeries ? refBands(d, t, [s.values], t.palette[si % t.palette.length]) : si === 0 ? refBands(d, t, series.map((x) => x.values)) : undefined
         }
-      }).concat(fc?.series ?? [], series[0] ? (trendSeries(d, t, series[0].values, fc?.cats.length ?? 0) ?? []) : [])
+      }).concat(fc?.series ?? [], (perSeries ? series.map((s, si) => trendSeries(d, t, [s.values], fc?.cats.length ?? 0, si, t.palette[si % t.palette.length])) : [trendSeries(d, t, series.map((x) => x.values), fc?.cats.length ?? 0, 0)]).filter((x): x is Option => !!x))
     }
   }
 }
@@ -155,9 +158,9 @@ function cartesianPanel(kind: 'bar' | 'line' | 'area' | 'combo'): NonNullable<Ch
  * Shaded bands over the plotted values: mean ± k sample standard deviations, the 95% confidence interval of the mean
  * (t distribution), or a reference box from the first to the third quartile.
  */
-function refBands(d: ChartData, t: Theme, values: (number | null)[]): Option | undefined {
+function refBands(d: ChartData, t: Theme, series: (number | null)[][], color = t.accent): Option | undefined {
   const bands = (d.options.refLines ?? []).filter((l) => l.kind === 'band' || l.kind === 'ci' || l.kind === 'box')
-  const nums = values.filter((v): v is number => v !== null)
+  const nums = series.flat().filter((v): v is number => v !== null)
   if (!bands.length || nums.length < 2) return undefined
   const n = nums.length
   const mean = nums.reduce((a, b) => a + b, 0) / n
@@ -166,7 +169,7 @@ function refBands(d: ChartData, t: Theme, values: (number | null)[]): Option | u
   const half = tQuantile(0.975, n - 1) * (sd / Math.sqrt(n))
   return {
     silent: true,
-    itemStyle: { color: t.accent, opacity: 0.1 },
+    itemStyle: { color, opacity: 0.1 },
     label: { color: t.text2, position: 'insideTopRight' },
     data: bands.map((b) =>
       b.kind === 'ci'
@@ -259,20 +262,22 @@ export function fitTrend(pts: (readonly [number, number])[], model: TrendModel =
 const TREND_NAMES: Record<TrendModel, string> = { linear: 'Linear', log: 'Logarithmic', exp: 'Exponential', power: 'Power', poly: 'Polynomial' }
 
 /** A trend line over category positions 1…n (one value per category; gaps stay gaps), as a dashed series. */
-function trendSeries(d: ChartData, t: Theme, values: (number | null)[], pad: number): Option | null {
+function trendSeries(d: ChartData, t: Theme, series: (number | null)[][], pad: number, idx: number, color = t.text2): Option | null {
   const l = (d.options.refLines ?? []).find((x) => x.kind === 'trend')
   if (!l || !l.model || l.model === 'linear') return null
-  const pts = values.map((v, i) => [i + 1, v] as const).filter((p): p is readonly [number, number] => p[1] !== null)
+  const values = series[0] ?? []
+  const pts = series.flatMap((vs) => vs.map((v, i) => [i + 1, v] as const)).filter((p): p is readonly [number, number] => p[1] !== null)
   const fit = fitTrend(pts, l.model, l.degree)
   if (!fit) return null
-  return { id: 'trend-0', name: `${TREND_NAMES[l.model]} trend`, type: 'line', smooth: true, silent: true, showSymbol: false, lineStyle: { color: t.text2, type: 'dashed', width: 1.5 }, data: [...values.map((_, i) => ((v) => (Number.isFinite(v) ? v : null))(fit.predict(i + 1))), ...new Array<null>(pad).fill(null)], endLabel: { show: true, formatter: `R² = ${fit.r2.toFixed(3)}`, color: t.text2 } }
+  return { id: `trend-${idx}`, name: `${TREND_NAMES[l.model]} trend`, type: 'line', smooth: true, silent: true, showSymbol: false, lineStyle: { color, type: 'dashed', width: 1.5 }, data: [...values.map((_, i) => ((v) => (Number.isFinite(v) ? v : null))(fit.predict(i + 1))), ...new Array<null>(pad).fill(null)], endLabel: { show: true, formatter: `R² = ${fit.r2.toFixed(3)}`, color: t.text2 } }
 }
 
 /** Reference lines: constant, average, median, min, max, percentile, a least-squares trend line, a box's lines. */
-function refLines(d: ChartData, t: Theme, values: (number | null)[]): Option | undefined {
+function refLines(d: ChartData, t: Theme, series: (number | null)[][], color = t.text2): Option | undefined {
   const lines = d.options.refLines ?? []
   if (!lines.length) return undefined
-  const nums = values.filter((v): v is number => v !== null)
+  const values = series[0] ?? []
+  const nums = series.flat().filter((v): v is number => v !== null)
   const sorted = [...nums].sort((a, b) => a - b)
   const data: unknown[] = []
   for (const l of lines) {
@@ -280,7 +285,7 @@ function refLines(d: ChartData, t: Theme, values: (number | null)[]): Option | u
     const label = { formatter: l.label ?? l.kind, color: t.text2, position: 'insideEndTop' as const }
     if (l.kind === 'trend') {
       if (l.model && l.model !== 'linear') continue // drawn as its own series (trendSeries)
-      const pts = values.map((v, i) => [i, v] as const).filter((p): p is readonly [number, number] => p[1] !== null)
+      const pts = series.flatMap((vs) => vs.map((v, i) => [i, v] as const)).filter((p): p is readonly [number, number] => p[1] !== null)
       if (pts.length < 2) continue
       const n = pts.length
       const mx = pts.reduce((a, p) => a + p[0], 0) / n
@@ -309,7 +314,7 @@ function refLines(d: ChartData, t: Theme, values: (number | null)[]): Option | u
     const v = l.kind === 'constant' || l.kind === 'param' ? l.value : l.kind === 'average' ? nums.reduce((a, b) => a + b, 0) / (nums.length || 1) : l.kind === 'median' ? quantile(sorted, 0.5) : l.kind === 'min' ? sorted[0] : sorted[sorted.length - 1]
     if (v !== undefined && Number.isFinite(v)) data.push({ yAxis: v, label: { ...label, formatter: `${l.label ?? l.kind} ${fmt(v, undefined, 'axis')}` } })
   }
-  return data.length ? { symbol: 'none', lineStyle: { color: t.text2, type: 'dashed' }, data } : undefined
+  return data.length ? { symbol: 'none', lineStyle: { color, type: 'dashed' }, data } : undefined
 }
 
 // ---------------------------------------------------------------- pie, scatter, heatmap, treemap, histogram, box

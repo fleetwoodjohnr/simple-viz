@@ -17,7 +17,7 @@
 - **Maps.** Point maps place cities and US ZIP codes by name. Custom maps from shapefiles and KML/KMZ files.
   Background map tiles from a tile server you choose (off by default).
 - **Chart analytics.** Logarithmic, exponential, power and polynomial trend lines; percentile lines, confidence
-  intervals of the mean and quartile reference boxes.
+  intervals of the mean and quartile reference boxes; one per color if wanted.
 
 ## 0.1.0 — 2026-11-09
 

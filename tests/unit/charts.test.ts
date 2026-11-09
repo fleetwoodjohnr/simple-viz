@@ -145,6 +145,18 @@ describe('chart analytics overlays', () => {
     expect(area[1].yAxis).toBeCloseTo(2.5 + sd, 10)
   })
 
+  it('reference lines use every mark of the pane, or one set per color in its color', () => {
+    const d: ChartData = { fields: [f('d0', 'region', 'dim', 'x'), f('d1', 'segment', 'dim', 'color'), f('m0', 'revenue', 'measure', 'y')], rows: [['East', 'A', 1], ['East', 'B', 10], ['West', 'A', 3], ['West', 'B', 30]], truncated: false, options: { refLines: [{ id: 'a', kind: 'average' }, { id: 't', kind: 'trend', model: 'log' }] } }
+    type S = { id?: string; markLine?: { data: { yAxis: number }[]; lineStyle: { color: string } } }
+    const pane = (plugin('bar').option!(d, LIGHT) as { series: S[] }).series
+    expect(pane[0].markLine!.data[0].yAxis).toBe(11) // (1 + 10 + 3 + 30) / 4
+    expect(pane[1].markLine).toBeUndefined()
+    const each = (plugin('bar').option!({ ...d, options: { ...d.options, refScope: 'series' } }, LIGHT) as { series: S[] }).series
+    expect(each.slice(0, 2).map((s) => s.markLine!.data[0].yAxis)).toEqual([2, 20])
+    expect(each.slice(0, 2).map((s) => s.markLine!.lineStyle.color)).toEqual(LIGHT.palette.slice(0, 2))
+    expect(each.filter((s) => s.id?.startsWith('trend-')).map((s) => s.id)).toEqual(['trend-0', 'trend-1'])
+  })
+
   it('trend models fit as numpy.polyfit does (exponential and power on ln y, as Tableau)', () => {
     const y = [2.1, 3.9, 6.2, 8.1, 9.8, 12.5, 13.9, 16.2]
     const pts = y.map((v, i) => [i + 1, v] as const)

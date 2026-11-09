@@ -778,6 +778,12 @@ function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fie
                 )}
               </label>
             )}
+            {cartesian && chart.enc.color && lines.length > 0 && (
+              <label className="mt-2 flex items-center gap-2 text-[12px] text-text-2">
+                <input type="checkbox" className="size-3.5 accent-[var(--accent)]" checked={o.refScope === 'series'} onChange={(e) => setO({ refScope: e.target.checked ? 'series' : undefined })} data-testid="ref-per-color" />
+                One for each color
+              </label>
+            )}
             {cartesian && (
               <label className="mt-2 flex items-center gap-2 text-[12px] text-text-2">
                 Percentile line
