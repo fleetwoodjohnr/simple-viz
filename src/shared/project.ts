@@ -8,16 +8,22 @@ import type { FeatureCollection } from '../core/charts/geo'
 export const PROJECT_SCHEMA_VERSION = 1
 
 export type FileFormat = 'csv' | 'tsv' | 'json' | 'jsonl' | 'parquet' | 'arrow' | 'xlsx' | 'xls' | 'xlsb' | 'ods' | 'xml2003'
-export type DbKind = 'postgres' | 'mysql' | 'sqlserver' | 'sqlite' | 'duckdb'
+export type DbKind = 'postgres' | 'mysql' | 'sqlserver' | 'clickhouse' | 'trino' | 'sqlite' | 'duckdb'
 /** Database servers (host, port, user, password), as opposed to database files. */
-export type ServerKind = 'postgres' | 'mysql' | 'sqlserver'
-export const isServer = (k: string): k is ServerKind => k === 'postgres' || k === 'mysql' || k === 'sqlserver'
+export type ServerKind = 'postgres' | 'mysql' | 'sqlserver' | 'clickhouse' | 'trino'
+export const isServer = (k: string): k is ServerKind => Object.hasOwn(SERVER, k)
 export const SERVER: Record<ServerKind, { label: string; port: number; database: string }> = {
   postgres: { label: 'PostgreSQL', port: 5432, database: 'postgres' },
   mysql: { label: 'MySQL / MariaDB', port: 3306, database: '' },
   /** Extract only: tables are copied into the cache (DuckDB can't attach SQL Server). */
-  sqlserver: { label: 'SQL Server', port: 1433, database: 'master' }
+  sqlserver: { label: 'SQL Server', port: 1433, database: 'master' },
+  /** Extract only, over ClickHouse's HTTP interface (8443 with TLS, 8123 without). */
+  clickhouse: { label: 'ClickHouse', port: 8443, database: 'default' },
+  /** Extract only, over Trino's REST protocol (Presto too); the database is catalog or catalog.schema. */
+  trino: { label: 'Trino / Presto', port: 8443, database: '' }
 }
+/** Servers read by their own drivers and copied into the cache (DuckDB can't attach them): no live mode. */
+export const extractOnly = (k: string) => k === 'sqlserver' || k === 'clickhouse' || k === 'trino'
 
 /** One relation a source exposes to SQL under `alias` (a sheet, named table, cell range, or database table). */
 export interface SourceTable {
@@ -88,6 +94,8 @@ export interface DbSource extends SourceBase {
 }
 
 export type Source = FileSource | DbSource
+/** A source on a database server (host, port, user…). */
+export const isServerSource = (s: Source): s is DbSource & { kind: ServerKind } => isServer(s.kind)
 
 /** A saved SQL query exposed as a reusable relation (a view), e.g. a join with calculated columns. */
 export interface Dataset {

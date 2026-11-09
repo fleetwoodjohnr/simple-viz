@@ -219,3 +219,73 @@ export async function startSqlServer(): Promise<Ms | null> {
 export function msSource(ms: Ms, password = ms.password): ResolvedSource {
   return { id: 'ms1', kind: 'sqlserver', host: ms.host, port: ms.port, user: ms.user, password, database: ms.database, sslmode: 'require', mode: 'extract', timeoutSec: 15, tables: [{ alias: 'ms_customers', ref: 'dbo.customers' }] }
 }
+
+// ---------------------------------------------------------------- ClickHouse, Trino
+
+export type Wh = Omit<Pg, 'restart'>
+
+/** Runs SQL on ClickHouse over HTTP (writes allowed: this is the test's own setup). */
+export async function chExec(ch: Wh, sql: string, body?: string) {
+  const url = `http://${ch.host}:${ch.port}/?query=${encodeURIComponent(sql)}`
+  const res = await fetch(url, { method: 'POST', headers: { 'X-ClickHouse-User': ch.user, 'X-ClickHouse-Key': ch.password }, body: body ?? '' })
+  if (!res.ok) throw new Error(await res.text())
+  return res.text()
+}
+
+/** ClickHouse to test against: SV_CH_HOST, or a throwaway podman container; null when neither. Seeded with customers. */
+export async function startClickHouse(): Promise<Wh | null> {
+  let ch: Wh
+  if (process.env.SV_CH_HOST) ch = { host: process.env.SV_CH_HOST, port: Number(process.env.SV_CH_PORT ?? 8123), user: process.env.SV_CH_USER ?? 'default', password: process.env.SV_CH_PASSWORD ?? '', database: 'shop', stop() {} }
+  else {
+    if (!hasPodman() || process.env.SV_NO_PODMAN) return null
+    const name = `sv-ch-${process.pid}-${Date.now()}`
+    const port = 20000 + Math.floor(Math.random() * 20000)
+    execFileSync('podman', ['run', '-d', '--name', name, '-p', `127.0.0.1:${port}:8123`, '-e', 'CLICKHOUSE_USER=sv', '-e', 'CLICKHOUSE_PASSWORD=sv-secret', '-e', 'CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1', 'docker.io/clickhouse/clickhouse-server:24.8'], { stdio: 'ignore' })
+    ch = { name, host: '127.0.0.1', port, user: 'sv', password: 'sv-secret', database: 'shop', stop: () => void execFileSync('podman', ['rm', '-f', name], { stdio: 'ignore' }) }
+  }
+  const t0 = Date.now()
+  for (;;) {
+    try {
+      await chExec(ch, 'CREATE DATABASE IF NOT EXISTS shop')
+      break
+    } catch (e) {
+      if (Date.now() - t0 > 120_000) throw e
+      await new Promise((r) => setTimeout(r, 1000))
+    }
+  }
+  await chExec(ch, 'DROP TABLE IF EXISTS shop.customers')
+  await chExec(ch, 'CREATE TABLE shop.customers (customer_id UInt32, customer_name String, region LowCardinality(String), segment String, since Nullable(Date), score Nullable(Decimal(6, 2)), vip Bool, seen DateTime64(3), big UInt64) ENGINE = MergeTree ORDER BY customer_id')
+  const rows = readFileSync(fixture('customers.csv'), 'utf8').trim().split('\n').slice(1).map((l) => l.split(','))
+  const csv = rows.map((r, i) => [r[0], r[1], r[2], r[3], i % 5 ? new Date(Date.UTC(2024, 0, 1 + i)).toISOString().slice(0, 10) : '\\N', i % 7 ? (i * 1.25).toFixed(2) : '\\N', i % 3 === 0 ? 'true' : 'false', `2024-03-0${(i % 9) + 1} 10:20:30.${String(i % 1000).padStart(3, '0')}`, String(2n ** 63n + BigInt(i))].join(',')).join('\n')
+  await chExec(ch, 'INSERT INTO shop.customers FORMAT CSV', csv)
+  return ch
+}
+
+/** Trino to test against: SV_TRINO_HOST, or a throwaway podman container (its built-in TPC-H catalog); null when neither. */
+export async function startTrino(): Promise<Wh | null> {
+  let tr: Wh
+  if (process.env.SV_TRINO_HOST) tr = { host: process.env.SV_TRINO_HOST, port: Number(process.env.SV_TRINO_PORT ?? 8080), user: 'sv', password: '', database: 'tpch.tiny', stop() {} }
+  else {
+    if (!hasPodman() || process.env.SV_NO_PODMAN) return null
+    const name = `sv-trino-${process.pid}-${Date.now()}`
+    const port = 20000 + Math.floor(Math.random() * 20000)
+    execFileSync('podman', ['run', '-d', '--name', name, '-p', `127.0.0.1:${port}:8080`, 'docker.io/trinodb/trino:470'], { stdio: 'ignore' })
+    tr = { name, host: '127.0.0.1', port, user: 'sv', password: '', database: 'tpch.tiny', stop: () => void execFileSync('podman', ['rm', '-f', name], { stdio: 'ignore' }) }
+  }
+  // Ready when a query runs (the server answers before its worker has registered).
+  const t0 = Date.now()
+  for (;;) {
+    try {
+      let page = (await (await fetch(`http://${tr.host}:${tr.port}/v1/statement`, { method: 'POST', headers: { 'X-Trino-User': 'sv' }, body: 'SELECT count(*) FROM tpch.tiny.nation' })).json()) as { nextUri?: string; error?: { message: string } }
+      while (page.nextUri && !page.error) page = (await (await fetch(page.nextUri)).json()) as typeof page
+      if (!page.error) break
+      if (Date.now() - t0 > 240_000) throw new Error(page.error.message)
+    } catch (e) {
+      if (Date.now() - t0 > 240_000) throw e
+    }
+    await new Promise((r) => setTimeout(r, 2000))
+  }
+  return tr
+}
+
+export const whSource = (w: Wh, kind: 'clickhouse' | 'trino', tables: ResolvedSource['tables'], password = w.password): ResolvedSource => ({ id: `${kind}1`, kind, host: w.host, port: w.port, user: w.user, password, database: w.database, sslmode: 'disable', mode: 'extract', timeoutSec: 30, tables })

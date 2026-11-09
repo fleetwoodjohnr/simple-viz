@@ -11,7 +11,7 @@ import { SourceBadge, timeAgo } from './RefreshStatus'
 import { Btn, IconBtn, Menu, MenuContent, MenuItem, MenuSep, MenuTrigger, MenuCheck, SubMenu, Modal, Field, cx, inputCls } from '../ui'
 import { DataGrid, typeLabel, type GridSource } from '../ui/DataGrid'
 import { profileSql, readProfile, type Profile } from '@/core/profile'
-import { isRemotePath, isSheetFormat, type Source } from '@/shared/project'
+import { isRemotePath, isServer, isServerSource, isSheetFormat, type Source } from '@/shared/project'
 import type { RelationInfo } from '@/shared/engine-protocol'
 import { openInSql } from './SqlEditor'
 import { ModelEditor } from './ModelEditor'
@@ -23,7 +23,7 @@ import { newId } from '@/core/project/sviz'
 const q = (s: string) => `"${s.replace(/"/g, '""')}"`
 
 function sourceIcon(s: Source) {
-  if (s.kind === 'postgres' || s.kind === 'mysql' || s.kind === 'sqlserver') return <Server className="size-4" />
+  if (isServer(s.kind)) return <Server className="size-4" />
   if (s.kind === 'sqlite' || s.kind === 'duckdb') return <Database className="size-4" />
   if (s.kind === 'file' && isSheetFormat(s.format)) return <FileSpreadsheet className="size-4" />
   return <FileText className="size-4" />
@@ -80,6 +80,12 @@ export function DataView() {
                 <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-sqlserver')} data-testid="add-sqlserver">
                   SQL Server database
                 </MenuItem>
+                <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-clickhouse')} data-testid="add-clickhouse">
+                  ClickHouse database
+                </MenuItem>
+                <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-trino')} data-testid="add-trino">
+                  Trino or Presto
+                </MenuItem>
                 <MenuSep />
                 <MenuItem icon={<SquareTerminal />} onSelect={() => openInSql('', { asDataset: true })}>
                   Dataset from SQL
@@ -115,7 +121,7 @@ export function DataView() {
                       {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
                     </button>
                     <span className={cx('text-text-3', st?.state === 'error' && 'text-danger')}>{sourceIcon(s)}</span>
-                    <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium" title={s.kind === 'postgres' || s.kind === 'mysql' || s.kind === 'sqlserver' ? `${s.user}@${s.host}:${s.port}/${s.database ?? ''}` : s.path}>
+                    <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium" title={isServerSource(s) ? `${s.user}@${s.host}:${s.port}/${s.database ?? ''}` : s.path}>
                       {s.name}
                     </span>
                     {st?.state === 'checking' ? <RefreshCw className="size-3.5 animate-spin text-text-3" /> : st?.state === 'error' ? <AlertTriangle className="size-3.5 text-danger" aria-label="Refresh failed" /> : null}
@@ -466,7 +472,7 @@ function SourceMenu({ s }: { s: Source }) {
           <MenuCheck checked={s.refresh.onOpen} onCheckedChange={(v) => setPolicy({ onOpen: !!v })}>
             When the project opens
           </MenuCheck>
-          {s.kind !== 'postgres' && s.kind !== 'mysql' && s.kind !== 'sqlserver' && !isRemotePath(s.path) && (
+          {!isServer(s.kind) && !isRemotePath(s.path) && (
             <MenuCheck checked={s.refresh.watch} onCheckedChange={(v) => setPolicy({ watch: !!v })}>
               When the file changes
             </MenuCheck>

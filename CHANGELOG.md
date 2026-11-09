@@ -10,6 +10,7 @@
   tables, without double counting.
 - **Dashboards.** Tiled layout; tablet and phone layouts; story points that keep their filter choices; the size of a
   chart in a tooltip.
+- **More sources.** ClickHouse and Trino/Presto (extract).
 - **Maps.** Point maps place cities and US ZIP codes by name. Custom maps from shapefiles and KML/KMZ files.
   Background map tiles from a tile server you choose (off by default).
 - **Chart analytics.** Logarithmic, exponential, power and polynomial trend lines; percentile lines, confidence

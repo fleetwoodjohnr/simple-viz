@@ -136,6 +136,8 @@ def({ id: 'data.add', label: 'Add data file…', keywords: 'import excel csv par
 def({ id: 'data.connect', label: 'Connect to PostgreSQL…', keywords: 'database server postgres', run: () => set({ dialog: { kind: 'connect-db', kind2: 'postgres' } }) })
 def({ id: 'data.remote', label: 'Add a file from the web or cloud storage…', keywords: 'url http s3 azure bucket blob cloud', run: () => set({ dialog: { kind: 'connect-remote' } }) })
 def({ id: 'data.connect-sqlserver', label: 'Connect to SQL Server…', keywords: 'database server mssql microsoft azure sql', run: () => set({ dialog: { kind: 'connect-db', kind2: 'sqlserver' } }) })
+def({ id: 'data.connect-clickhouse', label: 'Connect to ClickHouse…', keywords: 'database server olap clickhouse cloud', run: () => set({ dialog: { kind: 'connect-db', kind2: 'clickhouse' } }) })
+def({ id: 'data.connect-trino', label: 'Connect to Trino or Presto…', keywords: 'database query engine trino presto starburst athena', run: () => set({ dialog: { kind: 'connect-db', kind2: 'trino' } }) })
 def({ id: 'data.connect-mysql', label: 'Connect to MySQL or MariaDB…', keywords: 'database server mysql mariadb', run: () => set({ dialog: { kind: 'connect-db', kind2: 'mysql' } }) })
 def({ id: 'data.refresh', label: 'Refresh all data', needsProject: true, keywords: 'reload update', run: () => P.refreshSources(undefined, true) })
 

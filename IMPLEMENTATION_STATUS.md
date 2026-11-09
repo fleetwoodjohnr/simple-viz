@@ -225,11 +225,11 @@ Details per source, and what isn't supported (with reasons): [docs/CONNECTORS.md
 
 ### Known limitations
 
-- Excel 95 `.xls`, password-protected workbooks, Redshift, Snowflake, BigQuery, Databricks, Athena, Trino,
-  ClickHouse, Oracle, Google Sheets, ODBC/JDBC: not supported (reasons in docs/CONNECTORS.md).
-- SQL Server is extract only. S3-compatible services other than the S3 emulator (MinIO, R2, GCS) use the same code but
+- Excel 95 `.xls`, password-protected workbooks, Redshift, Snowflake, BigQuery, Databricks, Athena, Oracle, Google
+  Sheets, ODBC/JDBC: not supported (reasons in docs/CONNECTORS.md).
+- SQL Server, ClickHouse and Trino are extract only. S3-compatible services other than the S3 emulator (MinIO, R2, GCS) use the same code but
   weren't tested against the services themselves.
-- SQL Server, MySQL, S3 and Azure tests run where podman is available (Linux CI); they are skipped on Windows and macOS
+- SQL Server, MySQL, ClickHouse, Trino, S3 and Azure tests run where podman is available (Linux CI); they are skipped on Windows and macOS
   CI and say so.
 - The bundled extensions add about 114 MB (uncompressed, Linux x64) for MySQL, web/S3 and Azure.
 
@@ -248,6 +248,8 @@ saved views, stories, HTML export, calculated fields, top-N filters and role-pla
 in regression, multiplicative seasonality, `.xlsb` files.
 
 Also done: viz in tooltip.
+
+Also done: ClickHouse (HTTP interface, `readonly=1`) and Trino/Presto (REST protocol) sources, extract only, in the connection dialog — integration `warehouses` (real ClickHouse 24.8 and Trino 470 containers: types, a join with Excel, refresh, table lists, a wrong password).
 
 Also done: background map tiles under point maps from a tile server set in Settings (off by default; fetched by the main process with the address, coordinates, type and size checked; Web Mercator; redrawn on pan and zoom; the provider's credit shown) — unit `charts-more` (projection, tiles of a view, addresses), e2e `maps` (a local tile server; an invalid address refused).
 

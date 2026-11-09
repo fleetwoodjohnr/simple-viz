@@ -5,7 +5,7 @@ import path from 'node:path'
 import type { ConnectionDraft, OpenedFile, RecentFile, Settings } from '../shared/ipc-types'
 import type { EngineConfig, ResolvedSource } from '../shared/engine-protocol'
 import { packProject, migrate } from '../core/project/sviz'
-import { DATA_EXTENSIONS, FILE_FORMATS, PROJECT_EXTENSION, SERVER, isServer, isRemotePath, isSheetFormat, type Project, type Source } from '../shared/project'
+import { DATA_EXTENSIONS, FILE_FORMATS, PROJECT_EXTENSION, SERVER, extractOnly, isServer, isServerSource, isRemotePath, isSheetFormat, type Project, type Source } from '../shared/project'
 import * as store from './store'
 import * as creds from './credentials'
 import { EngineHost } from './engine-host'
@@ -119,7 +119,7 @@ async function addTrust(keys: string[]) {
   await store.atomicWrite(trustFile(), JSON.stringify([...t]))
 }
 const sourceKey = (s: Source) =>
-  s.kind === 'postgres' || s.kind === 'mysql' || s.kind === 'sqlserver'
+  isServerSource(s)
     ? `${s.kind}:${s.user ?? ''}@${s.host ?? ''}:${s.port ?? SERVER[s.kind].port}/${s.database ?? ''}`
     : s.kind === 'file' && isRemotePath(s.path)
       ? `url:${s.remote?.provider ?? 'http'}:${s.remote?.endpoint ?? ''}:${s.remote?.keyId ?? ''}:${s.path}`
@@ -129,10 +129,10 @@ const safeAddress = (v: unknown, max = 2048) => typeof v === 'string' && v.lengt
 
 function checkSource(x: unknown): Source {
   const s = x as Source & Record<string, unknown>
-  if (!s || typeof s !== 'object' || !isId(s.id) || !['file', 'postgres', 'mysql', 'sqlserver', 'sqlite', 'duckdb'].includes(s.kind)) throw new Error('Invalid source')
+  if (!s || typeof s !== 'object' || !isId(s.id) || !(s.kind === 'file' || s.kind === 'sqlite' || s.kind === 'duckdb' || isServer(s.kind))) throw new Error('Invalid source')
   if (!Array.isArray(s.tables) || s.tables.length > 500) throw new Error('Invalid source tables')
   for (const t of s.tables) if (!t || !isName(t.alias) || (t.ref !== undefined && (typeof t.ref !== 'string' || t.ref.length > 500))) throw new Error(`Invalid table name “${String(t?.alias)}”`)
-  if (s.kind === 'postgres' || s.kind === 'mysql' || s.kind === 'sqlserver') {
+  if (isServerSource(s)) {
     if (typeof s.host !== 'string' || s.host.length > 255 || /[\s'"\\]/.test(s.host)) throw new Error('Invalid host')
     if (s.port !== undefined && !(Number.isInteger(s.port) && s.port > 0 && s.port < 65536)) throw new Error('Invalid port')
   } else if (s.kind === 'file' && isRemotePath(s.path)) {
@@ -163,7 +163,7 @@ async function resolveSource(s: Source, settings: Settings): Promise<ResolvedSou
   if (s.kind === 'file') return { ...base, format: s.format, path: path.resolve(s.path), header: s.header }
   return {
     ...base,
-    mode: s.mode === 'live' && s.kind !== 'sqlserver' ? 'live' : 'extract',
+    mode: s.mode === 'live' && !extractOnly(s.kind) ? 'live' : 'extract',
     timeoutSec: Math.max(5, Math.min(3600, Number(s.timeoutSec) || settings.refreshTimeoutSec)),
     path: s.path ? path.resolve(s.path) : undefined,
     host: s.host,
@@ -184,12 +184,12 @@ async function configureEngine(p: Pick<Project, 'id' | 'sources' | 'datasets'>):
   const sources = p.sources.map(checkSource)
   for (const d of p.datasets) if (!isName(d?.name) || typeof d.sql !== 'string' || d.sql.length > 1_000_000) throw new Error(`Invalid dataset “${String(d?.name)}”`)
   const t = await trust()
-  const isOk = (s: Source) => (s.kind === 'postgres' || s.kind === 'mysql' || s.kind === 'sqlserver' || isRemotePath(s.path) ? t.has(sourceKey(s)) : granted.has(path.resolve(s.path!)) || t.has(sourceKey(s)))
+  const isOk = (s: Source) => (isServer(s.kind) || isRemotePath(s.path) ? t.has(sourceKey(s)) : granted.has(path.resolve(s.path!)) || t.has(sourceKey(s)))
   const unknown = sources.filter((s) => !isOk(s))
   const problems: string[] = []
   let allowed = sources
   if (unknown.length && mainWindow) {
-    const list = unknown.map((s) => (s.kind === 'postgres' || s.kind === 'mysql' || s.kind === 'sqlserver' ? `• ${SERVER[s.kind].label} ${s.user ? `${s.user}@` : ''}${s.host}:${s.port ?? SERVER[s.kind].port}/${s.database ?? ''}` : `• ${s.path}${s.kind === 'file' && s.remote?.endpoint ? ` (through ${s.remote.endpoint})` : ''}`)).join('\n')
+    const list = unknown.map((s) => (isServerSource(s) ? `• ${SERVER[s.kind].label} ${s.user ? `${s.user}@` : ''}${s.host}:${s.port ?? SERVER[s.kind].port}/${s.database ?? ''}` : `• ${s.path}${s.kind === 'file' && s.remote?.endpoint ? ` (through ${s.remote.endpoint})` : ''}`)).join('\n')
     const { response } = await dialog.showMessageBox(mainWindow, {
       type: 'question',
       message: 'Allow this project to read these data sources?',

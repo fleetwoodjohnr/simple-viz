@@ -7,7 +7,7 @@ import * as P from '../state/project'
 import { close } from './Dialogs'
 import { Btn, Field, Modal, Segmented, cx, inputCls } from '../ui'
 import { newId } from '@/core/project/sviz'
-import { DEFAULT_REFRESH, FILE_FORMATS, SERVER, isRemotePath, isSheetFormat, toAlias, type DbSource, type FileFormat, type FileSource, type RemoteOptions, type ServerKind } from '@/shared/project'
+import { DEFAULT_REFRESH, FILE_FORMATS, SERVER, extractOnly, isRemotePath, isSheetFormat, toAlias, type DbSource, type FileFormat, type FileSource, type RemoteOptions, type ServerKind } from '@/shared/project'
 
 type SheetRef = { ref: string; kind: 'sheet' | 'table' | 'name'; rows: number; columns: number }
 
@@ -119,7 +119,7 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
           <Server className="size-4 text-accent-ink" /> Connect to {info.label}
         </span>
       }
-      description={`Simple Viz only reads from the database${kind === 'sqlserver' ? ' (tables are copied into a fast local cache and refreshed)' : ''}. The password is kept in your system keychain, never in the project file.`}
+      description={`Simple Viz only reads from the database${extractOnly(kind) ? ' (tables are copied into a fast local cache and refreshed)' : ''}. The password is kept in your system keychain, never in the project file.`}
       width={560}
       footer={
         <>
@@ -146,7 +146,7 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
         <Field label="Port">
           <input className={inputCls} type="number" value={f.port} onChange={(e) => upd({ port: Number(e.target.value) })} aria-label="Port" data-testid="pg-port" />
         </Field>
-        <Field label={kind === 'mysql' ? 'Database (empty: all)' : 'Database'}>
+        <Field label={kind === 'mysql' ? 'Database (empty: all)' : kind === 'trino' ? 'Catalog (or catalog.schema)' : 'Database'}>
           <input className={inputCls} value={f.database} onChange={(e) => upd({ database: e.target.value })} aria-label="Database" data-testid="pg-database" />
         </Field>
         <Field label="SSL">
@@ -165,7 +165,7 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
           <input className={inputCls} type="password" value={f.password} onChange={(e) => upd({ password: e.target.value })} aria-label="Password" autoComplete="off" data-testid="pg-password" />
         </Field>
       </div>
-      {kind !== 'sqlserver' && (
+      {!extractOnly(kind) && (
       <div className="mt-4 flex items-center justify-between gap-4 rounded-lg bg-panel-2 px-3 py-2.5 shadow-[0_0_0_1px_var(--border)]">
         <div>
           <div className="text-[13px] font-medium">How to use the data</div>

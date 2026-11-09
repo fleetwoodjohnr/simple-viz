@@ -10,7 +10,7 @@ import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import type { ColumnInfo, EngineConfig, QueryResult, RelationInfo, ResolvedSource, ResultPage, SourceStatus } from '../shared/engine-protocol'
-import { SERVER, isServer, isRemotePath, isSheetFormat } from '../shared/project'
+import { SERVER, extractOnly, isServer, isRemotePath, isSheetFormat } from '../shared/project'
 import type { SheetFormat } from '../core/sheets/rows'
 import { gateProblems, collectRefs, SAFE_TABLE_FUNCTIONS } from '../core/sql/ast'
 import { explainError } from '../core/errors'
@@ -19,6 +19,7 @@ import { MACROS } from '../core/calc/macros'
 import { extractName, ident, isSafeType, lit, trimStatement } from './sql'
 import { extractSelect, sourceStat, readBytes, fileTables, type Memo, type Stat } from './ingest'
 import { sqlServerTables } from './sqlserver'
+import { clickhouseTables, trinoTables } from './warehouses'
 
 type Value = string | number | boolean | null
 
@@ -227,7 +228,7 @@ export class Engine {
 
   private async attachServer(c: DuckDBConnection, s: ResolvedSource) {
     // SQL Server isn't attached: each refresh reads it with its own driver (extract only).
-    if (s.kind === 'sqlserver') return
+    if (extractOnly(s.kind)) return
     return s.kind === 'mysql' ? this.attachMysql(c, s) : this.attachPostgres(c, s)
   }
 
@@ -663,6 +664,10 @@ export class Engine {
     try {
       if (s.kind === 'sqlserver') {
         return { tables: await sqlServerTables(s) }
+      } else if (s.kind === 'clickhouse') {
+        return { tables: await clickhouseTables(s) }
+      } else if (s.kind === 'trino') {
+        return { tables: await trinoTables(s) }
       } else if (isServer(s.kind)) {
         const ext = s.kind === 'mysql' ? 'mysql_scanner' : 'postgres_scanner'
         if (!extensionsDir) throw new Error(`The ${SERVER[s.kind].label} extension is not bundled with this build.`)
