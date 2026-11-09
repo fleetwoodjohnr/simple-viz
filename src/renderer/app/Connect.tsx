@@ -172,7 +172,7 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
         <Field label="Port">
           <input className={inputCls} type="number" value={f.port} onChange={(e) => upd({ port: Number(e.target.value) })} aria-label="Port" data-testid="pg-port" />
         </Field>
-        <Field label={kind === 'mysql' ? 'Database (empty: all)' : kind === 'trino' || kind === 'databricks' ? 'Catalog (or catalog.schema)' : kind === 'bigquery' ? 'Project (or project.dataset)' : kind === 'snowflake' ? 'Database (or DATABASE.SCHEMA)' : 'Database'}>
+        <Field label={kind === 'mysql' ? 'Database (empty: all)' : kind === 'trino' || kind === 'databricks' ? 'Catalog (or catalog.schema)' : kind === 'bigquery' ? 'Project (or project.dataset)' : kind === 'snowflake' ? 'Database (or DATABASE.SCHEMA)' : kind === 'oracle' ? 'Service name' : 'Database'}>
           <input className={inputCls} value={f.database} onChange={(e) => upd({ database: e.target.value })} aria-label="Database" data-testid="pg-database" />
         </Field>
         <Field label="SSL">

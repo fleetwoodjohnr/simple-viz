@@ -80,6 +80,9 @@ export function DataView() {
                 <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-sqlserver')} data-testid="add-sqlserver">
                   SQL Server database
                 </MenuItem>
+                <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-oracle')} data-testid="add-oracle">
+                  Oracle database
+                </MenuItem>
                 <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-redshift')} data-testid="add-redshift">
                   Amazon Redshift
                 </MenuItem>

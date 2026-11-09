@@ -8,15 +8,17 @@ import type { FeatureCollection } from '../core/charts/geo'
 export const PROJECT_SCHEMA_VERSION = 1
 
 export type FileFormat = 'csv' | 'tsv' | 'json' | 'jsonl' | 'parquet' | 'arrow' | 'xlsx' | 'xls' | 'xlsb' | 'ods' | 'xml2003'
-export type DbKind = 'postgres' | 'mysql' | 'sqlserver' | 'redshift' | 'clickhouse' | 'trino' | 'bigquery' | 'snowflake' | 'databricks' | 'sqlite' | 'duckdb'
+export type DbKind = 'postgres' | 'mysql' | 'sqlserver' | 'oracle' | 'redshift' | 'clickhouse' | 'trino' | 'bigquery' | 'snowflake' | 'databricks' | 'sqlite' | 'duckdb'
 /** Database servers (host, port, user, password), as opposed to database files. */
-export type ServerKind = 'postgres' | 'mysql' | 'sqlserver' | 'redshift' | 'clickhouse' | 'trino' | 'bigquery' | 'snowflake' | 'databricks'
+export type ServerKind = 'postgres' | 'mysql' | 'sqlserver' | 'oracle' | 'redshift' | 'clickhouse' | 'trino' | 'bigquery' | 'snowflake' | 'databricks'
 export const isServer = (k: string): k is ServerKind => Object.hasOwn(SERVER, k)
 export const SERVER: Record<ServerKind, { label: string; port: number; database: string }> = {
   postgres: { label: 'PostgreSQL', port: 5432, database: 'postgres' },
   mysql: { label: 'MySQL / MariaDB', port: 3306, database: '' },
   /** Extract only: tables are copied into the cache (DuckDB can't attach SQL Server). */
   sqlserver: { label: 'SQL Server', port: 1433, database: 'master' },
+  /** Extract only, through node-oracledb in thin mode; the database is the service name. */
+  oracle: { label: 'Oracle', port: 1521, database: 'FREEPDB1' },
   /** Extract only, through node-postgres (Redshift lacks what DuckDB's postgres extension needs). */
   redshift: { label: 'Amazon Redshift', port: 5439, database: 'dev' },
   /** Extract only, over ClickHouse's HTTP interface (8443 with TLS, 8123 without). */
@@ -34,7 +36,7 @@ export const SERVER: Record<ServerKind, { label: string; port: number; database:
   databricks: { label: 'Databricks', port: 443, database: '' }
 }
 /** Servers read by their own drivers and copied into the cache (DuckDB can't attach them): no live mode. */
-export const extractOnly = (k: string) => ['sqlserver', 'redshift', 'clickhouse', 'trino', 'bigquery', 'snowflake', 'databricks'].includes(k)
+export const extractOnly = (k: string) => ['sqlserver', 'oracle', 'redshift', 'clickhouse', 'trino', 'bigquery', 'snowflake', 'databricks'].includes(k)
 
 /** One relation a source exposes to SQL under `alias` (a sheet, named table, cell range, or database table). */
 export interface SourceTable {

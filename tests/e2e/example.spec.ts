@@ -33,7 +33,7 @@ test('the database dialog switches between database types (each with its port an
   await expect(page.getByTestId('pg-port')).toHaveValue('3306')
   await page.getByTestId('db-type').selectOption('sqlserver')
   await expect(page.getByTestId('pg-port')).toHaveValue('1433')
-  for (const [kind, label, field] of [['clickhouse', 'Connect to ClickHouse', 'Database'], ['trino', 'Connect to Trino / Presto', 'Catalog (or catalog.schema)'], ['bigquery', 'Connect to BigQuery', 'Service account key (JSON) or access token'], ['snowflake', 'Connect to Snowflake', 'Account address'], ['databricks', 'Connect to Databricks', 'SQL warehouse ID']] as const) {
+  for (const [kind, label, field] of [['oracle', 'Connect to Oracle', 'Service name'], ['redshift', 'Connect to Amazon Redshift', 'Database'], ['clickhouse', 'Connect to ClickHouse', 'Database'], ['trino', 'Connect to Trino / Presto', 'Catalog (or catalog.schema)'], ['bigquery', 'Connect to BigQuery', 'Service account key (JSON) or access token'], ['snowflake', 'Connect to Snowflake', 'Account address'], ['databricks', 'Connect to Databricks', 'SQL warehouse ID']] as const) {
     await page.getByTestId('db-type').selectOption(kind)
     await expect(page.getByRole('dialog')).toContainText(label)
     await expect(page.getByRole('dialog')).toContainText(field)

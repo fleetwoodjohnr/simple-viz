@@ -21,6 +21,7 @@ import { extractSelect, sourceStat, readBytes, fileTables, type Memo, type Stat 
 import { sqlServerTables } from './sqlserver'
 import { bigqueryTables, clickhouseTables, databricksTables, snowflakeTables, trinoTables } from './warehouses'
 import { redshiftTables } from './redshift'
+import { oracleTables } from './oracle'
 
 type Value = string | number | boolean | null
 
@@ -665,6 +666,8 @@ export class Engine {
     try {
       if (s.kind === 'sqlserver') {
         return { tables: await sqlServerTables(s) }
+      } else if (s.kind === 'oracle') {
+        return { tables: await oracleTables(s) }
       } else if (s.kind === 'redshift') {
         return { tables: await redshiftTables(s) }
       } else if (s.kind === 'clickhouse') {
@@ -720,7 +723,7 @@ function castExpr(col: string, ty: string): string | null {
   return isSafeType(t) ? `TRY_CAST(${ident(col)} AS ${t})` : null
 }
 
-const isAuthError = (e: unknown) => /password authentication failed|no password supplied|authentication failed|password is required|Access denied for user|Login failed for user|protected with a password|password is wrong/i.test(String((e as Error)?.message ?? e))
+const isAuthError = (e: unknown) => /password authentication failed|no password supplied|authentication failed|password is required|Access denied for user|Login failed for user|ORA-01017|Invalid access token|JWT token is invalid|protected with a password|password is wrong/i.test(String((e as Error)?.message ?? e))
 
 function splitRef(ref: string | undefined, s: ResolvedSource): [string | null, string] {
   const r = ref ?? ''

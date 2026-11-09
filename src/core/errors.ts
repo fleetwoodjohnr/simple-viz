@@ -3,7 +3,7 @@
 export function explainError(raw: unknown, ctx: { host?: string; port?: number; database?: string; path?: string } = {}): string {
   const m = String((raw as Error)?.message ?? raw ?? '')
   const where = ctx.host ? `${ctx.host}${ctx.port ? `:${ctx.port}` : ''}` : 'the server'
-  if (/password authentication failed|authentication failed|Access denied for user|Login failed for user/i.test(m)) return 'The server rejected the user name or password.'
+  if (/password authentication failed|authentication failed|Access denied for user|Login failed for user|ORA-01017|Invalid access token|JWT token is invalid/i.test(m)) return 'The server rejected the user name or password.'
   if (/no password supplied|password is required/i.test(m)) return 'The server needs a password.'
   if (/Connection refused|could not connect|ECONNREFUSED|Can't connect to (MySQL )?server/i.test(m)) return `Can’t reach ${where}. Check that the database is running and the host and port are right.`
   if (/could not translate host name|Name or service not known|ENOTFOUND|nodename nor servname/i.test(m)) return `The host name ${ctx.host ?? ''} couldn’t be found. Check the spelling, or your network.`.replace('  ', ' ')

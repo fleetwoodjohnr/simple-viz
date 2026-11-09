@@ -56,7 +56,7 @@ it('Snowflake: key-pair JWT sign-in, a statement that is still running, two resu
     ])
     expect(issuers.every((i) => i === `127.SV.SHA256:${fp}`)).toBe(true)
     await engine.close()
-    await expect(Engine.probe({ ...s, password: 'not a key' }, extensionsDir)).rejects.toThrow(/JWT token is invalid/)
+    await expect(Engine.probe({ ...s, password: 'not a key' }, extensionsDir)).rejects.toThrow('The server rejected the user name or password.')
   } finally {
     srv.close()
   }
@@ -90,7 +90,7 @@ it('Databricks: token sign-in, a statement that is pending, results in two chunk
       { id: 2, amount: null, day: null, at: null, ok: false, tags: null }
     ])
     await engine.close()
-    await expect(Engine.probe({ ...s, password: 'wrong' }, extensionsDir)).rejects.toThrow(/Invalid access token/)
+    await expect(Engine.probe({ ...s, password: 'wrong' }, extensionsDir)).rejects.toThrow('The server rejected the user name or password.')
   } finally {
     srv.close()
   }

@@ -121,3 +121,34 @@ describe('ClickHouse and Trino', () => {
     await expect(Engine.probe({ ...src, database: '' }, extensionsDir)).rejects.toThrow(/catalog/)
   })
 })
+
+describe('Oracle', () => {
+  let ora: Wh | null = null
+  beforeAll(async () => {
+    const { startOracle } = await import('./helpers')
+    ora = await startOracle()
+    if (!ora) console.warn('Oracle tests skipped: no podman (x64)')
+  }, 400_000)
+  afterAll(() => ora?.stop())
+
+  it('extracts tables with their types (dates with their time, NUMBER by precision), many fetches, lists tables', async (ctx) => {
+    if (!ora) return ctx.skip()
+    const src = { ...whSource(ora, 'trino', [{ alias: 'ora_customers', ref: 'SV.CUSTOMERS' }, { alias: 'numbers', ref: 'SV.NUMBERS' }]), id: 'oracle1', kind: 'oracle' as const }
+    const { engine } = await bootEngine([src, fileSource('xl', fixture('Sales.xlsx'), 'xlsx', [{ alias: 'transactions', ref: 'Transactions' }])])
+    expect(engine.statuses().find((s) => s.id === 'oracle1')?.error ?? 'ok').toBe('ok')
+    const types = Object.fromEntries((await rows(engine, 'SELECT column_name, column_type FROM (DESCRIBE ora_customers)')).map((r) => [r.column_name, r.column_type]))
+    expect(types).toEqual({ CUSTOMER_ID: 'BIGINT', CUSTOMER_NAME: 'VARCHAR', REGION: 'VARCHAR', SEGMENT: 'VARCHAR', SINCE: 'TIMESTAMP', SCORE: 'DOUBLE', BIG: 'DOUBLE' })
+    const out = await rows(engine, 'SELECT c.REGION AS region, round(sum(t.revenue), 2) AS revenue FROM transactions t JOIN ora_customers c ON c.CUSTOMER_ID = t.customer_id GROUP BY 1')
+    for (const r of out) expect(Math.abs(Number(r.revenue) - expected().v1.revenueByRegion[r.region as string])).toBeLessThan(0.01)
+    const [f] = await rows(engine, 'SELECT min(SINCE)::VARCHAR AS first, count(SCORE) AS scored, max(BIG) AS big FROM ora_customers')
+    const n = expected().customers
+    expect(f).toEqual({ first: '2024-01-02 09:30:00', scored: Array.from({ length: n }, (_, i) => i).filter((i) => i % 7).length, big: (n - 1) * 1e12 + 0.5 })
+    const [k] = await rows(engine, 'SELECT count(*) AS c, sum(N) AS s FROM numbers')
+    expect([Number(k.c), Number(k.s)]).toEqual([25_000, (25_000 * 25_001) / 2])
+    expect((await Engine.probe(src, extensionsDir)).tables).toEqual(['SV.CUSTOMERS', 'SV.NUMBERS'])
+    await engine.close()
+    const { engine: bad } = await bootEngine([{ ...src, password: 'wrong' }])
+    expect(bad.statuses()[0]).toMatchObject({ state: 'error', error: 'The server rejected the user name or password.', auth: true })
+    await bad.close()
+  })
+})

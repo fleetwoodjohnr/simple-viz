@@ -334,3 +334,34 @@ export async function startBigQuery(): Promise<Wh | null> {
   }
   return bq
 }
+
+/** Oracle Database Free in podman (gvenzl/oracle-free), with an app user "sv" holding customers and 25,000 numbers. */
+export async function startOracle(): Promise<Wh | null> {
+  if (!hasPodman() || process.env.SV_NO_PODMAN || process.arch !== 'x64') return null
+  const oracledb = (await import('oracledb')).default
+  const name = `sv-ora-${process.pid}-${Date.now()}`
+  const port = 20000 + Math.floor(Math.random() * 20000)
+  execFileSync('podman', ['run', '-d', '--name', name, '-p', `127.0.0.1:${port}:1521`, '-e', 'ORACLE_PASSWORD=Sv-secret-2026', '-e', 'APP_USER=sv', '-e', 'APP_USER_PASSWORD=Sv-secret-2026', 'docker.io/gvenzl/oracle-free:23-slim-faststart'], { stdio: 'ignore' })
+  const ora: Wh = { name, host: '127.0.0.1', port, user: 'sv', password: 'Sv-secret-2026', database: 'FREEPDB1', stop: () => void execFileSync('podman', ['rm', '-f', name], { stdio: 'ignore' }) }
+  const t0 = Date.now()
+  let c: import('oracledb').Connection
+  for (;;) {
+    try {
+      c = await oracledb.getConnection({ user: 'sv', password: ora.password, connectString: `127.0.0.1:${port}/FREEPDB1` })
+      break
+    } catch (e) {
+      if (Date.now() - t0 > 240_000) throw e
+      await new Promise((r) => setTimeout(r, 2000))
+    }
+  }
+  try {
+    await c.execute('CREATE TABLE customers (customer_id NUMBER(10) PRIMARY KEY, customer_name VARCHAR2(100), region VARCHAR2(40), segment VARCHAR2(40), since DATE, score NUMBER(6,2), big NUMBER)')
+    const rows = readFileSync(fixture('customers.csv'), 'utf8').trim().split('\n').slice(1).map((l) => l.split(','))
+    await c.executeMany("INSERT INTO customers VALUES (:1, :2, :3, :4, TO_DATE(:5, 'YYYY-MM-DD HH24:MI:SS'), :6, :7)", rows.map((r, i) => [Number(r[0]), r[1], r[2], r[3], i % 5 ? `${new Date(Date.UTC(2024, 0, 1 + i)).toISOString().slice(0, 10)} 09:30:00` : null, i % 7 ? i * 1.25 : null, i * 1e12 + 0.5]))
+    await c.execute('CREATE TABLE numbers AS SELECT level AS n FROM dual CONNECT BY level <= 25000')
+    await c.commit()
+  } finally {
+    await c.close()
+  }
+  return ora
+}

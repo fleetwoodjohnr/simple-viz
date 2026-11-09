@@ -11,6 +11,7 @@ import { stageSqlServer } from './sqlserver'
 import { decryptWorkbook, isEncryptedWorkbook } from './decrypt'
 import { stageWarehouse } from './warehouses'
 import { stageRedshift } from './redshift'
+import { stageOracle } from './oracle'
 import { isSpreadsheetXml, xmlRecords, xmlTables } from '../core/xmlrows'
 import { listTables } from '../core/sheets/rows'
 import { readWorkbook, tableRows, type SheetFormat } from '../core/sheets/rows'
@@ -71,6 +72,7 @@ export async function extractSelect(conn: DuckDBConnection, s: ResolvedSource, r
   }
   if (s.kind === 'sqlserver') return stageSqlServer(conn, s, ref ?? '')
   if (s.kind === 'redshift') return stageRedshift(conn, s, ref ?? '')
+  if (s.kind === 'oracle') return stageOracle(conn, s, ref ?? '')
   if (['clickhouse', 'trino', 'bigquery', 'snowflake', 'databricks'].includes(s.kind)) return stageWarehouse(conn, s, ref ?? '')
   const db = ident(`db_${s.id}`)
   const r = ref ?? ''
