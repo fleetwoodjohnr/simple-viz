@@ -553,6 +553,18 @@ function Pill({ r, role, index, chart, field }: { r: FieldRef; role: Role; index
             ))}
           </SubMenu>
         )}
+        {(r.quick || field?.calcKind === 'tablecalc') && (
+          <SubMenu label="Compute using">
+            <MenuCheck checked={!r.computeUsing?.length} onCheckedChange={() => patch({ computeUsing: undefined })}>
+              Along the x axis (default)
+            </MenuCheck>
+            {chartDims(chart).map((f) => (
+              <MenuCheck key={f} checked={r.computeUsing?.[0] === f} onCheckedChange={() => patch({ computeUsing: [f] })} data-testid={`compute-using-${f}`}>
+                Along {f}
+              </MenuCheck>
+            ))}
+          </SubMenu>
+        )}
         {measure && (
           <SubMenu label="Number format">
             {[[undefined, 'Automatic'], ['#,##0', 'Number (1,234)'], ['#,##0.00', 'Number (1,234.56)'], ['$#,##0', 'Currency ($1,234)'], ['$#,##0.00', 'Currency ($1,234.56)'], ['0%', 'Percent (12%)'], ['0.0%', 'Percent (12.3%)'], ['#,##0.0,,"M"', 'Millions (1.2M)'], ['#,##0.0,"K"', 'Thousands (1.2K)']].map(([code, label]) => (
@@ -890,4 +902,11 @@ function ParamLine({ lines, setLines }: { lines: ReferenceLine[]; setLines: (l: 
       </select>
     </label>
   )
+}
+
+/** The dimensions in a chart's view (each once), for "compute using". */
+function chartDims(c: Chart): string[] {
+  const e = c.enc
+  const refs = [...e.x, ...e.y, ...[e.color, e.size, e.label, e.facet].filter((r): r is FieldRef => !!r), ...e.detail]
+  return [...new Set(refs.filter((r) => !r.agg).map((r) => r.field))]
 }

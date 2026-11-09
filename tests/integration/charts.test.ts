@@ -98,6 +98,21 @@ describe('chart queries', () => {
     near(dense[dense.length - 1].m1, sparse.reduce((a, r) => a + Number(r.m0), 0))
   })
 
+  it('compute using: a running total along segment within each region, instead of along the x axis', async () => {
+    const enc = (computeUsing?: string[]) => ({ x: [dim('region')], color: dim('segment'), y: [sum('revenue', { quick: 'running_sum' as const, computeUsing })] })
+    const key = (r: Record<string, unknown>, a: string, b: string) => `${r[a]}|${r[b]}`
+    const along = await run({ enc: enc(['segment']) })
+    const ref = await rows(engine, `SELECT region, segment, sum(sum(revenue)) OVER (PARTITION BY region ORDER BY segment) AS rs FROM sales GROUP BY region, segment`)
+    const want = new Map(ref.map((r) => [key(r, 'region', 'segment'), Number(r.rs)]))
+    expect(along).toHaveLength(ref.length)
+    along.forEach((r) => near(r.m0, want.get(key(r, 'd0', 'd1'))!))
+    // The default runs along the x axis (region) within each segment.
+    const def = await run({ enc: enc() })
+    const ref2 = await rows(engine, `SELECT region, segment, sum(sum(revenue)) OVER (PARTITION BY segment ORDER BY region) AS rs FROM sales GROUP BY region, segment`)
+    const want2 = new Map(ref2.map((r) => [key(r, 'region', 'segment'), Number(r.rs)]))
+    def.forEach((r) => near(r.m0, want2.get(key(r, 'd0', 'd1'))!))
+  })
+
   it('+ joins text, as in Tableau', async () => {
     const out = await run({ enc: { x: [dim('Label')], y: [sum('revenue')] } }, [calc('Label', "[region] + ' / ' + UPPER([segment])")])
     const ref = await rows(engine, `SELECT region || ' / ' || upper(segment) AS l, sum(revenue) r FROM sales GROUP BY 1 ORDER BY 1`)

@@ -230,18 +230,29 @@ export function compileQuery(input: QueryInput): CompiledQuery {
   const tuples: string[] = []
   const joins: string[] = []
   let hidden = 0
+  /** A measure's windows and partition: along its "compute using" dimensions when it has them, else the defaults. */
+  const along = (m: OutField) => {
+    const want = (m.ref.computeUsing ?? []).map((f) => f.toLowerCase())
+    const by = want.length ? dims.filter((d) => d.role !== 'tooltip' && want.includes(d.ref.field.toLowerCase())) : []
+    if (!by.length) return { w: win, part: partitionDims }
+    const part = dims.filter((d) => d.role !== 'tooltip' && !by.includes(d)).map((d) => d.key)
+    const p = part.length ? `PARTITION BY ${part.join(', ')}` : ''
+    const w: Windows = { ordered: (order) => `OVER (${p ? `${p} ` : ''}ORDER BY ${order ?? by.map((d) => d.key).join(', ')})`, all: () => `OVER (${p})` }
+    return { w, part }
+  }
 
   for (const m of measures) {
     const c = calcOf(m.ref.field)
     let aggExpr: string
     if (c && c.kind === 'tablecalc') {
       for (const a of c.aggs) aggCols.push(`${a.expr} AS ${q(a.id)}`)
+      const { w, part } = along(m)
       for (const t of c.totals) {
-        lateCols.push(`${windowAgg(t.expr, partitionDims.length ? dims.filter((d) => partitionDims.includes(d.key)).map(dimSql) : [])} AS ${q(t.id)}`)
+        lateCols.push(`${windowAgg(t.expr, part.length ? dims.filter((d) => part.includes(d.key)).map(dimSql) : [])} AS ${q(t.id)}`)
         aggCols.push(`any_value(${q(t.id)}) AS ${q(t.id)}`)
       }
       // The final stage computes the table calc; carry its inputs through.
-      finalCols.push(`${tableCalcSql(c, win)} AS ${m.key}`)
+      finalCols.push(`${tableCalcSql(c, w)} AS ${m.key}`)
       continue
     }
     if (c && c.kind === 'aggregate') aggExpr = c.expr
@@ -252,7 +263,7 @@ export function compileQuery(input: QueryInput): CompiledQuery {
     const calls = aggregateCalls(aggExpr)
     if (!calls.some((call) => lodGrain(call.inner))) {
       aggCols.push(`${aggExpr} AS ${m.key}`)
-      finalCols.push(quickCalc(m, win, dims))
+      finalCols.push(quickCalc(m, along(m).w, dims))
       continue
     }
     // Aggregates of level-of-detail values run over one row per combination of the view's dimensions and the LOD's

@@ -68,6 +68,7 @@ Linux, Windows and macOS._
 | Chart → SQL compiler: dimensions, aggregations (sum, average, median, count distinct, percentiles…), date grains | integration `charts` (values against hand-written SQL) |
 | Filters: values (include/exclude), ranges, measure (HAVING), top N, context filters | integration `charts`, e2e `charts` |
 | Calculated fields: DuckDB SQL + `[Field]`, Tableau `IF … ELSEIF … END`, Tableau function names (ZN, IIF, COUNTD, DATEADD…), `+` joining text | unit `calc`, integration `charts`, e2e `charts` |
+| Compute using: a table calculation runs along a chosen dimension of the view, partitioned by the others | integration `charts`, e2e `charts` |
 | Show missing dates: every period of a date axis from the first to the last, empty ones null; table calculations run over them | integration `charts`, e2e `charts` |
 | Groups: a dimension's values combined under names (field menu → Create group…), the rest kept or put in Other; saved as a calculated field | unit `calc`, e2e `charts` |
 | Level of detail: FIXED (before dimension filters, after context filters), INCLUDE, EXCLUDE; aggregated over one row per view × LOD combination, as Tableau documents | integration `charts` (5 LOD cases) |

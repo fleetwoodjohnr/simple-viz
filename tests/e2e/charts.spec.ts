@@ -145,3 +145,28 @@ test('show missing dates fills the empty months of a filtered line chart', async
   expect((await chartSeries(page)).series['Sum of revenue'].some((v) => v === null)).toBe(true)
   await quit(app)
 })
+
+test('quick table calculation computed along a chosen dimension', async () => {
+  const { app, page } = await launch()
+  await salesProject(app, page, tempDir())
+  await page.getByTestId('nav-charts').click()
+  await page.getByTestId('new-chart-empty').click()
+  await page.getByTestId('chart-dataset').selectOption('sales_enriched')
+  await addField(page, 'region', 'x')
+  await addField(page, 'revenue', 'y')
+  await page.getByTestId('field-segment').dragTo(page.getByTestId('shelf-color'))
+  await page.getByTestId('pill-y-0').click()
+  await page.getByRole('menuitem', { name: 'Quick calculation' }).click()
+  await page.getByRole('menuitemcheckbox', { name: 'Running total' }).click()
+  await page.getByTestId('pill-y-0').click()
+  await page.getByRole('menuitem', { name: 'Compute using' }).click()
+  await page.getByTestId('compute-using-segment').click()
+  // Along segment within each region: the last segment's value is the region's total.
+  const totals = await sql(page, 'SELECT region, sum(revenue) AS r FROM sales_enriched GROUP BY 1')
+  const last = await sql(page, 'SELECT max(segment) AS s FROM sales_enriched')
+  await expect.poll(async () => {
+    const s = await chartSeries(page)
+    return totals.every((t) => Math.abs((s.series[String(last[0].s)][s.categories.indexOf(String(t.region))] ?? NaN) - Number(t.r)) < 0.01)
+  }).toBe(true)
+  await quit(app)
+})

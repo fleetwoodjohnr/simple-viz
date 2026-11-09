@@ -13,6 +13,9 @@ export interface FieldRef {
   /** Dates used as dimensions: truncate to this grain. */
   grain?: DateGrain
   quick?: QuickCalc
+  /** Table calculations (quick or calculated): the view's dimensions they run along ("compute using"); the other
+   *  dimensions partition. Absent = along the x axis, partitioned by the rest. */
+  computeUsing?: string[]
   /** Display name override. */
   label?: string
   /** Number format code (Excel style, e.g. "$#,##0", "0.0%"); absent = automatic. */

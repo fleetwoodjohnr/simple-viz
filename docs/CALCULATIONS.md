@@ -72,8 +72,11 @@ anything else, such as another calculated field that returns text, use `||` or `
 
 ## Not supported (yet)
 
-Densification beyond a date axis, and table calculations "compute using" an arbitrary set of fields (they compute
-along the chart's first axis, partitioned by the other dimensions).
+Densification beyond a date axis, and "compute using" a combination of dimensions with a chosen order.
+
+**Compute using** (the measure's menu, for a quick or calculated table calculation): by default a table calculation
+runs along the x axis and restarts for each value of the other dimensions; choose another dimension of the view to run
+along it instead, restarting for each combination of the rest.
 
 **Show missing dates** (chart format panel, for a date axis with a grain such as month) fills every period from the
 first to the last; empty periods have no value, so lines show a gap, and table calculations (running totals, moving
