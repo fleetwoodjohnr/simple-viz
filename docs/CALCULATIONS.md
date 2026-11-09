@@ -55,6 +55,12 @@ table calculations → sorting and limits. Mark a filter as a context filter to 
 A parameter is a value the reader picks: a number, text, date or yes/no, optionally from a list of allowed values. Use it in a formula as `[Parameter Name]`,
 in a filter, or in a reference line.
 
+## Groups
+
+Field menu → **Create group…** on a dimension: tick values, name the group, add it; repeat. The group becomes a
+calculated field, `<field> (group)`, with a `CASE … WHEN [field] IN (…) THEN 'name' … END` formula you can edit like
+any other.
+
 ## Joining text
 
 `+` joins text as in Tableau — `[First name] + ' ' + [Last name]`, `STR([Year]) + '%'` — when the value next to it is

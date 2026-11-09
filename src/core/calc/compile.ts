@@ -415,3 +415,12 @@ function splitTop(s: string, sep: string): string[] {
   parts.push(rest)
   return parts
 }
+
+/** A group (Tableau's "Create Group"): a calculated field mapping chosen values of a dimension to group names; the
+ *  values in no group keep their own name, or become "Other". */
+export function groupFormula(field: string, groups: { name: string; values: (string | number | boolean)[] }[], other: boolean, text = true): string {
+  const lit = (v: string | number | boolean) => (typeof v === 'string' ? `'${v.replace(/'/g, "''")}'` : String(v))
+  const ref = `[${field.replace(/\]/g, ']]')}]`
+  const whens = groups.filter((g) => g.values.length).map((g) => `  WHEN ${ref} IN (${g.values.map(lit).join(', ')}) THEN ${lit(g.name)}`)
+  return `CASE\n${whens.join('\n')}\n  ELSE ${other ? "'Other'" : text ? ref : `STR(${ref})`}\nEND`
+}

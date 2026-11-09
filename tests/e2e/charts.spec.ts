@@ -91,3 +91,31 @@ test('build charts, add a calculation and a filter, save and reopen', async () =
   expect((await chartSeries(again.page)).categories).toEqual(['Texas', 'Virginia'])
   await quit(again.app)
 })
+
+test('group values of a dimension (Create group)', async () => {
+  const dir = tempDir()
+  const { app, page } = await launch()
+  await salesProject(app, page, dir)
+  await page.getByTestId('nav-charts').click()
+  await page.getByTestId('new-chart-empty').click()
+  await page.getByTestId('chart-dataset').selectOption('sales_enriched')
+  await page.getByTestId('field-region').hover()
+  await page.getByTestId('field-menu-region').click()
+  await page.getByTestId('group-region').click()
+  const dialog = page.getByRole('dialog')
+  for (const [name, values] of [['East', ['Virginia', 'New York']], ['West', ['California', 'Washington']]] as const) {
+    for (const v of values) await dialog.getByRole('checkbox', { name: v }).check()
+    await dialog.getByLabel('Group name').fill(name)
+    await dialog.getByTestId('group-add').click()
+  }
+  await dialog.getByRole('checkbox', { name: 'Put the other values in “Other”' }).check()
+  await dialog.getByTestId('group-save').click()
+  await addField(page, 'region (group)', 'x')
+  await addField(page, 'revenue', 'y')
+  await expect.poll(async () => (await chartSeries(page)).categories).toEqual(['East', 'Other', 'West'])
+  const s = await chartSeries(page)
+  const r = exp.v1.revenueByRegion
+  near(s.series['Sum of revenue'][0], r.Virginia + r['New York'])
+  near(s.series['Sum of revenue'][2], r.California + r.Washington)
+  await quit(app)
+})

@@ -32,7 +32,7 @@ _Checked against Tableau's documentation on 8 November 2026._
 | [Context filters](https://help.tableau.com/current/pro/desktop/en-us/filtering_context.htm) | Any filter can be a context filter | ✅ |
 | [Parameters](https://help.tableau.com/current/pro/desktop/en-us/parameters_create.htm) | Number, text, date, yes/no, with lists; in formulas, filters and reference lines | ◐ No parameter actions |
 | [Hierarchies](https://help.tableau.com/current/pro/desktop/en-us/qs_hierarchies.htm) | Drill paths saved and reused; drill down/up on dashboards | ✅ |
-| [Groups](https://help.tableau.com/current/pro/desktop/en-us/sortgroup_groups_creating.htm) | With a calculated field (`CASE`) or a transform step | ✗ No visual grouping of marks |
+| [Groups](https://help.tableau.com/current/pro/desktop/en-us/sortgroup_groups_creating.htm) | Field menu → Create group…: tick values, name the group (the rest keep their names or become Other); saved as an editable calculated field | ◐ Not by selecting marks in the chart |
 | [Sets](https://help.tableau.com/current/pro/desktop/en-us/sortgroup_sets_create.htm) | — | ✗ |
 
 ## Charts and analytics

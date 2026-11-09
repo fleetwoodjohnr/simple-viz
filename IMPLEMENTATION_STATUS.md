@@ -67,7 +67,8 @@ Linux, Windows and macOS._
 |---|---|
 | Chart → SQL compiler: dimensions, aggregations (sum, average, median, count distinct, percentiles…), date grains | integration `charts` (values against hand-written SQL) |
 | Filters: values (include/exclude), ranges, measure (HAVING), top N, context filters | integration `charts`, e2e `charts` |
-| Calculated fields: DuckDB SQL + `[Field]`, Tableau `IF … ELSEIF … END`, Tableau function names (ZN, IIF, COUNTD, DATEADD…) | unit `calc`, integration `charts`, e2e `charts` |
+| Calculated fields: DuckDB SQL + `[Field]`, Tableau `IF … ELSEIF … END`, Tableau function names (ZN, IIF, COUNTD, DATEADD…), `+` joining text | unit `calc`, integration `charts`, e2e `charts` |
+| Groups: a dimension's values combined under names (field menu → Create group…), the rest kept or put in Other; saved as a calculated field | unit `calc`, e2e `charts` |
 | Level of detail: FIXED (before dimension filters, after context filters), INCLUDE, EXCLUDE; aggregated over one row per view × LOD combination, as Tableau documents | integration `charts` (5 LOD cases) |
 | Table calculations: RUNNING_*, WINDOW_*, RANK*, LOOKUP, INDEX, SIZE, FIRST, LAST, TOTAL; quick calcs (running total, % of total, rank, difference, moving average, year over year) | integration `charts › table calculations` |
 | Chart types: bar (grouped, stacked, 100%, horizontal), line, area, combo/dual axis, pie/donut, scatter/bubble, histogram, box plot, heat map, treemap, KPI card, table, crosstab | unit `charts`, e2e `charts` (bar, line, KPI drawn values = SQL) |
