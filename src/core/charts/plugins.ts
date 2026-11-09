@@ -102,8 +102,20 @@ function cartesianPanel(kind: 'bar' | 'line' | 'area' | 'combo'): NonNullable<Ch
     const fc = (kind === 'line' || kind === 'area') && stack === 'none' && !horizontal ? forecastSeries(d, t, catDim, cats, series) : null
     if (fc) cats.push(...fc.cats)
     const pct = stack === 'percent'
-    // Reference lines, bands and trends: over the pane's marks, or one set per color.
+    // Reference lines, bands and trends: over the pane's marks, one set per color, or one per cell (category).
     const perSeries = d.options.refScope === 'series' && series.length > 1
+    const perCell = d.options.refScope === 'cell'
+    const all = series.map((x) => x.values)
+    const cell = (ci: number) => series.map((x) => [x.values[ci] ?? null])
+    // Each cell's lines and bands: [category, from, to] (a line when both are the same), drawn across the category's band.
+    const cellMarks = perCell
+      ? cats.flatMap((_, ci) => [
+          ...((refBands(d, t, cell(ci))?.data ?? []) as { yAxis: number }[][]).map(([a, b]) => [ci, a.yAxis, b.yAxis]),
+          ...((refLines(d, t, cell(ci))?.data ?? []) as { yAxis?: number }[]).filter((l) => typeof l.yAxis === 'number').map((l) => [ci, l.yAxis!, l.yAxis!])
+        ])
+      : []
+    // Lines and bands are written for a vertical value axis: horizontal charts swap the axes.
+    const turn = (e: unknown): unknown => (!horizontal || !e || typeof e !== 'object' ? e : Array.isArray(e) ? e.map(turn) : { ...Object.fromEntries(Object.entries(e).map(([k, v]) => [k, k === 'data' ? turn(v) : v])), ...('yAxis' in e || 'xAxis' in e ? { xAxis: (e as { yAxis?: unknown }).yAxis, yAxis: (e as { xAxis?: unknown }).xAxis } : {}), ...('coord' in e ? { coord: [...(e as { coord: unknown[] }).coord].reverse() } : {}) })
     const lineIdx = new Set(kind === 'combo' ? (d.options.lineSeries ?? [1]) : kind === 'bar' ? [] : series.map((_, i) => i))
     const right = new Set(d.options.rightAxis ?? (kind === 'combo' && ms.length > 1 ? [1] : []))
     const totals = pct ? cats.map((_, ci) => series.reduce((a, s) => a + Math.abs(s.values[ci] ?? 0), 0)) : []
@@ -146,10 +158,14 @@ function cartesianPanel(kind: 'bar' | 'line' | 'area' | 'combo'): NonNullable<Ch
             return { value, row, itemStyle: row && dimmed(d, row) ? { opacity: 0.25 } : undefined }
           }),
           // Reference lines over every mark of the pane, or (one per color) over each series, in its color.
-          markLine: perSeries ? refLines(d, t, [s.values], t.palette[si % t.palette.length]) : si === 0 ? refLines(d, t, series.map((x) => x.values)) : undefined,
-          markArea: perSeries ? refBands(d, t, [s.values], t.palette[si % t.palette.length]) : si === 0 ? refBands(d, t, series.map((x) => x.values)) : undefined
+          markLine: turn(perCell ? undefined : perSeries ? refLines(d, t, [s.values], t.palette[si % t.palette.length]) : si === 0 ? refLines(d, t, all) : undefined),
+          markArea: turn(perCell ? undefined : perSeries ? refBands(d, t, [s.values], t.palette[si % t.palette.length]) : si === 0 ? refBands(d, t, all) : undefined)
         }
-      }).concat(fc?.series ?? [], (perSeries ? series.map((s, si) => trendSeries(d, t, [s.values], fc?.cats.length ?? 0, si, t.palette[si % t.palette.length])) : [trendSeries(d, t, series.map((x) => x.values), fc?.cats.length ?? 0, 0)]).filter((x): x is Option => !!x))
+      }).concat(
+        fc?.series ?? [],
+        (perCell ? [] : perSeries ? series.map((s, si) => trendSeries(d, t, [s.values], fc?.cats.length ?? 0, si, t.palette[si % t.palette.length])) : [trendSeries(d, t, all, fc?.cats.length ?? 0, 0)]).filter((x): x is Option => !!x),
+        cellMarks.length ? [cellSegments(cellMarks, horizontal, t)] : []
+      )
     }
   }
 }
@@ -270,6 +286,30 @@ function trendSeries(d: ChartData, t: Theme, series: (number | null)[][], pad: n
   const fit = fitTrend(pts, l.model, l.degree)
   if (!fit) return null
   return { id: `trend-${idx}`, name: `${TREND_NAMES[l.model]} trend`, type: 'line', smooth: true, silent: true, showSymbol: false, lineStyle: { color, type: 'dashed', width: 1.5 }, data: [...values.map((_, i) => ((v) => (Number.isFinite(v) ? v : null))(fit.predict(i + 1))), ...new Array<null>(pad).fill(null)], endLabel: { show: true, formatter: `R² = ${fit.r2.toFixed(3)}`, color: t.text2 } }
+}
+
+/** Reference lines and bands per cell: across each category's band, a dashed line at a value or a shaded box between two (a custom series, no legend entry). */
+function cellSegments(data: number[][], horizontal: boolean, t: Theme): Option {
+  type Api = { value: (i: number) => number; coord: (p: number[]) => number[]; size: (p: number[]) => number[] }
+  return {
+    id: 'ref-cells',
+    type: 'custom',
+    silent: true,
+    tooltip: { show: false },
+    z: 5,
+    encode: horizontal ? { x: [1, 2], y: 0 } : { x: 0, y: [1, 2] },
+    data,
+    renderItem: (_: unknown, api: Api) => {
+      const at = (v: number) => api.coord(horizontal ? [v, api.value(0)] : [api.value(0), v])
+      const [x1, y1] = at(api.value(1))
+      const [x2, y2] = at(api.value(2))
+      const half = (horizontal ? api.size([0, 1])[1] : api.size([1, 0])[0]) * 0.45
+      const box = horizontal ? { x: Math.min(x1, x2), y: y1 - half, width: Math.abs(x2 - x1), height: half * 2 } : { x: x1 - half, y: Math.min(y1, y2), width: half * 2, height: Math.abs(y2 - y1) }
+      return api.value(1) === api.value(2)
+        ? { type: 'line', shape: { x1: box.x, y1: box.y, x2: box.x + box.width, y2: box.y + box.height }, style: { stroke: t.text, lineWidth: 1.5, lineDash: [5, 3] } }
+        : { type: 'rect', shape: box, style: { fill: t.accent, opacity: 0.12 } }
+    }
+  }
 }
 
 /** Reference lines: constant, average, median, min, max, percentile, a least-squares trend line, a box's lines. */

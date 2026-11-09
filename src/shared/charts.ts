@@ -101,8 +101,8 @@ export interface ChartOptions {
   refLines?: ReferenceLine[]
   /** Scatter plots: color the marks by k-means cluster of their values (k chosen when absent). */
   clusters?: { k?: number }
-  /** Reference lines, bands and trends over every mark of a pane (default), or one per color series. */
-  refScope?: 'pane' | 'series'
+  /** Reference lines, bands and trends over every mark of a pane (default), one per color series, or one per cell (category). */
+  refScope?: 'pane' | 'series' | 'cell'
   /** Gauge: scale (default 0 to a round number above the value). */
   gauge?: { min?: number; max?: number }
   /** Maps: 'world', 'us-states' or a custom map's id (Project.maps); absent = the map that matches most values. */

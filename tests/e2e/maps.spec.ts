@@ -118,9 +118,13 @@ test('more chart types draw; maps match areas; custom GeoJSON; small multiples',
   // An average line for each color (segment), in that color.
   await page.getByTestId('refline-average').click()
   await addField(page, 'segment', 'color')
-  await page.getByTestId('ref-per-color').check()
+  await page.getByTestId('ref-scope').selectOption('series')
   await expect.poll(async () => (await drawn(page)).option.series.filter((s: any) => s.markLine?.data?.length).length).toBe(3)
-  await page.getByTestId('ref-per-color').uncheck()
+  // …or one for each cell: a segment across every date's band, at the average of its three segments.
+  await page.getByTestId('ref-scope').selectOption('cell')
+  await expect.poll(async () => (await drawn(page)).option.series.find((s: any) => s.id === 'ref-cells')?.data.length ?? 0).toBeGreaterThan(10)
+  if (process.env.SV_SHOTS) await page.screenshot({ path: `${process.env.SV_SHOTS}/ref-cells.png` })
+  await page.getByTestId('ref-scope').selectOption('pane')
   await page.getByTestId('refline-average').click()
   await page.getByTestId('pill-color-0').click()
   await page.getByTestId('pill-remove').click()

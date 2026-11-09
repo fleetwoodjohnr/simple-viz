@@ -155,6 +155,23 @@ describe('chart analytics overlays', () => {
     expect(each.slice(0, 2).map((s) => s.markLine!.data[0].yAxis)).toEqual([2, 20])
     expect(each.slice(0, 2).map((s) => s.markLine!.lineStyle.color)).toEqual(LIGHT.palette.slice(0, 2))
     expect(each.filter((s) => s.id?.startsWith('trend-')).map((s) => s.id)).toEqual(['trend-0', 'trend-1'])
+    // Per cell: each region's own average and ±1 SD band, across that region's band; no pane-wide line or trend.
+    const cellD: ChartData = { ...d, options: { refLines: [{ id: 'a', kind: 'average' }, { id: 'b', kind: 'band' }, { id: 't', kind: 'trend', model: 'log' }], refScope: 'cell' } }
+    type C = { id?: string; data: number[][]; markLine?: unknown; markArea?: unknown; encode?: unknown }
+    const cells = (plugin('bar').option!(cellD, LIGHT) as { series: C[] }).series
+    expect(cells.some((s) => s.markLine || s.markArea || s.id?.startsWith('trend-'))).toBe(false)
+    const sd = (a: number, b: number) => Math.abs(a - b) / Math.SQRT2
+    const want = [[0, 5.5 - sd(1, 10), 5.5 + sd(1, 10)], [0, 5.5, 5.5], [1, 16.5 - sd(3, 30), 16.5 + sd(3, 30)], [1, 16.5, 16.5]]
+    const marks = cells.find((s) => s.id === 'ref-cells')!
+    expect(marks.data).toHaveLength(4)
+    want.forEach((w, i) => w.forEach((v, j) => expect(marks.data[i][j]).toBeCloseTo(v, 10)))
+    expect(marks.encode).toEqual({ x: 0, y: [1, 2] })
+    // Horizontal bars: values run along x, so lines and bands turn with them.
+    const flat = (plugin('bar').option!({ ...cellD, options: { ...cellD.options, horizontal: true } }, LIGHT) as { series: C[] }).series
+    expect(flat.find((s) => s.id === 'ref-cells')!.encode).toEqual({ x: [1, 2], y: 0 })
+    const flatPane = (plugin('bar').option!({ ...d, options: { refLines: [{ id: 'a', kind: 'average' }], horizontal: true } }, LIGHT) as { series: { markLine?: { data: { xAxis?: number; yAxis?: number }[] } }[] }).series
+    expect(flatPane[0].markLine!.data[0]).toMatchObject({ xAxis: 11 })
+    expect(flatPane[0].markLine!.data[0].yAxis).toBeUndefined()
   })
 
   it('trend models fit as numpy.polyfit does (exponential and power on ln y, as Tableau)', () => {
