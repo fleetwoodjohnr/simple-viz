@@ -1,6 +1,7 @@
 // Spatial files for custom maps, read into GeoJSON: Esri Shapefiles (.shp with its .dbf attributes, zipped or picked
-// together) and KML/KMZ (Google Earth). Only areas are kept (the map fills them); coordinates must be longitude and
-// latitude (WGS 84): a projected shapefile is refused with the reason, since reprojecting needs its projection's maths.
+// together), KML/KMZ (Google Earth) and TopoJSON. Only areas are kept (the map fills them). Shapefiles in longitude and
+// latitude are read as they are; ones in Web Mercator or Transverse Mercator (UTM and most national grids) are
+// converted using their .prj; other projections are refused with the reason.
 import type { FeatureCollection } from './geo'
 import { readZip } from '../sheets/formats/zip'
 import { parseXml, deep, kid, kids } from '../sheets/formats/xml'
@@ -80,9 +81,62 @@ export function readDbf(b: Uint8Array, encoding = 'utf-8'): Record<string, strin
   return out
 }
 
+type Inverse = (x: number, y: number) => [number, number]
+
+const deg = 180 / Math.PI
+/**
+ * The inverse of a .prj's projection, to longitude/latitude: Web Mercator (spherical) or Transverse Mercator (Snyder's
+ * series, accurate to millimetres within a zone), with false easting/northing and linear units. Null: not projected.
+ */
+export function inverseProjection(prj: string): Inverse | null {
+  if (!/^\s*PROJCS/i.test(prj)) return null
+  const name = /PROJCS\["([^"]+)"/i.exec(prj)?.[1] ?? 'unknown'
+  const projection = /PROJECTION\["([^"]+)"/i.exec(prj)?.[1] ?? ''
+  const param = (n: string, d = 0) => Number(new RegExp(`PARAMETER\\["${n}",\\s*(-?[\\d.eE+-]+)`, 'i').exec(prj)?.[1] ?? d)
+  // The last UNIT is the projected (linear) one.
+  const units = [...prj.matchAll(/UNIT\["[^"]*",\s*([\d.eE+-]+)/gi)]
+  const unit = units.length > 1 ? Number(units[units.length - 1][1]) : 1
+  const fe = param('False_Easting')
+  const fn = param('False_Northing')
+  if (/Mercator_Auxiliary_Sphere|Pseudo.?Mercator|Web_Mercator/i.test(projection + name)) {
+    const R = 6378137
+    return (x, y) => [((x * unit - fe) / R) * deg, (2 * Math.atan(Math.exp((y * unit - fn) / R)) - Math.PI / 2) * deg]
+  }
+  if (/Transverse_Mercator/i.test(projection) && !/South_Orientated/i.test(projection)) {
+    const sph = /SPHEROID\["[^"]*",\s*([\d.eE+-]+),\s*([\d.eE+-]+)/i.exec(prj)
+    const a = Number(sph?.[1] ?? 6378137)
+    const invf = Number(sph?.[2] ?? 298.257223563)
+    const f = invf ? 1 / invf : 0
+    const e2 = 2 * f - f * f
+    const ep2 = e2 / (1 - e2)
+    const k0 = param('Scale_Factor', 1)
+    const lon0 = param('Central_Meridian') / deg
+    const lat0 = param('Latitude_Of_Origin') / deg
+    const m = (p: number) => a * ((1 - e2 / 4 - (3 * e2 ** 2) / 64 - (5 * e2 ** 3) / 256) * p - ((3 * e2) / 8 + (3 * e2 ** 2) / 32 + (45 * e2 ** 3) / 1024) * Math.sin(2 * p) + ((15 * e2 ** 2) / 256 + (45 * e2 ** 3) / 1024) * Math.sin(4 * p) - ((35 * e2 ** 3) / 3072) * Math.sin(6 * p))
+    const M0 = m(lat0)
+    const e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2))
+    return (x, y) => {
+      const M = M0 + (y * unit - fn) / k0
+      const mu = M / (a * (1 - e2 / 4 - (3 * e2 ** 2) / 64 - (5 * e2 ** 3) / 256))
+      const p1 = mu + ((3 * e1) / 2 - (27 * e1 ** 3) / 32) * Math.sin(2 * mu) + ((21 * e1 ** 2) / 16 - (55 * e1 ** 4) / 32) * Math.sin(4 * mu) + ((151 * e1 ** 3) / 96) * Math.sin(6 * mu) + ((1097 * e1 ** 4) / 512) * Math.sin(8 * mu)
+      const s = Math.sin(p1)
+      const c = Math.cos(p1)
+      const C1 = ep2 * c * c
+      const T1 = Math.tan(p1) ** 2
+      const N1 = a / Math.sqrt(1 - e2 * s * s)
+      const R1 = (a * (1 - e2)) / (1 - e2 * s * s) ** 1.5
+      const D = (x * unit - fe) / (N1 * k0)
+      const lat = p1 - ((N1 * Math.tan(p1)) / R1) * (D ** 2 / 2 - ((5 + 3 * T1 + 10 * C1 - 4 * C1 ** 2 - 9 * ep2) * D ** 4) / 24 + ((61 + 90 * T1 + 298 * C1 + 45 * T1 ** 2 - 252 * ep2 - 3 * C1 ** 2) * D ** 6) / 720)
+      const lon = lon0 + (D - ((1 + 2 * T1 + C1) * D ** 3) / 6 + ((5 - 2 * C1 + 28 * T1 - 3 * C1 ** 2 + 8 * ep2 + 24 * T1 ** 2) * D ** 5) / 120) / c
+      return [lon * deg, lat * deg]
+    }
+  }
+  throw new Error(`The shapefile uses a projection Simple Viz can’t convert (${name}). Save it as WGS 84 (EPSG:4326) first, e.g. in QGIS or mapshaper.`)
+}
+
 /** A shapefile's polygons (shape types 5, 15, 25) with their dBASE attributes as properties. */
 export function readShapefile(shp: Uint8Array, dbf?: Uint8Array, prj?: string, cpg?: string): FeatureCollection {
-  if (prj && /^\s*PROJCS/i.test(prj)) throw new Error(`The shapefile uses a projected coordinate system (${/PROJCS\["([^"]+)"/i.exec(prj)?.[1] ?? 'not longitude/latitude'}). Save it as WGS 84 (EPSG:4326) first, e.g. in QGIS or mapshaper.`)
+  const inverse = prj ? inverseProjection(prj) : null
   const v = new DataView(shp.buffer, shp.byteOffset, shp.byteLength)
   if (shp.length < 100 || v.getInt32(0, false) !== 9994) throw new Error('This isn’t a shapefile (.shp).')
   const attrs = dbf ? readDbf(dbf, cpg?.trim().toLowerCase().replace(/^utf8$/, 'utf-8') || 'utf-8') : []
@@ -102,7 +156,11 @@ export function readShapefile(shp: Uint8Array, dbf?: Uint8Array, prj?: string, c
         const starts = Array.from({ length: parts }, (_, i) => v.getInt32(p0 + 4 * i, true))
         const rings: Ring[] = starts.map((s, i) => {
           const e = i + 1 < parts ? starts[i + 1] : points
-          return Array.from({ length: Math.max(0, e - s) }, (_, k) => [v.getFloat64(xy + 16 * (s + k), true), v.getFloat64(xy + 16 * (s + k) + 8, true)] as [number, number])
+          return Array.from({ length: Math.max(0, e - s) }, (_, k) => {
+            const px = v.getFloat64(xy + 16 * (s + k), true)
+            const py = v.getFloat64(xy + 16 * (s + k) + 8, true)
+            return inverse ? inverse(px, py) : ([px, py] as [number, number])
+          })
         })
         if (rings.some((r) => r.some(([x, y]) => Math.abs(x) > 180.000001 || Math.abs(y) > 90.000001))) throw new Error('The shapefile’s coordinates aren’t longitude and latitude. Save it as WGS 84 (EPSG:4326) first, e.g. in QGIS or mapshaper.')
         features.push({ type: 'Feature', properties: attrs[idx] ?? {}, geometry: polygonOf(rings.filter((r) => r.length >= 4)) })
@@ -157,8 +215,11 @@ export function spatialToGeoJson(files: Record<string, Uint8Array>): string {
   if (one.endsWith('.zip') || one.endsWith('.kmz')) all = readZip(files[names[0]])
   const find = (ext: string) => Object.entries(all).find(([n]) => n.toLowerCase().endsWith(ext) && !n.split('/').pop()!.startsWith('._'))?.[1]
   const dec = new TextDecoder()
-  const json = find('.geojson') ?? find('.json')
-  if (json) return dec.decode(json)
+  const json = find('.geojson') ?? find('.topojson') ?? find('.json')
+  if (json) {
+    const text = dec.decode(json)
+    return /"type"\s*:\s*"Topology"/.test(text.slice(0, 2000)) ? JSON.stringify(topoToGeo(JSON.parse(text))) : text
+  }
   const kml = find('.kml')
   if (kml) return JSON.stringify(readKml(dec.decode(kml)))
   const shp = find('.shp')
@@ -168,4 +229,35 @@ export function spatialToGeoJson(files: Record<string, Uint8Array>): string {
     return JSON.stringify(readShapefile(shp, find('.dbf'), prj && dec.decode(prj), cpg && dec.decode(cpg)))
   }
   throw new Error('No map found: choose a GeoJSON, KML or KMZ file, a zipped shapefile, or a .shp with its .dbf.')
+}
+
+type Topology = { type: 'Topology'; arcs: number[][][]; transform?: { scale: [number, number]; translate: [number, number] }; objects: Record<string, { type: string; geometries?: TopoGeom[] } & TopoGeom> }
+type TopoGeom = { type: string; arcs?: unknown; properties?: Record<string, unknown> }
+
+/** TopoJSON to GeoJSON: arcs decoded (delta-encoded and scaled when quantized), polygons stitched from their arcs. */
+export function topoToGeo(t: Topology): FeatureCollection {
+  if (t?.type !== 'Topology' || !Array.isArray(t.arcs) || !t.objects) throw new Error('This isn’t a valid TopoJSON file.')
+  const arcs = t.arcs.map((arc) => {
+    if (!t.transform) return arc.map((p) => [p[0], p[1]] as [number, number])
+    let x = 0
+    let y = 0
+    return arc.map((p) => ((x += p[0]), (y += p[1]), [x * t.transform!.scale[0] + t.transform!.translate[0], y * t.transform!.scale[1] + t.transform!.translate[1]] as [number, number]))
+  })
+  const ring = (ids: number[]): Ring => {
+    const out: Ring = []
+    for (const i of ids) {
+      const a = i < 0 ? [...arcs[~i]].reverse() : arcs[i]
+      if (!a) throw new Error('The TopoJSON file refers to an arc it doesn’t have.')
+      out.push(...(out.length ? a.slice(1) : a))
+    }
+    return out
+  }
+  const features: Feature[] = []
+  for (const obj of Object.values(t.objects)) {
+    for (const g of obj.type === 'GeometryCollection' ? (obj.geometries ?? []) : [obj]) {
+      const geometry = g.type === 'Polygon' ? { type: 'Polygon', coordinates: (g.arcs as number[][]).map(ring) } : g.type === 'MultiPolygon' ? { type: 'MultiPolygon', coordinates: (g.arcs as number[][][]).map((p) => p.map(ring)) } : null
+      if (geometry) features.push({ type: 'Feature', properties: g.properties ?? {}, geometry })
+    }
+  }
+  return { type: 'FeatureCollection', features }
 }

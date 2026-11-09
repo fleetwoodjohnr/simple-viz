@@ -18,7 +18,7 @@
 - **Messy sheets.** The tables inside a sheet with titles, notes or several tables are found and picked.
 - **More sources.** Oracle, Amazon Redshift, ClickHouse, Trino/Presto, Google BigQuery, Snowflake and Databricks (extract;
   Redshift, Snowflake and Databricks are tested against their protocol or documented APIs, not the live services).
-- **Maps.** Point maps place cities and postal codes (US, UK, Canada and nine more countries) by name. Custom maps from shapefiles and KML/KMZ files.
+- **Maps.** Point maps place cities and postal codes (US, UK, Canada and nine more countries) by name. Custom maps from shapefiles (including UTM and Web Mercator ones), TopoJSON and KML/KMZ files.
   Background map tiles from a tile server you choose (off by default).
 - **Chart analytics.** Logarithmic, exponential, power and polynomial trend lines; percentile lines, confidence
   intervals of the mean and quartile reference boxes; one per color if wanted.

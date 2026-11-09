@@ -862,7 +862,7 @@ function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fie
 function MapPicker({ chart, setO }: { chart: Chart; setO: (p: Partial<ChartOptions>) => void }) {
   const maps = useApp((s) => s.project?.maps) ?? NO_MAPS
   const addMap = async () => {
-    const files = await window.simpleViz.openDialog({ name: 'Maps (GeoJSON, KML, KMZ, shapefile)', extensions: ['geojson', 'json', 'kml', 'kmz', 'zip', 'shp', 'dbf', 'prj', 'cpg'] }, true)
+    const files = await window.simpleViz.openDialog({ name: 'Maps (GeoJSON, TopoJSON, KML, KMZ, shapefile)', extensions: ['geojson', 'topojson', 'json', 'kml', 'kmz', 'zip', 'shp', 'dbf', 'prj', 'cpg'] }, true)
     const file = files.find((f) => !/\.(dbf|prj|cpg)$/i.test(f.name)) ?? files[0]
     if (!file) return
     try {
@@ -871,7 +871,7 @@ function MapPicker({ chart, setO }: { chart: Chart; setO: (p: Partial<ChartOptio
       const nameProp = nameProps[0]
       // Areas are matched on "name": keep the naming property under that key (and nothing else, to stay small).
       const geojson = { ...fc, features: fc.features.map((f) => ({ ...f, properties: { name: String(f.properties![nameProp]) } })) }
-      const m = { id: newId(), name: file.name.replace(/\.(geo)?json$|\.(kml|kmz|zip|shp)$/i, ''), nameProp, geojson }
+      const m = { id: newId(), name: file.name.replace(/\.(geo|topo)?json$|\.(kml|kmz|zip|shp)$/i, ''), nameProp, geojson }
       P.edit((p) => ({ ...p, maps: [...(p.maps ?? []), m] }))
       setO({ map: m.id })
       toast(`Added the map “${m.name}”: ${geojson.features.length} areas named by “${nameProp}”`, 'success')
@@ -896,7 +896,7 @@ function MapPicker({ chart, setO }: { chart: Chart; setO: (p: Partial<ChartOptio
         ))}
       </select>
       <button className="mt-1 text-[11.5px] text-accent-ink hover:underline" onClick={addMap} data-testid="add-map">
-        Add a map (GeoJSON, KML, shapefile)…
+        Add a map (GeoJSON, TopoJSON, KML, shapefile)…
       </button>
     </div>
   )

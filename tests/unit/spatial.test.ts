@@ -8,7 +8,8 @@ import { checkGeoJson, type FeatureCollection } from '@/core/charts/geo'
 
 const dir = path.resolve(__dirname, '../fixtures/spatial')
 const file = (n: string) => ({ [n]: new Uint8Array(readFileSync(path.join(dir, n))) })
-const expected = JSON.parse(readFileSync(path.join(dir, 'expected.json'), 'utf8')) as { record: Record<string, unknown>; parts: number[]; points: [number, number][] }[]
+const ref = JSON.parse(readFileSync(path.join(dir, 'expected.json'), 'utf8')) as { shapes: { record: Record<string, unknown>; parts: number[]; points: [number, number][] }[]; near: [number, number][][] }
+const expected = ref.shapes
 const read = (files: Record<string, Uint8Array>) => JSON.parse(spatialToGeoJson(files)) as FeatureCollection
 type Poly = [number, number][][]
 const polys = (g: { type: string; coordinates: unknown }) => (g.type === 'Polygon' ? [g.coordinates as Poly] : (g.coordinates as Poly[]))
@@ -43,8 +44,29 @@ describe('spatial files', () => {
     }
   })
 
-  it('refuses projected shapefiles and files with no map, with the reason', () => {
-    expect(() => read(file('projected.zip'))).toThrow(/projected coordinate system \(WGS_1984_UTM_Zone_33N\)/)
+  it('converts UTM and Web Mercator shapefiles to longitude/latitude (as pyproj projected them)', () => {
+    for (const n of ['utm.zip', 'webmerc.zip']) {
+      const fc = read(file(n))
+      fc.features.forEach((f, i) => {
+        const got = polys(f.geometry!).flat(2) as unknown as [number, number][]
+        const want = ref.near[i]
+        expect(got.length).toBe(want.length)
+        // Every point of the original rings is found, to about a centimetre.
+        for (const [x, y] of want) expect(got.some(([gx, gy]) => Math.abs(gx - x) < 1e-7 && Math.abs(gy - y) < 1e-7), `${n} ${x},${y}`).toBe(true)
+      })
+    }
+  })
+
+  it('TopoJSON: arcs decoded and shared between areas', () => {
+    const fc = read(file('halves.topojson'))
+    expect(fc.features.map((f) => [f.properties!.name, f.geometry!.coordinates])).toEqual([
+      ['West', [[[11, 20], [11, 21], [10, 21], [10, 20], [11, 20]]]],
+      ['East', [[[11, 20], [12, 20], [12, 21], [11, 21], [11, 20]]]]
+    ])
+  })
+
+  it('refuses unsupported projections and files with no map, with the reason', () => {
+    expect(() => read(file('projected.zip'))).toThrow(/can’t convert \(Lambert_Conformal_Conic_Test\)/)
     expect(() => read({ 'notes.txt': new TextEncoder().encode('hello') })).toThrow(/No map found/)
   })
 })
