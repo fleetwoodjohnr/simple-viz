@@ -17,7 +17,7 @@
   and trend lines, number formats; PNG, SVG and CSV export.
 - **Dashboards.** Drag charts onto a canvas, resize, align, group, lock; text with live values, filter controls,
   buttons, images. Click a bar to filter the other charts; drill down; go to another dashboard. Saved views (named
-  filter choices kept in the project). Presentation mode. PDF and PNG export.
+  filter choices kept in the project); URL actions open a web page for the clicked mark. Presentation mode. PDF and PNG export.
 - **Data modeling.** Relate tables by shared fields and chart across them without double-counting (Tableau-style
   relationships, several fact tables). Visual transforms — filter, calculate, join, group, pivot, unpivot and more —
   with a live preview and the equivalent SQL. Date tables and hierarchies.

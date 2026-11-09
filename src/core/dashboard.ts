@@ -3,6 +3,7 @@
 
 import type { ChartFilter } from '../shared/charts'
 import { GRID, type DashAction, type DashItem, type Dashboard, type Selections } from '../shared/dashboards'
+import { isSafeExternalUrl } from '../shared/urls'
 
 type Value = string | number | boolean | null
 
@@ -58,6 +59,16 @@ function actionFor(d: Dashboard, source: string, target: string, kind: DashActio
 /** A navigate action for clicks in this tile (drill-through to another dashboard). */
 export function navigateAction(d: Dashboard, source: string): DashAction | undefined {
   return d.actions.find((a) => a.kind === 'navigate' && (a.source === '*' || a.source === source))
+}
+
+/** The web address of a URL action for a clicked mark, or null when it isn't a web or email address. */
+export function actionUrl(template: string, values: Record<string, unknown>): string | null {
+  const lower = new Map(Object.entries(values).map(([k, v]) => [k.toLowerCase(), v]))
+  const url = template.trim().replace(/\{([^{}]+)\}|<([^<>]+)>/g, (m, a: string | undefined, b: string | undefined) => {
+    const k = (a ?? b ?? '').trim().toLowerCase()
+    return lower.has(k) ? encodeURIComponent(String(lower.get(k) ?? '')) : m
+  })
+  return isSafeExternalUrl(url) ? url : null
 }
 
 /** Toggles a mark: clicking the selected mark again clears it; clicking another replaces the tile's selection. */

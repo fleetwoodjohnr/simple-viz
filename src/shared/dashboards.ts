@@ -32,11 +32,12 @@ export interface DashItem {
 export interface DashAction {
   id: string
   /** filter: selecting marks filters the targets; highlight: dims non-matching marks; navigate: opens a dashboard
-   *  with the selection applied (drill-through). */
-  kind: 'filter' | 'highlight' | 'navigate'
+   *  with the selection applied (drill-through); url: opens a web page for the clicked mark. */
+  kind: 'filter' | 'highlight' | 'navigate' | 'url'
   /** Source chart item id, or '*' for every chart. */
   source: string
-  /** Target chart item ids, or '*' for every other chart; for navigate, a dashboard id. */
+  /** Target chart item ids, or '*' for every other chart; for navigate, a dashboard id; for url, the address, with
+   *  {Field} (or Tableau's <Field>) replaced by the clicked mark's value. */
   target: string
   /** Fields carried by the action; empty = every dimension of the clicked mark. */
   fields?: string[]

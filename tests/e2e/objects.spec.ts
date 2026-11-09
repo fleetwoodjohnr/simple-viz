@@ -87,6 +87,21 @@ test('text, shape, image, reset button, row layout; fit to window', async () => 
   await page.getByTestId('dash-button').click()
   await expect(page.getByTestId('reset-filters')).toHaveCount(0)
 
+  // A URL action opens a web page for the clicked mark (the system browser is stubbed).
+  await app.evaluate(({ shell }) => {
+    ;(globalThis as any).__opened = []
+    shell.openExternal = async (u: string) => void (globalThis as any).__opened.push(u)
+  })
+  await page.getByTestId('mode-edit').click()
+  await page.locator('[data-testid=dashboard-canvas]').click({ position: { x: 4, y: 4 } })
+  await page.getByRole('button', { name: 'Add action' }).click()
+  await page.getByLabel('Action kind').last().selectOption('url')
+  await page.getByLabel('Web address').fill('https://example.com/search?q={region}')
+  await page.getByTestId('mode-view').click()
+  await clickBar(page, page.locator('[data-testid=item-chart]').first(), 'New York')
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__opened)).toEqual(['https://example.com/search?q=New%20York'])
+  await page.getByTestId('dash-button').click()
+
   // Fit to window scales a dashboard wider than the window down; fixed size shows it at 100%.
   const scale = () => page.locator('[data-scale]').first().getAttribute('data-scale').then(Number)
   const width = await page.evaluate(() => (window as any).__sv.get().project.dashboards[0].size.w)

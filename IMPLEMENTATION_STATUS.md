@@ -97,6 +97,7 @@ Linux, Windows and macOS._
 | Cross-filtering by clicking marks, highlight actions, drill-through (go to dashboard with the selection), reset | unit `dashboard filtering`, e2e `dashboards` |
 | Drill-down through a field path (categories or date grains), drill up | e2e `dashboards` |
 | Saved views: the filter controls' choices kept under a name in the project, applied from the Views menu | e2e `objects` |
+| URL actions: a click on a mark opens a web or email address filled with its values (other schemes refused) | unit `URL actions`, e2e `objects` |
 | Sizes (desktop, laptop, tablet, phone, A4, Letter), fit-to-window, presentation mode with tabs | e2e `layout` (size preset keeps tiles inside, presentation and Escape), e2e `objects` (fit to window vs fixed size) |
 | Refresh on open, on file change, on focus, on a timer, per source; per-dashboard timer; status and stale badges; last good data kept | integration `engine`, `postgres`; e2e `acceptance` |
 | Password asked again when the keychain can't keep it or the server refuses it | e2e `acceptance` (CI has no keychain) |

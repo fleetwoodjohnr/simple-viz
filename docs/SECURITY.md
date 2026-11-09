@@ -60,7 +60,9 @@ checked (areas only, a text property to name them) and stored in the project.
 Formulas are SQL, checked by the same gate. Custom visuals are ECharts options in JSON: only data placeholders are
 replaced, prototype keys are dropped, no string is evaluated as code, and their tooltips are plain text (no HTML). Map
 data and images stay inside the project; the page's CSP allows images only from the app itself and `data:`/`blob:`
-URLs. A **portable copy** (File → Save a Portable Copy) contains the tables' data itself: share it as you would the
+URLs. A dashboard's **URL actions** open a page only when the reader clicks a mark: the clicked values are
+URL-encoded into the address, and only `http:`, `https:` and `mailto:` addresses go to the system browser (checked in
+the page and again in the main process). A **portable copy** (File → Save a Portable Copy) contains the tables' data itself: share it as you would the
 data.
 
 ## Network

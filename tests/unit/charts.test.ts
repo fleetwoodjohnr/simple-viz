@@ -175,3 +175,15 @@ describe('axis labels', () => {
     expect(fmt(0.25, f('m1', 'share', 'measure', 'y', 'DOUBLE', { format: '0%' }), 'axis')).toBe('25%')
   })
 })
+
+import { actionUrl } from '@/core/dashboard'
+
+describe('URL actions', () => {
+  it('fill {Field} and <Field> with the clicked values, encoded; only web and email addresses', () => {
+    expect(actionUrl('https://example.com/?q={region}&s=<Segment>', { Region: 'New York', segment: 'A&B' })).toBe('https://example.com/?q=New%20York&s=A%26B')
+    expect(actionUrl('https://example.com/{unknown}', { region: 'x' })).toBe('https://example.com/{unknown}')
+    expect(actionUrl('javascript:alert({region})', { region: 'x' })).toBeNull()
+    expect(actionUrl('file:///etc/{region}', { region: 'passwd' })).toBeNull()
+    expect(actionUrl('{region}', { region: 'javascript:alert(1)' })).toBeNull()
+  })
+})

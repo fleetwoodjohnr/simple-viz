@@ -225,7 +225,7 @@ function Workspace({ d }: { d: Dashboard }) {
         {/* Wraps: with a selection, the arrange tools would not fit a narrow window on one line. */}
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-panel px-3 py-1.5">
           <span className="mr-2 truncate text-[14px] font-semibold" data-testid="dashboard-name">{d.name}</span>
-          <Segmented value={mode} onChange={(m) => setDash({ mode: m, selected: [] })} label="Mode" options={[{ value: 'edit', label: <span className="flex items-center gap-1"><Pencil className="size-3.5" /> Edit</span> }, { value: 'view', label: <span className="flex items-center gap-1" data-testid="mode-view"><Eye className="size-3.5" /> View</span> }]} />
+          <Segmented value={mode} onChange={(m) => setDash({ mode: m, selected: [] })} label="Mode" options={[{ value: 'edit', label: <span className="flex items-center gap-1" data-testid="mode-edit"><Pencil className="size-3.5" /> Edit</span> }, { value: 'view', label: <span className="flex items-center gap-1" data-testid="mode-view"><Eye className="size-3.5" /> View</span> }]} />
           {mode === 'edit' && sel.length > 0 && <Arrange d={d} sel={sel} />}
           <div className="flex-1" />
           {dirtyFilters && (
@@ -694,10 +694,11 @@ function Actions({ d }: { d: Dashboard }) {
         {d.actions.map((a) => (
           <li key={a.id} className="rounded-lg bg-panel-2 p-2 text-[12px] shadow-[0_0_0_1px_var(--border)]">
             <div className="flex items-center gap-1.5">
-              <select aria-label="Action kind" className="h-7 flex-1 rounded-md border border-border bg-panel px-1 text-[12px]" value={a.kind} onChange={(e) => setActions((all) => all.map((x) => (x.id === a.id ? { ...x, kind: e.target.value as DashAction['kind'], target: e.target.value === 'navigate' ? (project.dashboards.find((y) => y.id !== d.id)?.id ?? '') : '*' } : x)))}>
+              <select aria-label="Action kind" className="h-7 flex-1 rounded-md border border-border bg-panel px-1 text-[12px]" value={a.kind} onChange={(e) => setActions((all) => all.map((x) => (x.id === a.id ? { ...x, kind: e.target.value as DashAction['kind'], target: e.target.value === 'navigate' ? (project.dashboards.find((y) => y.id !== d.id)?.id ?? '') : e.target.value === 'url' ? '' : '*' } : x)))}>
                 <option value="filter">Filter</option>
                 <option value="highlight">Highlight</option>
                 <option value="navigate">Go to dashboard</option>
+                <option value="url">Open a web page</option>
               </select>
               <IconBtn size="sm" label="Remove action" onClick={() => setActions((all) => all.filter((x) => x.id !== a.id))}>
                 <X className="size-3.5" />
@@ -713,8 +714,10 @@ function Actions({ d }: { d: Dashboard }) {
                   </option>
                 ))}
               </select>{' '}
-              {a.kind === 'navigate' ? 'to ' : 'to '}
-              {a.kind === 'navigate' ? (
+              {a.kind === 'url' ? 'opens ' : 'to '}
+              {a.kind === 'url' ? (
+                <input aria-label="Web address" placeholder="https://example.com/?q={Region}" title="{Field} is replaced by the clicked mark’s value" className="mt-1 h-7 w-full rounded border border-border bg-panel px-1.5 text-[11.5px]" value={a.target} onChange={(e) => setActions((all) => all.map((x) => (x.id === a.id ? { ...x, target: e.target.value } : x)))} />
+              ) : a.kind === 'navigate' ? (
                 <select aria-label="Target dashboard" className="h-6 rounded border border-border bg-panel px-0.5 text-[11.5px]" value={a.target} onChange={(e) => setActions((all) => all.map((x) => (x.id === a.id ? { ...x, target: e.target.value } : x)))}>
                   {project.dashboards.filter((x) => x.id !== d.id).map((x) => (
                     <option key={x.id} value={x.id}>

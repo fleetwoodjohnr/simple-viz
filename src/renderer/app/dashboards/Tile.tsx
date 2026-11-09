@@ -4,12 +4,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Search, AlertTriangle } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
-import { useApp } from '../../state/store'
+import { useApp, toast } from '../../state/store'
 import * as P from '../../state/project'
 import { ChartView } from '../charts/ChartView'
 import { distinctValues } from '../charts/FilterDialog'
 import { useDash, setDash, setSelection, resetFilters, NO_SELECTIONS, NO_MARKS, NO_DRILL, type Drill } from './runtime'
-import { tileFilters, tileHighlight, toggleMark, dynamicText, navigateAction, type MarkSelection } from '@/core/dashboard'
+import { tileFilters, tileHighlight, toggleMark, dynamicText, navigateAction, actionUrl, type MarkSelection } from '@/core/dashboard'
 import type { Dashboard, DashItem } from '@/shared/dashboards'
 import type { Chart, ChartFilter } from '@/shared/charts'
 import { isDate, isNumeric } from '@/core/query/compile'
@@ -78,6 +78,13 @@ export function ChartTile({ d, item, interactive }: { d: Dashboard; item: DashIt
       const v = m.values[path[lvl].field]
       setDash((s) => ({ drill: { ...s.drill, [d.id]: { ...(s.drill[d.id] ?? {}), [item.id]: { level: lvl + 1, path: [...(drill?.path ?? []), v] } } } }))
       return
+    }
+    // URL actions open their page; the click still filters and highlights.
+    for (const a of d.actions) {
+      if (a.kind !== 'url' || !a.target.trim() || (a.source !== '*' && a.source !== item.id)) continue
+      const url = actionUrl(a.target, m.values)
+      if (url) void window.simpleViz.openExternal(url)
+      else toast('This action’s address isn’t a web or email address, so it wasn’t opened.', 'error')
     }
     const nav = navigateAction(d, item.id)
     const sel: MarkSelection = { item: item.id, values: m.values }
