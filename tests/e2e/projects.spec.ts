@@ -81,7 +81,7 @@ test('unsaved work comes back after a crash', async () => {
   await gone
   await new Promise((r) => setTimeout(r, 1500))
   const again = await launch({ userData })
-  await expect(again.page.getByTestId('recovery')).toBeVisible()
+  await expect(again.page.getByTestId('recovery')).toBeVisible({ timeout: 20_000 }) // a cold start of the packaged app on Windows is slow
   await again.page.getByTestId('recovery').getByRole('button', { name: 'Restore' }).click()
   await again.page.getByTestId('relation-customers').click()
   await expect(again.page.getByTestId('relation-rows')).toHaveText('120 rows', { timeout: 20_000 })
