@@ -392,7 +392,9 @@ export function compileModelQuery(input: ModelInput): CompiledQuery {
     return parts.length ? parts.join(' AND ') : 'TRUE'
   })
   const sortDim = dims.find((d) => d.role === 'x') ?? dims[0]
-  const order = chart.options.sort?.by === 'value' && measures[0] ? `${measures[0].key} ${chart.options.sort.dir === 'asc' ? 'ASC' : 'DESC'} NULLS LAST` : sortDim ? `${sortDim.key} ${chart.options.sort?.dir === 'desc' ? 'DESC' : 'ASC'} NULLS LAST` : ''
+  // Then by the other dimensions, so marks with the same first value always come in the same order.
+  const rest = dims.filter((d) => d !== sortDim).map((d) => `${d.key} ASC NULLS LAST`)
+  const order = [chart.options.sort?.by === 'value' && measures[0] ? `${measures[0].key} ${chart.options.sort.dir === 'asc' ? 'ASC' : 'DESC'} NULLS LAST` : sortDim ? `${sortDim.key} ${chart.options.sort?.dir === 'desc' ? 'DESC' : 'ASC'} NULLS LAST` : '', ...rest].filter(Boolean).join(', ')
   const combined = branches.length === 1 && !measures.length ? branches[0] : `SELECT ${[...dims.map((d) => d.key), ...partKeys.map((k) => `any_value(${k}) AS ${k}`)].join(', ')} FROM (\n${branches.join('\nUNION ALL BY NAME\n')}\n)${dims.length ? ' GROUP BY ALL' : ''}`
   const perMark = [...dims.map((d) => d.key), ...measures.filter((m) => calcMeasures.get(m.key)?.kind !== 'tablecalc').map((m) => (finalExpr.has(m.key) ? `${finalExpr.get(m.key)} AS ${m.key}` : m.key)), ...tcInputs]
   const marks = `SELECT ${perMark.join(', ')} FROM (\n${combined}\n)${having.length ? ` WHERE ${having.join(' AND ')}` : ''}`
