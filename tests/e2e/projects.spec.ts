@@ -53,9 +53,10 @@ test('a moved workbook is found again with the relink dialog', async () => {
   await page.getByTestId('relink-source').click()
   await stubDialogs(app, { open: [path.join(dir, 'moved', 'Sales.xlsx')], message: 0 })
   await page.getByRole('dialog').getByRole('button', { name: 'Find file…' }).click()
+  // The source now reads the moved file, and its refresh succeeds (the rows alone would show from the cache).
+  await expect.poll(() => page.evaluate(() => (window as any).__sv.get().project.sources.find((s: any) => s.format === 'xlsx').path)).toBe(path.join(dir, 'moved', 'Sales.xlsx'))
+  await expect(page.getByTestId('refresh-status')).toHaveAttribute('data-state-summary', 'ok')
   await expect(page.getByTestId('relation-rows')).toHaveText('1,000 rows')
-  const src = await page.evaluate(() => (window as any).__sv.get().project.sources.find((s: any) => s.format === 'xlsx').path)
-  expect(src).toBe(path.join(dir, 'moved', 'Sales.xlsx'))
   void file
   await quit(app)
 })

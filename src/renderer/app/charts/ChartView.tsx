@@ -357,15 +357,26 @@ function Crosstab({ data }: { data: ChartData }) {
   )
 }
 
-/** PNG (data URL, at `scale`×) or SVG markup of a rendered chart element. */
+/**
+ * PNG (data URL, at `scale`×) or SVG markup of a rendered chart element. Drawn again off screen at document size (at
+ * least 1000 × 600): a chart in a small window would otherwise drop the labels that don't fit.
+ */
 export function exportChart(el: HTMLElement, kind: 'png' | 'svg', scale = 2, dark = false): string | null {
   const c = (el.querySelector('[data-testid=echart]') as (HTMLDivElement & { __echart?: echarts.ECharts }) | null)?.__echart
   if (!c) return null
-  if (kind === 'png') return c.getDataURL({ type: 'png', pixelRatio: scale, backgroundColor: dark ? '#18181b' : '#ffffff' })
-  // SVG: render the same option with the SVG renderer, off screen.
-  const { width, height } = { width: c.getWidth(), height: c.getHeight() }
+  const width = Math.max(c.getWidth(), 1000)
+  const height = Math.max(c.getHeight(), 600)
+  const option = { ...(c.getOption() as Record<string, unknown>), animation: false } as echarts.EChartsCoreOption
+  if (kind === 'png') {
+    const host = document.createElement('div')
+    const off = echarts.init(host, undefined, { renderer: 'canvas', width, height, devicePixelRatio: scale })
+    off.setOption(option)
+    const url = off.getDataURL({ type: 'png', pixelRatio: scale, backgroundColor: dark ? '#18181b' : '#ffffff' })
+    off.dispose()
+    return url
+  }
   const ssr = echarts.init(null as never, undefined, { renderer: 'svg', ssr: true, width, height })
-  ssr.setOption(c.getOption() as echarts.EChartsCoreOption)
+  ssr.setOption(option)
   const svg = ssr.renderToSVGString()
   ssr.dispose()
   return svg

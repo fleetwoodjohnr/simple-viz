@@ -140,7 +140,7 @@ export function Home() {
         <section className="mt-9">
           <h3 className="mb-3 text-[13px] font-semibold text-text-2">{project ? `Add data to ${project.title}` : 'Start with your data'}</h3>
           <div className="grid grid-cols-3 gap-3">
-            <StartCard testid="start-file" icon={<FileSpreadsheet />} title="Excel, CSV or other file" body="xlsx, xlsm, ods, csv, tsv, json, parquet, SQLite and DuckDB files" onClick={() => void pickDataFiles()} />
+            <StartCard testid="start-file" icon={<FileSpreadsheet />} title="Excel, CSV or other file" body="xlsx, xls, ods, csv, json, parquet, arrow, xml, SQLite and DuckDB files" onClick={() => void pickDataFiles()} />
             <StartCard testid="start-postgres" icon={<Server />} title="PostgreSQL" body="Query a database live, or keep a fast local extract" onClick={() => runCommand('data.connect')} />
             <StartCard testid="start-blank" icon={<Database />} title={project ? 'Go to Data' : 'Blank project'} body={project ? 'Sources, previews and datasets' : 'Start empty and add sources later'} onClick={() => (project ? set({ workspace: 'data' }) : runCommand('file.new'))} />
           </div>
