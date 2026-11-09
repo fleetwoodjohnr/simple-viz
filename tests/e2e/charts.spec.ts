@@ -117,6 +117,35 @@ test('group values of a dimension (Create group)', async () => {
   const r = exp.v1.revenueByRegion
   near(s.series['Sum of revenue'][0], r.Virginia + r['New York'])
   near(s.series['Sum of revenue'][2], r.California + r.Washington)
+
+  // Grouping by picking marks: click two bars of a region chart, then Group them.
+  await page.getByTestId('new-chart').click()
+  await page.getByTestId('chart-dataset').selectOption('sales_enriched')
+  await addField(page, 'region', 'x')
+  await addField(page, 'revenue', 'y')
+  await expect.poll(async () => (await chartSeries(page)).categories.length).toBe(exp.regions.length)
+  const bar = async (cat: string) => {
+    const el = page.locator('[data-testid=chart-canvas] [data-testid=echart]').first()
+    const pt = await el.evaluate((node, c) => {
+      const ch = (node as any).__echart
+      const opt = ch.getOption()
+      const i = opt.xAxis[0].data.indexOf(c)
+      const v = opt.series[0].data[i]
+      const [x, y] = ch.convertToPixel({ seriesIndex: 0 }, [i, (typeof v === 'object' ? v.value : v) / 2])
+      const b = node.getBoundingClientRect()
+      return { x: b.left + x, y: b.top + y }
+    }, cat)
+    await page.mouse.click(pt.x, pt.y)
+  }
+  await bar('Texas')
+  await bar('Florida')
+  await expect(page.getByTestId('picked-marks')).toContainText('2 selected')
+  await page.getByTestId('group-marks').click()
+  await expect.poll(async () => (await chartSeries(page)).categories).toContain('Texas, Florida')
+  const g = await chartSeries(page)
+  near(g.series['Sum of revenue'][g.categories.indexOf('Texas, Florida')], r.Texas + r.Florida)
+  expect(g.categories).toContain('Virginia') // the rest keep their names
+  expect(await page.evaluate(() => (window as any).__sv.get().project.charts[1].enc.x[0].field)).toBe('region (group 2)')
   await quit(app)
 })
 

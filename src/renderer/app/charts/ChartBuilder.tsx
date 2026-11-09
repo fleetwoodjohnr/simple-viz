@@ -17,6 +17,7 @@ import { FilterDialog } from './FilterDialog'
 import { askText } from '../Dialogs'
 import { CalcDialog } from './CalcDialog'
 import { GroupDialog } from './GroupDialog'
+import { groupFormula } from '@/core/calc/compile'
 import { ParamDialog } from './ParamDialog'
 import { fieldDefs, defaultRef, AGGS, GRAINS, type FieldDef } from './fields'
 import { PLUGINS, plugin, recommend } from '@/core/charts/plugins'
@@ -166,6 +167,30 @@ function Builder({ chart }: { chart: Chart }) {
   const [filterFor, setFilterFor] = useState<{ field: string; id?: string; asMeasure?: boolean } | null>(null)
   const [calcEdit, setCalcEdit] = useState<CalcField | 'new' | null>(null)
   const [groupFor, setGroupFor] = useState<{ f: FieldDef; mode: 'group' | 'set' } | null>(null)
+  // Marks picked on the chart (click; Ctrl/⌘ or Shift adds), to group them (Tableau's group from selected marks).
+  const primary = [...chart.enc.x, ...chart.enc.y, chart.enc.color].find((r): r is FieldRef => !!r && !r.agg)?.field
+  const [picked, setPicked] = useState<(string | number | boolean | null)[]>([])
+  useEffect(() => setPicked([]), [chart.id, primary])
+  const pickMark = (m: { values: Record<string, string | number | boolean | null> }) => {
+    if (!primary || !(primary in m.values)) return
+    const v = m.values[primary]
+    setPicked((p) => (p.some((x) => x === v) ? p.filter((x) => x !== v) : [...p, v]))
+  }
+  const groupPicked = () => {
+    const f = fields.find((x) => x.name === primary)
+    const vals = picked.filter((v): v is string | number | boolean => v !== null)
+    if (!f || !vals.length) return
+    const taken = new Set(get().project?.calcs.map((c) => c.name.toLowerCase()))
+    let nm = `${f.name} (group)`
+    for (let i = 2; taken.has(nm.toLowerCase()); i++) nm = `${f.name} (group ${i})`
+    const c: CalcField = { id: newId(), dataset: chart.dataset, name: nm, formula: groupFormula(f.name, [{ name: vals.map(String).join(', '), values: vals }], false, !isNumeric(f.type)) }
+    P.edit((p) => ({ ...p, calcs: [...p.calcs, c] }))
+    // The group takes the field's place on the chart.
+    const swap = (r: FieldRef) => (r.field === f.name && !r.agg ? { ...r, field: nm } : r)
+    upd((x) => ({ ...x, enc: { ...x.enc, x: x.enc.x.map(swap), y: x.enc.y.map(swap), color: x.enc.color && swap(x.enc.color) } }))
+    setPicked([])
+    toast(`Grouped ${vals.length} values into “${vals.map(String).join(', ')}” (${nm})`, 'success')
+  }
   const [autoType, setAutoType] = useState(() => !chart.enc.x.length && !chart.enc.y.length)
   const upd = (fn: (c: Chart) => Chart) => updateChart(chart.id, fn)
 
@@ -271,8 +296,19 @@ function Builder({ chart }: { chart: Chart }) {
             ))}
           </div>
         </div>
-        <div className="min-h-0 flex-1 bg-panel p-3" data-testid="chart-canvas">
-          <ChartView chart={chart} />
+        <div className="relative min-h-0 flex-1 bg-panel p-3" data-testid="chart-canvas">
+          <ChartView chart={chart} onMark={primary ? pickMark : undefined} highlight={picked.length && primary ? { [primary]: picked } : undefined} />
+          {picked.length > 0 && (
+            <div className="absolute right-4 top-4 z-10 flex items-center gap-1.5 rounded-lg bg-elev px-2.5 py-1.5 text-[12px] shadow-[0_0_0_1px_var(--border),0_6px_18px_-6px_rgb(0_0_0/0.3)]" data-testid="picked-marks">
+              {picked.length} selected
+              <Btn size="sm" onClick={groupPicked} data-testid="group-marks">
+                Group them
+              </Btn>
+              <Btn size="sm" variant="ghost" onClick={() => setPicked([])}>
+                Clear
+              </Btn>
+            </div>
+          )}
         </div>
       </div>
       <FormatPanel chart={chart} fields={fields} ranked={ranked.map((p) => p.id)} onType={(t) => (setAutoType(false), upd((c) => ({ ...c, type: t })))} upd={upd} />
