@@ -3,7 +3,7 @@
 import { type Page, type Locator } from '@playwright/test'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { test, expect, launch, quit, salesProject, tempDir, stubDialogs } from './helpers'
+import { test, expect, launch, quit, salesProject, tempDir, stubDialogs, sql } from './helpers'
 
 // A 2 × 2 red PNG.
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR4nGP8z8DAwMDAxMDAwMAAAA4EAgFZu6v8AAAAAElFTkSuQmCC', 'base64')
@@ -244,6 +244,29 @@ test('sets: created from a field, In/Out on a chart, changed by a set action', a
     const val = (d: any) => (d !== null && typeof d === 'object' ? d.value : d)
     return cats.filter((_, i) => inSeries && val(inSeries.data[i]) != null)
   }
+  await expect.poll(() => inOut(page)).toEqual(['Texas'])
+
+  // A computed set: the top 2 regions by revenue (In for them), on the color shelf instead.
+  await page.getByTestId('field-region').hover()
+  await page.getByTestId('field-menu-region').click()
+  await page.getByTestId('set-region').click()
+  await page.getByRole('dialog').getByRole('radio', { name: 'Top N' }).click()
+  await page.getByTestId('set-top-n').fill('2')
+  await page.getByTestId('set-top-by').selectOption('revenue')
+  await page.getByTestId('group-save').click()
+  await page.getByTestId('field-region (top 2)').dragTo(page.getByTestId('shelf-color'))
+  const top2 = (await sql(page, 'SELECT region FROM sales_enriched GROUP BY 1 ORDER BY sum(revenue) DESC LIMIT 2')).map((r) => r.region)
+  await expect.poll(async () => (await inOut(page)).sort()).toEqual([...top2].sort())
+  // A condition that doesn't aggregate is refused with the reason.
+  await page.getByTestId('field-region').hover()
+  await page.getByTestId('field-menu-region').click()
+  await page.getByTestId('set-region').click()
+  await page.getByRole('dialog').getByRole('radio', { name: 'Condition' }).click()
+  await page.getByTestId('set-condition').fill('[revenue] > 1')
+  await page.getByTestId('group-save').click()
+  await expect(page.getByTestId('set-error')).toContainText('must aggregate')
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click()
+  await page.getByTestId('field-region (set)').dragTo(page.getByTestId('shelf-color'))
   await expect.poll(() => inOut(page)).toEqual(['Texas'])
   // Stacked, so a click at the category's centre lands on its bar (grouped bars sit either side of it).
   await page.evaluate(() => {

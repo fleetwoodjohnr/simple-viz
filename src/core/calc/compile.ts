@@ -426,6 +426,20 @@ export function setFormula(field: string, values: (string | number | boolean)[])
   return values.length ? `IF ${refOf(field)} IN (${values.map(litOf).join(', ')}) THEN 'In' ELSE 'Out' END` : "'Out'"
 }
 
+/** The table of a computed set's members (built by the query compiler from the set's condition or top N). */
+export const setTable = (id: string) => `set_${id.replace(/[^A-Za-z0-9_]/g, '_')}`
+
+/** A computed set (condition or top N): In when the value is among the members the query computes. */
+export function computedSetFormula(field: string, id: string): string {
+  return `IF ${refOf(field)} IN (SELECT k FROM "${setTable(id)}") THEN 'In' ELSE 'Out' END`
+}
+
+/** Two sets combined: members of either (union), of both (intersect), or of the first only (except). */
+export function combinedSetFormula(a: string, b: string, op: 'union' | 'intersect' | 'except'): string {
+  const cond = op === 'union' ? `${refOf(a)} = 'In' OR ${refOf(b)} = 'In'` : op === 'intersect' ? `${refOf(a)} = 'In' AND ${refOf(b)} = 'In'` : `${refOf(a)} = 'In' AND ${refOf(b)} = 'Out'`
+  return `IF ${cond} THEN 'In' ELSE 'Out' END`
+}
+
 export function groupFormula(field: string, groups: { name: string; values: (string | number | boolean)[] }[], other: boolean, text = true): string {
   const lit = litOf
   const ref = refOf(field)

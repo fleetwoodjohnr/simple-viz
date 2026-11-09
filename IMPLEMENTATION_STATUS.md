@@ -248,6 +248,8 @@ in regression, multiplicative seasonality, `.xlsb` files.
 
 Also done: viz in tooltip.
 
+Also done: computed sets (a condition such as `SUM([revenue]) > 1000`, or the top/bottom N by a measure), computed after context filters and before dimension filters as in Tableau, and combined sets (either, both, first only) — integration `charts` (against hand-written SQL, through the SQL gate), e2e `objects`. Trend models, reference distributions and boxes; damped trends and ARIMA (rows above).
+
 Not yet: tiled (automatic) dashboard layout beyond row/column containers; LOD expressions and table
 calculations on models; conditional and top-N sets; ARIMA; map tiles, geocoding of cities, Shapefile/KML; cloud
 warehouses (Snowflake, BigQuery, Databricks, Oracle, …).

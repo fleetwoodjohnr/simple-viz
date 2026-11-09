@@ -9,7 +9,7 @@
 
 import type { Agg, CalcField, Chart, ChartFilter, DateGrain, FieldRef, Parameter } from '../../shared/charts'
 import type { ColumnInfo } from '../../shared/engine-protocol'
-import { compileCalc, AGGREGATES, type Compiled, type Lod } from '../calc/compile'
+import { compileCalc, setTable, AGGREGATES, type Compiled, type Lod } from '../calc/compile'
 
 export type Role = 'x' | 'y' | 'color' | 'size' | 'label' | 'detail' | 'tooltip' | 'facet'
 
@@ -100,12 +100,13 @@ export function compileQuery(input: QueryInput): CompiledQuery {
   // ---- calculated fields used anywhere in the chart
   const compiled = new Map<string, Compiled>()
   let ci = 0
+  const compileWith = (formula: string, prefix: string) => compileCalc(substituteParams(formula, params), columns.map((x) => x.name), calcs.map((x) => ({ name: x.name, formula: substituteParams(x.formula, params) })), prefix, columns.filter((x) => /^(VARCHAR|TEXT|STRING)/i.test(x.type)).map((x) => x.name))
   const calcOf = (name: string): Compiled | null => {
     const c = calcBy.get(name.toLowerCase())
     if (!c) return null
     if (!compiled.has(c.name)) {
       try {
-        compiled.set(c.name, compileCalc(substituteParams(c.formula, params), columns.map((x) => x.name), calcs.map((x) => ({ name: x.name, formula: substituteParams(x.formula, params) })), `c${ci++}`, columns.filter((x) => /^(VARCHAR|TEXT|STRING)/i.test(x.type)).map((x) => x.name)))
+        compiled.set(c.name, compileWith(c.formula, `c${ci++}`))
       } catch (e) {
         throw new QueryError(`Calculated field “${c.name}”: ${(e as Error).message}`)
       }
@@ -159,6 +160,40 @@ export function compileQuery(input: QueryInput): CompiledQuery {
   }
   for (const f of fields) collect(f.ref.field)
   for (const f of [...chart.filters, ...(input.extra ?? [])]) collect(f.field)
+
+  // Computed sets (members meeting a condition, or the top N): a table of members built after the context filters and
+  // before the dimension filters, where Tableau computes sets. Conditions are compiled now so their FIXED LODs are
+  // computed with the others.
+  const setTables: { table: string; sql: () => string }[] = []
+  for (const c of calcs) {
+    const s = c.set
+    if (!usedCalcs.has(c.name.toLowerCase()) || !s || (!s.condition && !s.top)) continue
+    let having = ''
+    if (s.condition) {
+      let cond: Compiled
+      try {
+        cond = compileWith(s.condition, `s${ci++}`)
+      } catch (e) {
+        throw new QueryError(`Set “${c.name}”: ${(e as Error).message}`)
+      }
+      if (cond.kind !== 'aggregate' || cond.tcs.length || cond.totals.length) throw new QueryError(`Set “${c.name}”: the condition must aggregate, e.g. SUM([Sales]) > 1000.`)
+      if (cond.lods.some((l) => l.kind !== 'fixed')) throw new QueryError(`Set “${c.name}”: only FIXED level-of-detail expressions can be used in a set’s condition.`)
+      compiled.set(`\u0000set ${c.name}`, cond)
+      having = cond.expr
+    }
+    const top = s.top
+    const by = top && calcOf(top.by)
+    if (top && by && by.kind !== 'row' && by.kind !== 'aggregate') throw new QueryError(`Set “${c.name}”: “${top.by}” can’t rank the members.`)
+    setTables.push({
+      table: setTable(c.id),
+      sql: () => {
+        const k = inlineExpr(s.field)
+        if (!top) return `SELECT ${k} AS k FROM base0 GROUP BY 1 HAVING ${having}`
+        const byExpr = by && by.kind === 'aggregate' ? by.expr : AGG_SQL[top.agg ?? 'sum'](inlineExpr(top.by))
+        return `SELECT ${k} AS k FROM base0 GROUP BY 1 ORDER BY ${byExpr} ${top.bottom ? 'ASC' : 'DESC'} NULLS LAST, 1 LIMIT ${Math.max(1, Math.floor(top.n))}`
+      }
+    })
+  }
 
   // Row-level calcs are columns (their expressions already inline other row calcs). Those using INCLUDE/EXCLUDE
   // values come after the dimension filters, where those values are computed.
@@ -302,7 +337,8 @@ export function compileQuery(input: QueryInput): CompiledQuery {
   const raw = input.mode === 'raw' || (!dims.length && !measures.length)
   const ordered = orderBy(chart, fields)
 
-  let sql = `WITH base0 AS (\n  SELECT *${fixedCols.length ? `, ${fixedCols.join(', ')}` : ''}\n  FROM ${q(chart.dataset)}${context.length ? `\n  WHERE ${context.join(' AND ')}` : ''}\n),\nbase AS (\n  SELECT *${rowCalcCols.length ? `, ${rowCalcCols.join(', ')}` : ''} FROM base0\n)`
+  const sets = setTables.map((t) => `${q(t.table)} AS (\n  ${t.sql()}\n),\n`).join('')
+  let sql = `WITH base0 AS (\n  SELECT *${fixedCols.length ? `, ${fixedCols.join(', ')}` : ''}\n  FROM ${q(chart.dataset)}${context.length ? `\n  WHERE ${context.join(' AND ')}` : ''}\n),\n${sets}base AS (\n  SELECT *${rowCalcCols.length ? `, ${rowCalcCols.join(', ')}` : ''} FROM base0\n)`
   // Top-N filters keep the dimension values with the highest measure (after context filters, before others).
   const topWhere = topFilters.map((f) => {
     const by = f.top!.by

@@ -103,6 +103,7 @@ export function compileModelQuery(input: { chart: Pick<Chart, 'enc' | 'filters' 
   const calcOf = (name: string) => {
     const c = calcs.find((x) => x.name.toLowerCase() === name.toLowerCase())
     if (!c) return null
+    if (c.set?.condition || c.set?.top) throw new QueryError(`“${c.name}”: sets computed from a condition or a ranking work on datasets, not models yet. Pick its members instead.`)
     if (!calcCache.has(c.name)) {
       try {
         const sub = (f: string) => substituteParams(f, params)

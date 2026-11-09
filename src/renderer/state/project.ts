@@ -470,5 +470,5 @@ export function setParam(name: string, value: unknown) {
 
 /** Replaces a set's members (a set action), regenerating its formula. */
 export function setSetValues(name: string, values: (string | number | boolean)[]) {
-  edit((p) => ({ ...p, calcs: p.calcs.map((c) => (c.set && c.name.toLowerCase() === name.toLowerCase() ? { ...c, set: { ...c.set, values }, formula: setFormula(c.set.field, values) } : c)) }))
+  edit((p) => ({ ...p, calcs: p.calcs.map((c) => (c.set && c.name.toLowerCase() === name.toLowerCase() ? { ...c, set: { field: c.set.field, values }, formula: setFormula(c.set.field, values) } : c)) }))
 }

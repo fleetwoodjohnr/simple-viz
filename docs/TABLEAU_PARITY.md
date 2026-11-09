@@ -33,7 +33,7 @@ _Checked against Tableau's documentation on 8 November 2026._
 | [Parameters](https://help.tableau.com/current/pro/desktop/en-us/parameters_create.htm) | Number, text, date, yes/no, with lists; in formulas (and so in calculated filters), reference lines, dashboard controls and parameter actions | ◐ Filters can't bind to a parameter directly (use a calculated field); no range limits in the control |
 | [Hierarchies](https://help.tableau.com/current/pro/desktop/en-us/qs_hierarchies.htm) | Drill paths saved and reused; drill down/up on dashboards | ✅ |
 | [Groups](https://help.tableau.com/current/pro/desktop/en-us/sortgroup_groups_creating.htm) | Field menu → Create group…: tick values, name the group (the rest keep their names or become Other); saved as an editable calculated field | ◐ Not by selecting marks in the chart |
-| [Sets](https://help.tableau.com/current/pro/desktop/en-us/sortgroup_sets_create.htm) | Field menu → Create set…: chosen members are In, the rest Out (a field for shelves and filters); set actions change the members | ◐ No conditional or top-N sets, no combined sets |
+| [Sets](https://help.tableau.com/current/pro/desktop/en-us/sortgroup_sets_create.htm), [combined sets](https://help.tableau.com/current/pro/desktop/en-us/sortgroup_sets_combine.htm) | Field menu → Create set…: picked members, a condition (`SUM([Sales]) > 1000`) or the top/bottom N by a measure, computed after context filters; two sets combined (either, both, first only); set actions change the members | ◐ Computed sets on datasets (models: picked members) |
 
 ## Charts and analytics
 

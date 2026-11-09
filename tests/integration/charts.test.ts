@@ -3,6 +3,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { bootEngine, expected, fileSource, fixture, rows } from './helpers'
 import { compileQuery, type QueryInput } from '../../src/core/query/compile'
+import { computedSetFormula, combinedSetFormula, setFormula } from '../../src/core/calc/compile'
 import { plugin } from '../../src/core/charts/plugins'
 import { corrWrap, cohortWrap, densityWrap } from '../../src/core/charts/more'
 import type { Engine } from '../../src/engine/engine'
@@ -208,5 +209,35 @@ describe('chart queries', () => {
     const bins = await rows(engine, densityWrap(de.sql, { hasCat: true }))
     const bySeg = await rows(engine, 'SELECT segment, count(revenue) AS n FROM sales GROUP BY 1')
     for (const s of bySeg) expect(bins.filter((b) => b.g === s.segment).reduce((a, b) => a + Number(b.n), 0)).toBe(Number(s.n))
+  })
+
+  it('computed sets: top N and conditions, membership after context filters and before dimension filters; combined sets', async () => {
+    const top: CalcField = { id: 'top-products', dataset: 'sales', name: 'Top products', formula: computedSetFormula('product_name', 'top-products'), set: { field: 'product_name', values: [], top: { n: 3, by: 'revenue', agg: 'sum' } } }
+    const out = await run({ enc: { x: [dim('Top products')], y: [sum('revenue')] } }, [top])
+    const [ref] = await rows(engine, `WITH t AS (SELECT product_name FROM sales GROUP BY 1 ORDER BY sum(revenue) DESC LIMIT 3) SELECT sum(revenue) FILTER (WHERE product_name IN (SELECT * FROM t)) AS i, sum(revenue) FILTER (WHERE product_name NOT IN (SELECT * FROM t)) AS o FROM sales`)
+    near(out.find((r) => r.d0 === 'In')!.m0, Number(ref.i))
+    near(out.find((r) => r.d0 === 'Out')!.m0, Number(ref.o))
+    // A dimension filter doesn't change the members; a context filter does.
+    const tx = await run({ enc: { x: [dim('Top products')], y: [sum('revenue')] }, filters: [{ id: 'f', field: 'region', op: 'in', values: ['Texas'] }] }, [top])
+    const [refTx] = await rows(engine, `WITH t AS (SELECT product_name FROM sales GROUP BY 1 ORDER BY sum(revenue) DESC LIMIT 3) SELECT sum(revenue) FILTER (WHERE product_name IN (SELECT * FROM t)) AS i FROM sales WHERE region = 'Texas'`)
+    near(tx.find((r) => r.d0 === 'In')!.m0, Number(refTx.i))
+    const ctx = await run({ enc: { x: [dim('Top products')], y: [sum('revenue')] }, filters: [{ id: 'f', field: 'region', op: 'in', values: ['Texas'], context: true }] }, [top])
+    const [refCtx] = await rows(engine, `WITH s AS (SELECT * FROM sales WHERE region = 'Texas'), t AS (SELECT product_name FROM s GROUP BY 1 ORDER BY sum(revenue) DESC LIMIT 3) SELECT sum(revenue) FILTER (WHERE product_name IN (SELECT * FROM t)) AS i FROM s`)
+    near(ctx.find((r) => r.d0 === 'In')!.m0, Number(refCtx.i))
+    // A condition: regions selling more than the average region.
+    const [{ avg }] = await rows(engine, 'SELECT avg(s) AS avg FROM (SELECT sum(revenue) s FROM sales GROUP BY region)')
+    const big: CalcField = { id: 'big', dataset: 'sales', name: 'Big regions', formula: computedSetFormula('region', 'big'), set: { field: 'region', values: [], condition: `SUM([revenue]) > ${Number(avg)}` } }
+    const members = (await run({ enc: { x: [dim('region')], y: [sum('revenue')] }, filters: [{ id: 'f', field: 'Big regions', op: 'in', values: ['In'] }] }, [big])).map((r) => r.d0)
+    const refBig = (await rows(engine, `SELECT region FROM sales GROUP BY 1 HAVING sum(revenue) > ${Number(avg)} ORDER BY 1`)).map((r) => r.region)
+    expect(members).toEqual(refBig)
+    expect(() => compileQuery({ chart: { dataset: 'sales', type: 'bar', filters: [], options: {}, enc: { x: [dim('Bad')], y: [], detail: [], tooltip: [] } }, columns: columns(), calcs: [{ ...big, name: 'Bad', set: { ...big.set!, condition: '[revenue] > 1' } }] })).toThrow(/must aggregate/)
+    // Combined: Texas or Virginia with Virginia or California, and the other two operations.
+    const a: CalcField = { id: 'a', dataset: 'sales', name: 'A', formula: setFormula('region', ['Texas', 'Virginia']), set: { field: 'region', values: ['Texas', 'Virginia'] } }
+    const b: CalcField = { id: 'b', dataset: 'sales', name: 'B', formula: setFormula('region', ['Virginia', 'California']), set: { field: 'region', values: ['Virginia', 'California'] } }
+    for (const [op, want] of [['union', ['California', 'Texas', 'Virginia']], ['intersect', ['Virginia']], ['except', ['Texas']]] as const) {
+      const comb: CalcField = { id: 'ab', dataset: 'sales', name: 'AB', formula: combinedSetFormula('A', 'B', op), set: { field: 'region', values: [], combine: { a: 'A', b: 'B', op } } }
+      const got = (await run({ enc: { x: [dim('region')], y: [sum('revenue')] }, filters: [{ id: 'f', field: 'AB', op: 'in', values: ['In'] }] }, [a, b, comb])).map((r) => r.d0)
+      expect(got).toEqual(want)
+    }
   })
 })

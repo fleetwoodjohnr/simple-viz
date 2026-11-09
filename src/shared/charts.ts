@@ -135,6 +135,14 @@ export interface Chart {
   updatedAt: number
 }
 
+export interface SetDef {
+  field: string
+  values: (string | number | boolean)[]
+  condition?: string
+  top?: { n: number; by: string; agg: Agg; bottom?: boolean }
+  combine?: { a: string; b: string; op: 'union' | 'intersect' | 'except' }
+}
+
 export interface CalcField {
   id: string
   /** Relation it belongs to. */
@@ -142,8 +150,12 @@ export interface CalcField {
   name: string
   formula: string
   description?: string
-  /** A set: the member values of a dimension (the formula is generated from them: 'In' or 'Out'). */
-  set?: { field: string; values: (string | number | boolean)[] }
+  /**
+   * A set of a dimension's values, 'In' or 'Out' (Tableau's sets). Members are listed (`values`), or computed after
+   * context filters: those meeting an aggregate `condition` (e.g. SUM([Sales]) > 1000), or the `top` n by a measure.
+   * `combine` joins two sets of the same dimension. The formula is generated from these.
+   */
+  set?: SetDef
 }
 
 export interface Parameter {
