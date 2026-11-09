@@ -105,7 +105,7 @@ export function compileQuery(input: QueryInput): CompiledQuery {
     if (!c) return null
     if (!compiled.has(c.name)) {
       try {
-        compiled.set(c.name, compileCalc(substituteParams(c.formula, params), columns.map((x) => x.name), calcs.map((x) => ({ name: x.name, formula: substituteParams(x.formula, params) })), `c${ci++}`))
+        compiled.set(c.name, compileCalc(substituteParams(c.formula, params), columns.map((x) => x.name), calcs.map((x) => ({ name: x.name, formula: substituteParams(x.formula, params) })), `c${ci++}`, columns.filter((x) => /^(VARCHAR|TEXT|STRING)/i.test(x.type)).map((x) => x.name)))
       } catch (e) {
         throw new QueryError(`Calculated field “${c.name}”: ${(e as Error).message}`)
       }

@@ -53,6 +53,17 @@ describe('calculated field syntax', () => {
     expect(() => c("'unterminated")).toThrow(CalcError)
     expect(() => c('SUM([Sales]')).not.toThrow() // left for DuckDB to report
   })
+
+  it('joins text with + as Tableau does, next to a text value, text field or text function', () => {
+    const t = (f: string) => compileCalc(f, cols, [], 't', ['Region']).expr
+    expect(t("[Region] + ' – ' + [Region]")).toBe(`"Region" || ' – ' || "Region"`)
+    expect(t("STR([Sales]) + '%'")).toBe(`STR("Sales") || '%'`)
+    expect(t('UPPER([Region]) + LOWER([Region])')).toBe(`UPPER("Region") || LOWER("Region")`)
+    expect(t("'Q' + STR(SUM([Sales]) + 1)")).toBe(`'Q' || STR(SUM("Sales") + 1)`)
+    expect(t('[Sales] + [Profit] + 1')).toBe('"Sales" + "Profit" + 1')
+    expect(t("[Order Date] + '1 day'::INTERVAL")).toBe(`"Order Date" + '1 day'::INTERVAL`)
+    expect(t("'a+b' + [Sales]")).toBe(`'a+b' || "Sales"`)
+  })
 })
 
 describe('query helpers', () => {

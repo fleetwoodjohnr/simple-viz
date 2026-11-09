@@ -67,6 +67,12 @@ describe('chart queries', () => {
     out.forEach((r, i) => near(r.m0, ref[i].m as number, 1e-9))
   })
 
+  it('+ joins text, as in Tableau', async () => {
+    const out = await run({ enc: { x: [dim('Label')], y: [sum('revenue')] } }, [calc('Label', "[region] + ' / ' + UPPER([segment])")])
+    const ref = await rows(engine, `SELECT region || ' / ' || upper(segment) AS l, sum(revenue) r FROM sales GROUP BY 1 ORDER BY 1`)
+    expect(out.map((r) => r.d0)).toEqual(ref.map((r) => r.l))
+  })
+
   it('INCLUDE: averages the per-customer values, not the records', async () => {
     const out = await run({ enc: { x: [dim('region')], y: [{ field: 'Customer revenue', agg: 'avg' }] } }, [calc('Customer revenue', '{INCLUDE [customer_id] : SUM([revenue])}')])
     const ref = await rows(engine, 'SELECT region, avg(s) a FROM (SELECT region, customer_id, sum(revenue) s FROM sales GROUP BY ALL) GROUP BY region ORDER BY region')

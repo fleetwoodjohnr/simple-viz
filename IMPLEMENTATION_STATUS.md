@@ -79,7 +79,7 @@ Linux, Windows and macOS._
 
 ### Known limitations
 
-- Tableau's `+` for joining text is not supported (use `||`); no densification of missing marks.
+- `+` joins text when the operand next to it is a quoted value, a text field or a text function; next to a calculated field returning text use `||`. No densification of missing marks.
 - Table calculations "compute using" the x-axis dimensions (other dimensions are panes); there is no UI to change it yet.
 - Calculated fields can't reference table calculations.
 

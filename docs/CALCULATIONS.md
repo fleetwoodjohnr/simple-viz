@@ -55,8 +55,14 @@ table calculations → sorting and limits. Mark a filter as a context filter to 
 A parameter is a value the reader picks: a number, text, date or yes/no, optionally from a list of allowed values. Use it in a formula as `[Parameter Name]`,
 in a filter, or in a reference line.
 
+## Joining text
+
+`+` joins text as in Tableau — `[First name] + ' ' + [Last name]`, `STR([Year]) + '%'` — when the value next to it is
+text: a quoted value, a text field, or a text function (`STR`, `UPPER`, `LEFT`, `MID`, `TRIM`, `REPLACE`…). For
+anything else, such as another calculated field that returns text, use `||` or `concat()`.
+
 ## Not supported (yet)
 
-String concatenation with `+` (use `||` or `concat`), Tableau's data densification (filling missing marks), and
+Tableau's data densification (filling missing marks), and
 table calculations "compute using" an arbitrary set of fields (they compute along the chart's first axis, partitioned
 by the other dimensions).

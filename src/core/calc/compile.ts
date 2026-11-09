@@ -76,11 +76,16 @@ interface Ctx {
   prefix: string
   seq: { n: number }
   stack: string[]
+  /** Text columns (lower case): `+` next to one joins text, as in Tableau. */
+  text: Set<string>
 }
 
+/** Functions returning text: `+` next to a call of one joins text. */
+const TEXT_FNS = new Set(['str', 'upper', 'lower', 'ucase', 'lcase', 'left', 'right', 'mid', 'trim', 'ltrim', 'rtrim', 'replace', 'concat', 'substr', 'substring', 'lpad', 'rpad', 'repeat', 'reverse', 'strftime', 'monthname', 'dayname'])
+
 /** Compiles one calculated field. `calcs`: every calculated field of the dataset (for references between them). */
-export function compileCalc(formula: string, columns: string[], calcs: CalcSource[], prefix = 'c'): Compiled {
-  const ctx: Ctx = { columns: new Map(columns.map((c) => [c.toLowerCase(), c])), calcs: new Map(calcs.map((c) => [c.name.toLowerCase(), c])), prefix, seq: { n: 0 }, stack: [] }
+export function compileCalc(formula: string, columns: string[], calcs: CalcSource[], prefix = 'c', textColumns: string[] = []): Compiled {
+  const ctx: Ctx = { columns: new Map(columns.map((c) => [c.toLowerCase(), c])), calcs: new Map(calcs.map((c) => [c.name.toLowerCase(), c])), prefix, seq: { n: 0 }, stack: [], text: new Set(textColumns.map((c) => c.toLowerCase())) }
   return compile(formula, ctx)
 }
 
@@ -94,6 +99,23 @@ function compile(formula: string, ctx: Ctx): Compiled {
   let i = 0
   const n = s.length
   const id = (kind: string) => `__${ctx.prefix}_${kind}${ctx.seq.n++}`
+  // Tableau's `+` joins text: it becomes || when the operand on either side is text — a quoted value, a text field
+  // or a call of a text function (STR, UPPER, LEFT…). Only the neighbouring operand is looked at.
+  let prevText = false
+  let textCall = false
+  const parens: boolean[] = []
+  const isText = (k: number): boolean => {
+    while (k < n && /\s/.test(s[k])) k++
+    // A quoted value, unless it is cast ('1 day'::INTERVAL).
+    if (s[k] === "'") return !/^'(?:[^']|'')*'\s*::/.test(s.slice(k))
+    if (s[k] === '[' || s[k] === '"') {
+      const j = s[k] === '[' ? closing(s, k, '[', ']') : s.indexOf('"', k + 1)
+      const r = j > k ? resolve(s.slice(k + 1, j).replace(/\]\]/g, ']'), ctx) : null
+      return r?.kind === 'column' && ctx.text.has(r.name.toLowerCase())
+    }
+    const w = /^([A-Za-z_]\w*)\s*\(/.exec(s.slice(k))
+    return !!w && TEXT_FNS.has(w[1].toLowerCase())
+  }
 
   while (i < n) {
     const ch = s[i]
@@ -106,6 +128,7 @@ function compile(formula: string, ctx: Ctx): Compiled {
       }
       if (j >= n) throw new CalcError(ch === "'" ? 'A text value is missing its closing quote.' : 'A name in double quotes is missing its closing quote.', i)
       if (ch === '"') addDep(s.slice(i + 1, j).replace(/""/g, '"'), ctx, out)
+      prevText = ch === "'" || ctx.text.has(s.slice(i + 1, j).replace(/""/g, '"').toLowerCase())
       expr += s.slice(i, j + 1)
       i = j + 1
       continue
@@ -127,6 +150,7 @@ function compile(formula: string, ctx: Ctx): Compiled {
       const inner = s.slice(i + 1, j).replace(/\]\]/g, ']')
       const ref = resolve(inner, ctx)
       if (ref) {
+        prevText = ref.kind === 'column' && ctx.text.has(ref.name.toLowerCase())
         if (ref.kind === 'column') {
           expr += q(ref.name)
           addDep(ref.name, ctx, out)
@@ -204,11 +228,26 @@ function compile(formula: string, ctx: Ctx): Compiled {
         continue
       }
       if (call && AGGREGATES.has(lw)) hasAgg = true
+      prevText = false
+      textCall = call && TEXT_FNS.has(lw)
       expr += word
       i = j
       continue
     }
-    expr += ch
+    if (ch === '+') {
+      expr += prevText || isText(i + 1) ? '||' : '+'
+      prevText = false
+    } else if (ch === '(') {
+      parens.push(textCall)
+      expr += ch
+    } else if (ch === ')') {
+      prevText = parens.pop() ?? false
+      expr += ch
+    } else {
+      if (!/\s/.test(ch)) prevText = false
+      expr += ch
+    }
+    if (!/\s/.test(ch)) textCall = false
     i++
   }
 
