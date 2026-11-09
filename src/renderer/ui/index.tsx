@@ -95,6 +95,9 @@ export const MenuTrigger = DropdownMenu.Trigger
 
 const surface = 'pop-in z-[90] min-w-[180px] overflow-hidden rounded-xl border border-border bg-elev p-1 text-[13px] text-text shadow-[var(--shadow-pop)] outline-none'
 
+/** A menu taller than the room left in the window scrolls instead of running off screen. */
+const menuFit = 'max-h-[var(--radix-popper-available-height)] overflow-y-auto'
+
 export function MenuContent({ children, className, align = 'start', onCloseAutoFocus, onEscapeKeyDown, ...p }: ComponentProps<typeof DropdownMenu.Content>) {
   // After choosing an item, focus stays where the item put it (the document, a dialog) or returns to the
   // visible document — not to the trigger button — so the next keystroke goes into the text.
@@ -122,7 +125,7 @@ export function MenuContent({ children, className, align = 'start', onCloseAutoF
           ;(docEl ?? (opener?.isConnected ? opener : null))?.focus()
         }}
         {...p}
-        className={cx(surface, className)}
+        className={cx(surface, menuFit, className)}
       >
         {children}
       </DropdownMenu.Content>
@@ -166,7 +169,7 @@ export function SubMenu({ label, icon, children }: { label: ReactNode; icon?: Re
         <ChevronRight className="size-3.5 text-text-3" />
       </DropdownMenu.SubTrigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.SubContent sideOffset={4} collisionPadding={8} className={surface}>
+        <DropdownMenu.SubContent sideOffset={4} collisionPadding={8} className={cx(surface, menuFit)}>
           {children}
         </DropdownMenu.SubContent>
       </DropdownMenu.Portal>
