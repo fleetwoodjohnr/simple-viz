@@ -139,4 +139,13 @@ export interface Parameter {
   step?: number
 }
 
+/** A value for a parameter, converted to its type (null when it can't be). */
+export function coerceParam(p: Pick<Parameter, 'type'>, v: unknown): Parameter['value'] {
+  if (v === null || v === undefined || v === '') return null
+  if (p.type === 'number') return Number.isFinite(Number(v)) ? Number(v) : null
+  if (p.type === 'boolean') return v === true || v === 'true' || v === 1
+  if (p.type === 'date') return /^\d{4}-\d{2}-\d{2}/.test(String(v)) ? String(v).slice(0, 10) : null
+  return String(v)
+}
+
 export const emptyEncodings = (): Encodings => ({ x: [], y: [], detail: [], tooltip: [] })

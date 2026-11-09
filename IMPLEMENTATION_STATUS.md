@@ -98,6 +98,7 @@ Linux, Windows and macOS._
 | Cross-filtering by clicking marks, highlight actions, drill-through (go to dashboard with the selection), reset | unit `dashboard filtering`, e2e `dashboards` |
 | Drill-down through a field path (categories or date grains), drill up | e2e `dashboards` |
 | Saved views: the filter controls' choices kept under a name in the project, applied from the Views menu | e2e `objects` |
+| Parameters: created and edited in the chart builder; used in formulas (`[Parameters].[Name]`, `$Name`), as a reference line, through a dashboard control, and set by a parameter action | unit `parameters`, integration `charts`, e2e `objects` |
 | URL actions: a click on a mark opens a web or email address filled with its values (other schemes refused) | unit `URL actions`, e2e `objects` |
 | Sizes (desktop, laptop, tablet, phone, A4, Letter), fit-to-window, presentation mode with tabs | e2e `layout` (size preset keeps tiles inside, presentation and Escape), e2e `objects` (fit to window vs fixed size) |
 | Refresh on open, on file change, on focus, on a timer, per source; per-dashboard timer; status and stale badges; last good data kept | integration `engine`, `postgres`; e2e `acceptance` |

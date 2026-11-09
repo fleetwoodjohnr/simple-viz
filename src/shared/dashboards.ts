@@ -1,6 +1,6 @@
 // Dashboards as stored in a project (project.json → dashboards).
 
-export type ItemKind = 'chart' | 'text' | 'filter' | 'button' | 'image' | 'shape' | 'container'
+export type ItemKind = 'chart' | 'text' | 'filter' | 'button' | 'image' | 'shape' | 'container' | 'param'
 
 export interface DashItem {
   id: string
@@ -24,6 +24,8 @@ export interface DashItem {
   /** Image: a data URL (embedded in the project). */
   image?: string
   shape?: { fill: string; radius: number }
+  /** Parameter control: the parameter's name. */
+  param?: string
   container?: { direction: 'row' | 'column'; gap: number }
   /** Show the tile's title bar (charts). */
   showTitle?: boolean
@@ -32,12 +34,13 @@ export interface DashItem {
 export interface DashAction {
   id: string
   /** filter: selecting marks filters the targets; highlight: dims non-matching marks; navigate: opens a dashboard
-   *  with the selection applied (drill-through); url: opens a web page for the clicked mark. */
-  kind: 'filter' | 'highlight' | 'navigate' | 'url'
+   *  with the selection applied (drill-through); url: opens a web page for the clicked mark; param: sets a parameter
+   *  to the clicked mark's value of `fields[0]` (or its first field). */
+  kind: 'filter' | 'highlight' | 'navigate' | 'url' | 'param'
   /** Source chart item id, or '*' for every chart. */
   source: string
   /** Target chart item ids, or '*' for every other chart; for navigate, a dashboard id; for url, the address, with
-   *  {Field} (or Tableau's <Field>) replaced by the clicked mark's value. */
+   *  {Field} (or Tableau's <Field>) replaced by the clicked mark's value; for param, the parameter's name. */
   target: string
   /** Fields carried by the action; empty = every dimension of the clicked mark. */
   fields?: string[]

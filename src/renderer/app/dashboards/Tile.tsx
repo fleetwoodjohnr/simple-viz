@@ -79,7 +79,14 @@ export function ChartTile({ d, item, interactive }: { d: Dashboard; item: DashIt
       setDash((s) => ({ drill: { ...s.drill, [d.id]: { ...(s.drill[d.id] ?? {}), [item.id]: { level: lvl + 1, path: [...(drill?.path ?? []), v] } } } }))
       return
     }
-    // URL actions open their page; the click still filters and highlights.
+    // Parameter actions set a parameter to the clicked value; the click still filters and highlights.
+    for (const a of d.actions) {
+      if (a.kind !== 'param' || !a.target || (a.source !== '*' && a.source !== item.id)) continue
+      const want = a.fields?.[0]?.toLowerCase()
+      const hit = Object.entries(m.values).find(([f]) => !want || f.toLowerCase() === want)
+      if (hit) P.setParam(a.target, hit[1])
+    }
+    // URL actions open their page.
     for (const a of d.actions) {
       if (a.kind !== 'url' || !a.target.trim() || (a.source !== '*' && a.source !== item.id)) continue
       const url = actionUrl(a.target, m.values)
@@ -256,5 +263,31 @@ export function ButtonTile({ d, item, interactive }: { d: Dashboard; item: DashI
     <button onClick={run} className="flex h-full w-full items-center justify-center rounded-lg bg-accent px-3 text-[13px] font-semibold text-accent-fg hover:brightness-110" data-testid="dash-button">
       {b.label}
     </button>
+  )
+}
+
+/** A control for a parameter: a list of its allowed values, a yes/no switch, or an input (applied on Enter or leaving). */
+export function ParamTile({ item }: { item: DashItem }) {
+  const p = useApp((s) => s.project?.params.find((x) => x.name.toLowerCase() === (item.param ?? '').toLowerCase()))
+  if (!p) return <div className="flex h-full items-center justify-center p-2 text-[12px] text-text-3">Choose a parameter</div>
+  const value = p.value === null ? '' : String(p.value)
+  const commit = (v: string) => v !== value && P.setParam(p.name, v)
+  return (
+    <div className="flex h-full flex-col justify-center gap-1 p-2" data-testid={`param-control-${p.name}`}>
+      <span className="truncate text-[11.5px] font-semibold text-text-2">{p.name}</span>
+      {p.type === 'boolean' ? (
+        <input type="checkbox" aria-label={p.name} className="size-4 accent-[var(--accent)]" checked={p.value === true} onChange={(e) => P.setParam(p.name, e.target.checked)} />
+      ) : p.choices?.length ? (
+        <select aria-label={p.name} className={cx(inputCls, 'h-8')} value={value} onChange={(e) => commit(e.target.value)}>
+          {p.choices.map((c) => (
+            <option key={String(c)} value={String(c)}>
+              {String(c)}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input key={value} aria-label={p.name} type={p.type === 'number' ? 'number' : p.type === 'date' ? 'date' : 'text'} className={cx(inputCls, 'h-8')} defaultValue={value} onBlur={(e) => commit(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && commit(e.currentTarget.value)} />
+      )}
+    </div>
   )
 }

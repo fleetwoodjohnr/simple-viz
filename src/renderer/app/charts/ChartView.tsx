@@ -120,7 +120,16 @@ export function useChartData(chart: Chart | null, extra?: ChartFilter[], highlig
   }, [key])
 
   // Formatting-only changes (title, labels, legend…) don't re-query.
-  const data = useMemo(() => (state.data && chart ? { ...state.data, options: chart.options, highlight } : state.data), [state.data, chart?.options, highlight])
+  // Parameter reference lines take the parameter's current value.
+  const options = useMemo(() => {
+    if (!chart || !chart.options.refLines?.some((l) => l.kind === 'param')) return chart?.options
+    const value = (name?: string) => {
+      const v = Number(params?.find((p) => p.name.toLowerCase() === name?.toLowerCase())?.value ?? NaN)
+      return Number.isFinite(v) ? v : undefined
+    }
+    return { ...chart.options, refLines: chart.options.refLines.map((l) => (l.kind === 'param' ? { ...l, value: value(l.param), label: l.label ?? l.param } : l)) }
+  }, [chart, params])
+  const data = useMemo(() => (state.data && chart ? { ...state.data, options: options!, highlight } : state.data), [state.data, chart, options, highlight])
   return { ...state, data }
 }
 

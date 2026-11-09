@@ -5,6 +5,7 @@ import { get, set, toast } from './store'
 import { describe, holdRequestsUntil, onEngineConnected } from './engine'
 import { newProject as blankProject, newId, packProject, unpackProject } from '@/core/project/sviz'
 import { DEFAULT_REFRESH, FILE_FORMATS, PROJECT_EXTENSION, isRemotePath, isSheetFormat, toAlias, type Dataset, type FileSource, type Project, type Source } from '@/shared/project'
+import { coerceParam } from '@/shared/charts'
 import type { OpenedFile, RecoveryEntry } from '@/shared/ipc-types'
 import type { SourceStatus } from '@/shared/engine-protocol'
 
@@ -459,4 +460,9 @@ export function saveDataset(d: Omit<Dataset, 'id'> & { id?: string }): Dataset {
 
 export function removeDataset(id: string) {
   edit((p) => ({ ...p, datasets: p.datasets.filter((d) => d.id !== id) }))
+}
+
+/** Sets a parameter's current value (kept in the project, like Tableau's). */
+export function setParam(name: string, value: unknown) {
+  edit((p) => ({ ...p, params: p.params.map((x) => (x.name.toLowerCase() === name.toLowerCase() ? { ...x, value: coerceParam(x, value) } : x)) }))
 }

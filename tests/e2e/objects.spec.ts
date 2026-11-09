@@ -167,3 +167,51 @@ test('saved views: filter choices kept under a name and applied again', async ()
   expect(views.map((v: any) => [v.name, v.selections.region.values])).toEqual([['Texas only', ['Texas']]])
   await quit(app)
 })
+
+test('parameters: created in the chart builder, a reference line, a dashboard control, a parameter action', async () => {
+  test.setTimeout(180_000)
+  const { app, page } = await launch()
+  await salesProject(app, page, tempDir())
+  await page.getByTestId('nav-charts').click()
+  await page.getByTestId('new-chart-empty').click()
+  await page.getByTestId('chart-dataset').selectOption('sales_enriched')
+  for (const [field, shelf] of [['region', 'x'], ['revenue', 'y']]) {
+    await page.getByTestId(`field-${field}`).hover()
+    await page.getByTestId(`field-menu-${field}`).click()
+    await page.getByTestId(`add-to-${shelf}`).click()
+  }
+  for (const [name, type, value] of [['Threshold', 'number', '1000000'], ['Focus', 'text', '']]) {
+    await page.getByTestId('new-param').click()
+    await page.getByLabel('Parameter name').fill(name)
+    await page.getByLabel('Parameter type').selectOption(type)
+    await page.getByLabel('Parameter value').fill(value)
+    await page.getByTestId('param-save').click()
+  }
+  await expect(page.getByTestId('param-Threshold')).toContainText('1000000')
+  const lineAt = (scope: Page | Locator) =>
+    scope.locator('[data-testid=echart]').first().evaluate((el) => ((el as any).__echart.getOption().series[0].markLine?.data ?? []).map((x: any) => x.yAxis))
+  await page.getByLabel('Line at parameter').selectOption('Threshold')
+  await expect.poll(() => lineAt(page)).toEqual([1000000])
+
+  // On a dashboard: a control changes the value, and the line follows.
+  await page.getByTestId('nav-dashboards').click()
+  await page.getByTestId('new-dashboard-empty').click()
+  await page.locator('[data-testid^=palette-chart-]').first().click()
+  await page.getByTestId('add-param').click()
+  const control = page.getByTestId('param-control-Threshold').getByRole('spinbutton')
+  await control.fill('1500000')
+  await control.press('Enter')
+  const tile = page.locator('[data-testid=item-chart]').first()
+  await expect.poll(() => lineAt(tile)).toEqual([1500000])
+
+  // A parameter action: clicking a bar sets Focus to its region.
+  await page.getByTestId('mode-edit').click()
+  await page.getByRole('button', { name: 'Add action' }).click()
+  await page.getByLabel('Action kind').last().selectOption('param')
+  await page.getByLabel('Target parameter').selectOption('Focus')
+  await page.getByLabel('Value from field').fill('region')
+  await page.getByTestId('mode-view').click()
+  await clickBar(page, tile, 'Texas')
+  await expect.poll(() => page.evaluate(() => (window as any).__sv.get().project.params.find((p: any) => p.name === 'Focus').value)).toBe('Texas')
+  await quit(app)
+})

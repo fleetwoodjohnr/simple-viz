@@ -187,3 +187,17 @@ describe('URL actions', () => {
     expect(actionUrl('{region}', { region: 'javascript:alert(1)' })).toBeNull()
   })
 })
+
+import { coerceParam } from '@/shared/charts'
+
+describe('parameters', () => {
+  it('values are converted to the parameter type', () => {
+    expect(coerceParam({ type: 'number' }, '1500')).toBe(1500)
+    expect(coerceParam({ type: 'number' }, 'abc')).toBeNull()
+    expect(coerceParam({ type: 'text' }, 42)).toBe('42')
+    expect(coerceParam({ type: 'boolean' }, 'true')).toBe(true)
+    expect(coerceParam({ type: 'date' }, '2025-03-01T00:00:00')).toBe('2025-03-01')
+    expect(coerceParam({ type: 'date' }, 'March')).toBeNull()
+    expect(coerceParam({ type: 'number' }, '')).toBeNull()
+  })
+})

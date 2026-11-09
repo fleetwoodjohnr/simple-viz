@@ -16,11 +16,12 @@ import { FilterDialog } from './FilterDialog'
 import { askText } from '../Dialogs'
 import { CalcDialog } from './CalcDialog'
 import { GroupDialog } from './GroupDialog'
+import { ParamDialog } from './ParamDialog'
 import { fieldDefs, defaultRef, AGGS, GRAINS, type FieldDef } from './fields'
 import { PLUGINS, plugin, recommend } from '@/core/charts/plugins'
 import { AGG_LABEL, compileQuery, fieldTitle, isDate, isNumeric, type Role } from '@/core/query/compile'
 import { newId } from '@/core/project/sviz'
-import { emptyEncodings, type CalcField, type Chart, type ChartFilter, type ChartOptions, type FieldRef, type QuickCalc } from '@/shared/charts'
+import { emptyEncodings, type CalcField, type Chart, type ChartFilter, type ChartOptions, type FieldRef, type QuickCalc, type Parameter, type ReferenceLine } from '@/shared/charts'
 
 // ---------------------------------------------------------------- state
 
@@ -309,6 +310,8 @@ function FieldsPanel({ chart, fields, onAdd, onDataset, onCalc, onGroup }: { cha
   const relations = useApp((s) => s.relations)
   const models = useApp((s) => s.project!.models)
   const hierarchies = useApp((s) => s.project!.hierarchies)
+  const params = useApp((s) => s.project!.params)
+  const [paramEdit, setParamEdit] = useState<Parameter | 'new' | null>(null)
   const [q, setQ] = useState('')
   const shown = fields.filter((f) => !q || f.name.toLowerCase().includes(q.toLowerCase()))
   const group = (role: 'dim' | 'measure') => shown.filter((f) => f.role === role && !f.calc)
@@ -366,6 +369,24 @@ function FieldsPanel({ chart, fields, onAdd, onDataset, onCalc, onGroup }: { cha
             <FieldItem key={f.name} f={f} onAdd={onAdd} onEdit={() => onCalc(f.calc!)} />
           ))}
         </ul>
+        <div className="flex items-center justify-between px-1.5 pb-1 pt-3">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Parameters</span>
+          <IconBtn size="sm" label="New parameter" onClick={() => setParamEdit('new')} data-testid="new-param">
+            <Plus className="size-3.5" />
+          </IconBtn>
+        </div>
+        <ul>
+          {params.map((p) => (
+            <li key={p.id}>
+              <button onClick={() => setParamEdit(p)} className="flex h-7 w-full items-center gap-2 rounded-md px-1.5 text-left text-[12.5px] hover:bg-hover" data-testid={`param-${p.name}`} title={`In a formula: [Parameters].[${p.name}]`}>
+                <Icons.SlidersHorizontal className="size-3.5 text-[color:var(--chart-1)]" />
+                <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                <span className="truncate text-[11.5px] text-text-3">{p.value === null ? '—' : String(p.value)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        {paramEdit && <ParamDialog param={paramEdit === 'new' ? null : paramEdit} onClose={() => setParamEdit(null)} />}
       </div>
     </aside>
   )
@@ -708,6 +729,7 @@ function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fie
                 </button>
               ))}
             </div>
+            {cartesian && <ParamLine lines={lines} setLines={(refLines) => setO({ refLines })} />}
             {(chart.type === 'line' || chart.type === 'area') && chart.enc.x[0]?.grain && chart.enc.x[0].grain !== 'exact' && (
               <label className="mt-2 flex items-center gap-2 text-[12px] text-text-2">
                 <input type="checkbox" className="size-3.5 accent-[var(--accent)]" checked={!!o.forecast} onChange={(e) => setO({ forecast: e.target.checked ? { periods: 6 } : undefined })} data-testid="forecast-toggle" />
@@ -841,5 +863,25 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
       <span className="text-[12px] font-medium text-text-2">{label}</span>
       {children}
     </div>
+  )
+}
+
+/** A reference line at a number parameter's value (it moves when the parameter changes). */
+function ParamLine({ lines, setLines }: { lines: ReferenceLine[]; setLines: (l: ReferenceLine[]) => void }) {
+  const params = useApp((s) => s.project!.params).filter((p) => p.type === 'number')
+  if (!params.length) return null
+  const cur = lines.find((l) => l.kind === 'param')
+  return (
+    <label className="mt-2 flex items-center gap-2 text-[12px] text-text-2">
+      Line at
+      <select className={cx(inputCls, 'h-6 flex-1 px-1 text-[12px]')} aria-label="Line at parameter" value={cur?.param ?? ''} onChange={(e) => setLines([...lines.filter((l) => l.kind !== 'param'), ...(e.target.value ? [{ id: 'param', kind: 'param' as const, param: e.target.value }] : [])])}>
+        <option value="">no parameter</option>
+        {params.map((p) => (
+          <option key={p.id} value={p.name}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+    </label>
   )
 }

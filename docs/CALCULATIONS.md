@@ -52,8 +52,11 @@ table calculations → sorting and limits. Mark a filter as a context filter to 
 
 ## Parameters
 
-A parameter is a value the reader picks: a number, text, date or yes/no, optionally from a list of allowed values. Use it in a formula as `[Parameter Name]`,
-in a filter, or in a reference line.
+A parameter is a value the reader picks: a number, text, date or yes/no, optionally from a list of allowed values.
+Create one in the chart builder (Parameters → +). Use it in a formula as `[Parameters].[Name]` (or `$Name` when the
+name has no spaces) — for example `IF [Sales] >= [Parameters].[Threshold] THEN 'Above' ELSE 'Below' END`, which you
+can then filter or color by; draw a reference line at its value (Analytics → Line at); let readers change it with a
+parameter control on a dashboard; or set it by clicking a mark (a "Set a parameter" dashboard action).
 
 ## Groups
 

@@ -67,6 +67,17 @@ describe('chart queries', () => {
     out.forEach((r, i) => near(r.m0, ref[i].m as number, 1e-9))
   })
 
+  it('parameters in formulas: [Parameters].[Name] and $Name take the current value', async () => {
+    const params = [{ id: 'p', name: 'Threshold', type: 'number' as const, value: 5000 }]
+    const calcs = [calc('Size', "IF [revenue] >= [Parameters].[Threshold] THEN 'Big' ELSE 'Small' END"), calc('Big2', '[revenue] >= $Threshold')]
+    const out = await run({ enc: { x: [dim('Size')], y: [sum('revenue')] } }, calcs, { params })
+    const ref = await rows(engine, `SELECT CASE WHEN revenue >= 5000 THEN 'Big' ELSE 'Small' END AS s, sum(revenue) r FROM sales GROUP BY 1 ORDER BY 1`)
+    expect(out.map((r) => r.d0)).toEqual(ref.map((r) => r.s))
+    out.forEach((r, i) => near(r.m0, ref[i].r as number))
+    const two = await run({ enc: { x: [dim('Big2')], y: [sum('revenue')] } }, calcs, { params: [{ ...params[0], value: 1e12 }] })
+    expect(two.map((r) => r.d0)).toEqual([false])
+  })
+
   it('+ joins text, as in Tableau', async () => {
     const out = await run({ enc: { x: [dim('Label')], y: [sum('revenue')] } }, [calc('Label', "[region] + ' / ' + UPPER([segment])")])
     const ref = await rows(engine, `SELECT region || ' / ' || upper(segment) AS l, sum(revenue) r FROM sales GROUP BY 1 ORDER BY 1`)

@@ -8,7 +8,7 @@ import { useApp, set, get, toast } from '../../state/store'
 import * as P from '../../state/project'
 import { Btn, IconBtn, Menu, MenuContent, MenuItem, MenuSep, MenuTrigger, Segmented, Switch, Tip, cx, inputCls } from '../../ui'
 import { useDash, setDash, getDash, resetFilters, NO_SELECTIONS, NO_MARKS } from './runtime'
-import { ChartTile, TextTile, FilterTile, ButtonTile } from './Tile'
+import { ChartTile, TextTile, FilterTile, ButtonTile, ParamTile } from './Tile'
 import { ChartIcon, openChart } from '../charts/ChartBuilder'
 import { askText } from '../Dialogs'
 import { exportDashboardPdf, exportDashboardPng, exportDashboardHtml } from './export'
@@ -16,7 +16,7 @@ import { align, distribute, clampItem, snap, layoutContainer, findSlot, TEMPLATE
 import { newId } from '@/core/project/sviz'
 import { GRID, SIZES, type DashAction, type DashItem, type Dashboard, type Selections } from '@/shared/dashboards'
 
-const { LayoutDashboard, Bookmark, Plus, Copy, Star, Trash2, MoreHorizontal, Type, Filter, MousePointerClick, Image, Square, Columns3, Rows3, Lock, Unlock, Group, Ungroup, Eye, Pencil, Maximize, Download, RotateCcw, AlignLeft, AlignCenterHorizontal, AlignRight, AlignStartHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignHorizontalSpaceAround, AlignVerticalSpaceAround, X, FileText, FileCode2 } = Icons
+const { LayoutDashboard, Bookmark, Plus, Copy, Star, Trash2, MoreHorizontal, Type, Filter, MousePointerClick, Image, Square, Columns3, Rows3, Lock, Unlock, Group, Ungroup, Eye, Pencil, Maximize, Download, RotateCcw, AlignLeft, AlignCenterHorizontal, AlignRight, AlignStartHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignHorizontalSpaceAround, AlignVerticalSpaceAround, X, FileText, FileCode2, SlidersHorizontal } = Icons
 
 export function newDashboard(name: string, items: DashItem[] = []): Dashboard {
   return { id: newId(), name, size: { mode: 'fit', w: 1366, h: 768 }, items, actions: [{ id: newId(), kind: 'filter', source: '*', target: '*' }], updatedAt: Date.now() }
@@ -197,6 +197,11 @@ function Palette({ d }: { d: Dashboard }) {
         <PaletteBtn icon={<Square />} label="Shape" onClick={() => add({ kind: 'shape', w: 240, h: 160, shape: { fill: 'var(--accent-soft)', radius: 12 } })} testid="add-shape" />
         <PaletteBtn icon={<Columns3 />} label="Row layout" onClick={() => add({ kind: 'container', w: 640, h: 280, container: { direction: 'row', gap: GRID * 2 } })} testid="add-row" />
         <PaletteBtn icon={<Rows3 />} label="Column layout" onClick={() => add({ kind: 'container', w: 320, h: 480, container: { direction: 'column', gap: GRID * 2 } })} testid="add-column" />
+        <PaletteBtn icon={<SlidersHorizontal />} label="Parameter" onClick={() => {
+          const p = get().project?.params[0]
+          if (!p) return toast('Create a parameter first: Charts → Parameters → +', 'info')
+          add({ kind: 'param', w: 240, h: 72, param: p.name })
+        }} testid="add-param" />
       </div>
     </div>
   )
@@ -477,7 +482,7 @@ function Canvas({ d, edit, canvasRef }: { d: Dashboard; edit: boolean; canvasRef
               <div
                 key={it.id}
                 onPointerDown={(e) => start(e, raw)}
-                className={cx('absolute overflow-hidden rounded-xl', it.kind === 'chart' || it.kind === 'filter' ? 'bg-panel shadow-[0_0_0_1px_var(--border),0_1px_2px_rgb(0_0_0/0.04)]' : '', it.kind === 'container' && edit && 'border-2 border-dashed border-border-strong', isSel && 'ring-2 ring-accent', edit && !it.locked && 'cursor-move')}
+                className={cx('absolute overflow-hidden rounded-xl', it.kind === 'chart' || it.kind === 'filter' || it.kind === 'param' ? 'bg-panel shadow-[0_0_0_1px_var(--border),0_1px_2px_rgb(0_0_0/0.04)]' : '', it.kind === 'container' && edit && 'border-2 border-dashed border-border-strong', isSel && 'ring-2 ring-accent', edit && !it.locked && 'cursor-move')}
                 style={{ left: it.x, top: it.y, width: it.w, height: it.h, background: it.kind === 'shape' ? it.shape?.fill : undefined, borderRadius: it.kind === 'shape' ? it.shape?.radius : undefined, zIndex: isSel ? 3 : it.kind === 'shape' || it.kind === 'container' ? 0 : 1 }}
                 data-testid={`item-${it.kind}`}
                 data-item={it.id}
@@ -519,6 +524,8 @@ function ItemBody({ d, it, interactive }: { d: Dashboard; it: DashItem; interact
       return <FilterTile d={d} item={it} />
     case 'button':
       return <ButtonTile d={d} item={it} interactive={interactive} />
+    case 'param':
+      return <ParamTile item={it} />
     case 'image':
       return it.image ? <img src={it.image} alt="" className="h-full w-full object-contain" /> : null
     default:
@@ -568,7 +575,7 @@ function Properties({ d, sel }: { d: Dashboard; sel: DashItem[] }) {
           <Actions d={d} />
         </>
       ) : (
-        <Section title={{ chart: 'Chart', text: 'Text', filter: 'Filter control', button: 'Button', image: 'Image', shape: 'Shape', container: 'Layout container' }[one.kind]}>
+        <Section title={{ chart: 'Chart', text: 'Text', filter: 'Filter control', button: 'Button', image: 'Image', shape: 'Shape', container: 'Layout container', param: 'Parameter control' }[one.kind]}>
           {one.kind === 'chart' && (
             <>
               <label className="block text-[12px]">
@@ -604,6 +611,18 @@ function Properties({ d, sel }: { d: Dashboard; sel: DashItem[] }) {
                 <Segmented value={one.textStyle?.align ?? 'left'} onChange={(v) => setItem({ textStyle: { ...(one.textStyle ?? { size: 14 }), align: v } })} label="Align" options={[{ value: 'left', label: 'L' }, { value: 'center', label: 'C' }, { value: 'right', label: 'R' }]} />
               </Line>
             </>
+          )}
+          {one.kind === 'param' && (
+            <label className="block text-[12px]">
+              <span className="mb-1 block font-medium text-text-2">Parameter</span>
+              <select className={cx(inputCls, 'h-8 text-[12px]')} aria-label="Parameter" value={one.param ?? ''} onChange={(e) => setItem({ param: e.target.value })}>
+                {project.params.map((p) => (
+                  <option key={p.id} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           )}
           {one.kind === 'filter' && one.filter && (
             <>
@@ -697,11 +716,12 @@ function Actions({ d }: { d: Dashboard }) {
         {d.actions.map((a) => (
           <li key={a.id} className="rounded-lg bg-panel-2 p-2 text-[12px] shadow-[0_0_0_1px_var(--border)]">
             <div className="flex items-center gap-1.5">
-              <select aria-label="Action kind" className="h-7 flex-1 rounded-md border border-border bg-panel px-1 text-[12px]" value={a.kind} onChange={(e) => setActions((all) => all.map((x) => (x.id === a.id ? { ...x, kind: e.target.value as DashAction['kind'], target: e.target.value === 'navigate' ? (project.dashboards.find((y) => y.id !== d.id)?.id ?? '') : e.target.value === 'url' ? '' : '*' } : x)))}>
+              <select aria-label="Action kind" className="h-7 flex-1 rounded-md border border-border bg-panel px-1 text-[12px]" value={a.kind} onChange={(e) => setActions((all) => all.map((x) => (x.id === a.id ? { ...x, kind: e.target.value as DashAction['kind'], target: e.target.value === 'navigate' ? (project.dashboards.find((y) => y.id !== d.id)?.id ?? '') : e.target.value === 'url' ? '' : e.target.value === 'param' ? (project.params[0]?.name ?? '') : '*' } : x)))}>
                 <option value="filter">Filter</option>
                 <option value="highlight">Highlight</option>
                 <option value="navigate">Go to dashboard</option>
                 <option value="url">Open a web page</option>
+                <option value="param">Set a parameter</option>
               </select>
               <IconBtn size="sm" label="Remove action" onClick={() => setActions((all) => all.filter((x) => x.id !== a.id))}>
                 <X className="size-3.5" />
@@ -717,8 +737,19 @@ function Actions({ d }: { d: Dashboard }) {
                   </option>
                 ))}
               </select>{' '}
-              {a.kind === 'url' ? 'opens ' : 'to '}
-              {a.kind === 'url' ? (
+              {a.kind === 'url' ? 'opens ' : a.kind === 'param' ? 'sets ' : 'to '}
+              {a.kind === 'param' ? (
+                <>
+                  <select aria-label="Target parameter" className="h-6 rounded border border-border bg-panel px-0.5 text-[11.5px]" value={a.target} onChange={(e) => setActions((all) => all.map((x) => (x.id === a.id ? { ...x, target: e.target.value } : x)))}>
+                    {project.params.map((p) => (
+                      <option key={p.id} value={p.name}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input aria-label="Value from field" placeholder="to the clicked mark’s first field" title="The field whose clicked value the parameter takes" className="mt-1 h-7 w-full rounded border border-border bg-panel px-1.5 text-[11.5px]" value={a.fields?.[0] ?? ''} onChange={(e) => setActions((all) => all.map((x) => (x.id === a.id ? { ...x, fields: e.target.value.trim() ? [e.target.value.trim()] : undefined } : x)))} />
+                </>
+              ) : a.kind === 'url' ? (
                 <input aria-label="Web address" placeholder="https://example.com/?q={Region}" title="{Field} is replaced by the clicked mark’s value" className="mt-1 h-7 w-full rounded border border-border bg-panel px-1.5 text-[11.5px]" value={a.target} onChange={(e) => setActions((all) => all.map((x) => (x.id === a.id ? { ...x, target: e.target.value } : x)))} />
               ) : a.kind === 'navigate' ? (
                 <select aria-label="Target dashboard" className="h-6 rounded border border-border bg-panel px-0.5 text-[11.5px]" value={a.target} onChange={(e) => setActions((all) => all.map((x) => (x.id === a.id ? { ...x, target: e.target.value } : x)))}>
