@@ -92,11 +92,11 @@ Linux, Windows and macOS._
 | **Acceptance scenario, all 24 steps** (Excel + PostgreSQL → SQL dataset → charts → dashboard with a region filter → save → workbook changed → reopen with refreshed figures → dark/light → PDF → update check) | e2e `acceptance` |
 | Dashboard canvas: add from the palette (free spot), drag charts in, move, resize (8 handles), 8 px grid snap, undo/redo | e2e `dashboards` |
 | Align, distribute, group, lock, duplicate, delete; keyboard nudging | unit `charts › dashboard layout`, e2e `layout` |
-| Layout containers (row/column), text with live values (`{region}`), images, shapes, buttons (reset, refresh, go to dashboard, present) | unit `dynamic titles`, e2e `dashboards` (dynamic text); others manual |
+| Layout containers (row/column), text with live values (`{region}`), images, shapes, buttons (reset, refresh, go to dashboard, present) | unit `dynamic titles`, e2e `dashboards` (dynamic text), e2e `objects` (embedded image, shape, row layout arranging its items, reset button); refresh/go-to/present buttons manual |
 | Filter controls (list, dropdown, search, number range, date range) affecting every chart with the field | e2e `acceptance` |
 | Cross-filtering by clicking marks, highlight actions, drill-through (go to dashboard with the selection), reset | unit `dashboard filtering`, e2e `dashboards` |
 | Drill-down through a field path (categories or date grains), drill up | e2e `dashboards` |
-| Sizes (desktop, laptop, tablet, phone, A4, Letter), fit-to-window, presentation mode with tabs | e2e `layout` (size preset keeps tiles inside, presentation and Escape); fit-to-window manual |
+| Sizes (desktop, laptop, tablet, phone, A4, Letter), fit-to-window, presentation mode with tabs | e2e `layout` (size preset keeps tiles inside, presentation and Escape), e2e `objects` (fit to window vs fixed size) |
 | Refresh on open, on file change, on focus, on a timer, per source; per-dashboard timer; status and stale badges; last good data kept | integration `engine`, `postgres`; e2e `acceptance` |
 | Password asked again when the keychain can't keep it or the server refuses it | e2e `acceptance` (CI has no keychain) |
 | PDF export (exact page size, charts as images), PNG export | e2e `acceptance` (PDF, text checked with pdftotext), e2e `dashboards` (PNG) |
