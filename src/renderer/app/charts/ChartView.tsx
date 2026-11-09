@@ -18,6 +18,7 @@ import { tableSource, type Model, type Project } from '@/shared/project'
 import type { ColumnInfo, RelationInfo } from '@/shared/engine-protocol'
 import { DataGrid } from '../../ui/DataGrid'
 import { resolveMap, placeLocate } from './maps'
+import { tileLayer } from './tiles'
 import { cx } from '../../ui'
 
 echarts.use([BarChart, LineChart, PieChart, ScatterChart, HeatmapChart, TreemapChart, BoxplotChart, FunnelChart, GaugeChart, RadarChart, SankeyChart, GraphChart, SunburstChart, CandlestickChart, MapChart, CustomChart, GridComponent, LegendComponent, TooltipComponent, TitleComponent, VisualMapComponent, MarkLineComponent, MarkAreaComponent, AriaComponent, CalendarComponent, GeoComponent, RadarComponent, CanvasRenderer, SVGRenderer])
@@ -231,6 +232,9 @@ function EChart({ data, type, onMark, onHover }: { data: ChartData; type: string
   const accent = useApp((s) => s.settings.accent)
   const patterns = useApp((s) => s.settings.chartPatterns)
   const calm = useApp((s) => s.settings.reduceMotion)
+  const tiles = useApp((s) => s.settings.mapTiles)
+  const credit = useApp((s) => s.settings.mapTilesAttribution)
+  const layer = useRef<ReturnType<typeof tileLayer> | null>(null)
   const markRef = useRef(onMark)
   markRef.current = onMark
   const hoverRef = useRef(onHover)
@@ -244,7 +248,8 @@ function EChart({ data, type, onMark, onHover }: { data: ChartData; type: string
     inst.current = chart
     liveCharts.add(chart)
     ;(el as HTMLDivElement & { __echart?: echarts.ECharts }).__echart = chart
-    const ro = new ResizeObserver(() => chart.resize())
+    layer.current = tileLayer(chart)
+    const ro = new ResizeObserver(() => (chart.resize(), layer.current?.resize()))
     ro.observe(el)
     chart.on('click', (p) => {
       const row = (p.data as { row?: Value[] } | undefined)?.row
@@ -265,6 +270,7 @@ function EChart({ data, type, onMark, onHover }: { data: ChartData; type: string
     chart.on('globalout', () => hoverRef.current?.(null))
     return () => {
       ro.disconnect()
+      layer.current?.dispose()
       liveCharts.delete(chart)
       chart.dispose()
     }
@@ -276,14 +282,17 @@ function EChart({ data, type, onMark, onHover }: { data: ChartData; type: string
   const [drawError, setDrawError] = useState('')
   useEffect(() => {
     try {
-      const opt = plugin(type).option?.(data, readTheme(dark))
+      // Point maps over background tiles when a tile server is set (Settings → Data).
+      const withTiles = type === 'pointmap' && !!tiles && !!data.geo
+      const opt = plugin(type).option?.(withTiles ? { ...data, geo: { ...data.geo!, tiles: { attribution: credit } } } : data, readTheme(dark))
       if (opt) inst.current?.setOption(opt as echarts.EChartsCoreOption, { notMerge: true })
+      layer.current?.set(withTiles)
       setDrawError('')
     } catch (e) {
       inst.current?.clear()
       setDrawError((e as Error).message)
     }
-  }, [data, type, dark, accent, patterns, calm])
+  }, [data, type, dark, accent, patterns, calm, tiles, credit])
 
   return (
     <>

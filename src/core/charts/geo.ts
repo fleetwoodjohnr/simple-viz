@@ -94,3 +94,46 @@ export function placeLocator(places: PlaceRow[], zips?: Record<string, [number, 
     return hit ? [hit[5], hit[6]] : null
   }
 }
+
+// ---------------------------------------------------------------- background map tiles (Web Mercator)
+
+const MAX_LAT = 85.05112878
+/** Longitude/latitude → the Web Mercator square [0, 1]² that map tiles cut up (y down). */
+export const mercator = (lon: number, lat: number): [number, number] => {
+  const r = (Math.max(-MAX_LAT, Math.min(MAX_LAT, lat)) * Math.PI) / 180
+  return [(lon + 180) / 360, (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2]
+}
+export const unmercator = (x: number, y: number): [number, number] => [x * 360 - 180, (Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180) / Math.PI]
+
+/** ECharts geo projection matching the tiles. */
+export const MERCATOR = { project: (p: number[]) => mercator(p[0], p[1]), unproject: (p: number[]) => unmercator(p[0], p[1]) }
+
+/**
+ * The tiles covering a view: the zoom level whose 256 px tiles best fit the world's width on screen, and the tiles
+ * inside the view's Mercator bounds (at most `max`; fewer, coarser tiles beyond that).
+ */
+export function tilesFor(view: { x0: number; y0: number; x1: number; y1: number }, worldPx: number, max = 64): { z: number; tiles: { x: number; y: number }[] } {
+  let z = Math.max(0, Math.min(19, Math.round(Math.log2(Math.max(1, worldPx) / 256))))
+  for (;;) {
+    const n = 2 ** z
+    const clamp = (v: number) => Math.max(0, Math.min(n - 1, Math.floor(v * n)))
+    const [tx0, tx1, ty0, ty1] = [clamp(Math.min(view.x0, view.x1)), clamp(Math.max(view.x0, view.x1)), clamp(Math.min(view.y0, view.y1)), clamp(Math.max(view.y0, view.y1))]
+    if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) <= max || z === 0) {
+      const tiles: { x: number; y: number }[] = []
+      for (let y = ty0; y <= ty1; y++) for (let x = tx0; x <= tx1; x++) tiles.push({ x, y })
+      return { z, tiles }
+    }
+    z--
+  }
+}
+
+/** A tile server address: https (or http on this computer), with {z}, {x} and {y}. */
+export function validTileTemplate(t: string): boolean {
+  if (!/\{z\}/.test(t) || !/\{x\}/.test(t) || !/\{y\}/.test(t)) return false
+  try {
+    const u = new URL(t.replace(/\{[zxys]\}/g, '0'))
+    return u.protocol === 'https:' || (u.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname))
+  } catch {
+    return false
+  }
+}

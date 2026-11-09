@@ -67,7 +67,8 @@ const api: SimpleVizApi = {
   watchFiles: (paths) => ipcRenderer.invoke('files:watch', paths),
   confirmClose: () => void ipcRenderer.invoke('app:confirm-close'),
   checkForUpdates: () => ipcRenderer.invoke('update:check'),
-  appVersion: () => ipcRenderer.invoke('app:version')
+  appVersion: () => ipcRenderer.invoke('app:version'),
+  mapTile: (z, x, y) => ipcRenderer.invoke('maps:tile', z, x, y)
 }
 
 contextBridge.exposeInMainWorld('simpleViz', api)

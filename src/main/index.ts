@@ -11,6 +11,8 @@ import * as creds from './credentials'
 import { EngineHost } from './engine-host'
 import { watchFiles } from './watch'
 import { checkForUpdates, installIfRequested, scheduleUpdateCheck } from './updater'
+import { fetchTile, clearTiles } from './tiles'
+import { validTileTemplate } from '../core/charts/geo'
 import icon from '../../resources/icon.png?asset'
 
 const isMac = process.platform === 'darwin'
@@ -448,9 +450,13 @@ function registerIpc() {
   handle('recovery:remove', (_e, id: unknown) => (typeof id === 'string' ? store.removeRecovery(id) : undefined))
 
   handle('settings:get', () => store.getSettings())
+  handle('maps:tile', (_e, z: unknown, x: unknown, y: unknown) => fetchTile(z, x, y))
   handle('settings:set', async (_e, patch: Partial<Settings>) => {
     if (typeof patch !== 'object' || !patch) throw new Error('Invalid settings')
     if (patch.theme !== undefined && !['system', 'light', 'dark'].includes(patch.theme)) throw new Error('Invalid theme')
+    if (patch.mapTiles !== undefined && (typeof patch.mapTiles !== 'string' || (patch.mapTiles !== '' && !validTileTemplate(patch.mapTiles)))) throw new Error('A tile server address starts with https:// and has {z}, {x} and {y} in it.')
+    if (patch.mapTilesAttribution !== undefined && (typeof patch.mapTilesAttribution !== 'string' || patch.mapTilesAttribution.length > 300)) throw new Error('Invalid attribution')
+    if (patch.mapTiles !== undefined) clearTiles()
     const next = await store.setSettings(patch)
     if (patch.theme) nativeTheme.themeSource = next.theme
     if (patch.uiScale) mainWindow?.webContents.setZoomFactor(next.uiScale)

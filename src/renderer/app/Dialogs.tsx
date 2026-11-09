@@ -339,6 +339,14 @@ function SettingsDialog({ initial }: { initial?: string }) {
                 <input aria-label="Refresh time limit (seconds)" type="number" min={5} max={3600} className={cx(inputCls, 'w-24')} value={s.refreshTimeoutSec} onChange={(e) => updateSettings({ refreshTimeoutSec: Math.max(5, Number(e.target.value) || 60) })} />
               </Row>
               <p className="py-2.5 text-[12px] leading-relaxed text-text-3">When to refresh (on open, when a file changes, when you return to the app, every few minutes) is set per source, in Data → the source’s menu.</p>
+              <Row label="Background map tiles" hint="Point maps draw over tiles from this server (an address with {z}, {x} and {y}). Off when empty: maps then make no requests. The server sees which areas you look at; follow its usage terms.">
+                <input aria-label="Map tile server" placeholder="https://tile.openstreetmap.org/{z}/{x}/{y}.png" className={cx(inputCls, 'w-72 text-[12px]')} defaultValue={s.mapTiles} onBlur={(e) => e.target.value.trim() !== s.mapTiles && updateSettings({ mapTiles: e.target.value.trim() }).catch((err: Error) => toast(err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), 'error'))} data-testid="map-tiles" />
+              </Row>
+              {s.mapTiles && (
+                <Row label="Map credit" hint="Shown on the map, as tile providers require (e.g. © OpenStreetMap contributors)">
+                  <input aria-label="Map credit" className={cx(inputCls, 'w-72 text-[12px]')} defaultValue={s.mapTilesAttribution} onBlur={(e) => updateSettings({ mapTilesAttribution: e.target.value.trim() })} data-testid="map-tiles-credit" />
+                </Row>
+              )}
             </>
           )}
           {section === 'backup' && (
@@ -357,7 +365,7 @@ function SettingsDialog({ initial }: { initial?: string }) {
                 {keychain?.secure ? <ShieldCheck className="size-5 text-success" /> : <ShieldAlert className="size-5 text-warn" />}
               </Row>
               <div className="space-y-2 py-3 text-[12.5px] leading-relaxed text-text-2">
-                <p>Your data stays on this computer. Simple Viz has no account and sends no telemetry. It connects only to the databases you add, and to GitHub for the update check (which you can turn off under About and updates).</p>
+                <p>Your data stays on this computer. Simple Viz has no account and sends no telemetry. It connects only to the databases you add, to GitHub for the update check (which you can turn off under About and updates), and to a map tile server if you set one (off by default).</p>
                 <p>Queries only read data: SQL that would change a database or a file is refused. Macros in spreadsheets never run. Project files never contain passwords.</p>
               </div>
             </>

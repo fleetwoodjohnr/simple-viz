@@ -86,7 +86,12 @@ export function toast(message: string, kind: Toast['kind'] = 'info') {
 }
 
 export async function updateSettings(patch: Partial<Settings>) {
+  const prev = get().settings
   set((s) => ({ settings: { ...s.settings, ...patch } }))
-  const next = await window.simpleViz.settingsSet(patch)
-  set({ settings: next })
+  try {
+    set({ settings: await window.simpleViz.settingsSet(patch) })
+  } catch (e) {
+    set({ settings: prev }) // refused (e.g. an invalid tile server address): back to what was saved
+    throw e
+  }
 }

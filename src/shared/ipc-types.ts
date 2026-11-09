@@ -54,6 +54,10 @@ export interface Settings {
   /** Width of the side panels (fields, schema), in px. */
   panelWidth: number
   onboarded: boolean
+  /** Background tiles for point maps: a tile server's address with {z}/{x}/{y} ('' = off: no map requests). */
+  mapTiles: string
+  /** The tile provider's required credit, shown on the map. */
+  mapTilesAttribution: string
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -72,7 +76,9 @@ export const DEFAULT_SETTINGS: Settings = {
   lastUpdateCheck: 0,
   navCollapsed: false,
   panelWidth: 260,
-  onboarded: false
+  onboarded: false,
+  mapTiles: '',
+  mapTilesAttribution: ''
 }
 
 /** What the connection dialog sends to test a database or list its tables. The password goes to the keychain. */
@@ -152,6 +158,8 @@ export interface SimpleVizApi {
   confirmClose(): void
   checkForUpdates(): Promise<void>
   appVersion(): Promise<string>
+  /** A background map tile from the tile server in Settings (null when tiles are off or the server has none). */
+  mapTile(z: number, x: number, y: number): Promise<{ type: string; data: Uint8Array } | null>
 }
 
 export type { EngineConfig }

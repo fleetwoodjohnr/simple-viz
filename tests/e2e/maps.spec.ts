@@ -4,6 +4,8 @@
 import { type Page } from '@playwright/test'
 import path from 'node:path'
 import { readFileSync } from 'node:fs'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { test, expect, launch, quit, salesProject, tempDir, stubDialogs, fixture, sql } from './helpers'
 
 const exp = JSON.parse(readFileSync(path.resolve('tests/fixtures/expected.json'), 'utf8'))
@@ -167,5 +169,38 @@ test('more chart types draw; maps match areas; custom GeoJSON; small multiples',
   const richmond = d.option.series[0].data.find((p: any) => p.value[0] === -77.452)
   expect(richmond.value.slice(0, 2)).toEqual([-77.452, 37.552])
   expect(Math.abs(richmond.value[2] - exp.v1.revenueByRegion.Virginia)).toBeLessThan(0.01)
+
+  // Background tiles from a tile server (a local one here): requested through the app, drawn under the points, with
+  // the provider's credit; none without a server.
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR4nGP8z8DAwMDAxMDAwMAAAA4EAgFZu6v8AAAAAElFTkSuQmCC', 'base64')
+  const asked: string[] = []
+  const server = createServer((req, res) => (asked.push(req.url ?? ''), res.writeHead(200, { 'Content-Type': 'image/png' }), res.end(PNG)))
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
+  try {
+    const port = (server.address() as AddressInfo).port
+    await page.getByRole('button', { name: 'Settings' }).first().click()
+    await page.getByRole('button', { name: 'Data and refresh' }).click()
+    await page.getByTestId('map-tiles').fill('http://tiles.example.com/{z}/{x}/{y}.png')
+    await page.getByTestId('map-tiles').blur()
+    await expect(page.getByText('A tile server address starts with https://')).toBeVisible()
+    await page.getByTestId('map-tiles').fill(`http://127.0.0.1:${port}/{z}/{x}/{y}.png`)
+    await page.getByTestId('map-tiles').blur()
+    await page.getByTestId('map-tiles-credit').fill('© Test tiles')
+    await page.getByTestId('map-tiles-credit').blur()
+    await page.keyboard.press('Escape')
+    const graphics = async () => ((await drawn(page)).option.graphic ?? []).flatMap((g: any) => g.elements ?? [g])
+    const tileIds = async () => (await graphics()).map((e: any) => String(e.id))
+    await expect.poll(async () => (await tileIds()).filter((id: string) => id.startsWith('tile:')).length, { timeout: 15_000 }).toBeGreaterThan(0)
+    expect(asked.every((u) => /^\/\d+\/\d+\/\d+\.png$/.test(u))).toBe(true)
+    expect(await tileIds()).toContain('credit')
+    const credit = (await graphics()).find((e: any) => e.id === 'credit')
+    expect([credit.type, credit.style.text]).toEqual(['text', '© Test tiles'])
+    // Off again: no tiles.
+    await page.evaluate(() => (window as any).__sv.get().settings && (window as any).simpleViz.settingsSet({ mapTiles: '' }))
+    await page.evaluate(() => (window as any).__sv.set((s: any) => ({ settings: { ...s.settings, mapTiles: '' } })))
+    await expect.poll(async () => (await tileIds()).filter((id: string) => id.startsWith('tile:')).length).toBe(0)
+  } finally {
+    server.close()
+  }
   await quit(app)
 })

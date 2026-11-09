@@ -71,6 +71,12 @@ Simple Viz contacts only the databases and web/cloud addresses the user adds and
 release feed for updates (downloads are checked against the release's SHA-512; installing always asks first). No
 telemetry.
 
+Background map tiles are off by default. When the user sets a tile server (Settings → Data and refresh), the main
+process fetches tiles from that address only: https (or http on this computer), tile coordinates checked as
+integers in range, images only (PNG, JPEG, WebP) up to 2 MB, a 15 s time limit, kept in memory. The window's content
+policy is unchanged (it still makes no network requests); tiles reach it as image data. The tile server learns which
+map areas are viewed, which the setting says.
+
 ## Dependencies
 
 CI runs `npm audit --omit=dev` (what ships) and CodeQL on every push. DuckDB extensions are pinned by SHA-256

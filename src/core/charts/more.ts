@@ -5,7 +5,7 @@
 import type { OutField } from '../query/compile'
 import { type ChartData, type Theme, type Value, col, dims, measures, fmt, esc, pivot, dimmed } from './data'
 import { type Option, base, axisStyle, legend, grid, rowTooltip, catLabels } from './option'
-import { normalizeName } from './geo'
+import { normalizeName, MERCATOR } from './geo'
 
 type Build = (d: ChartData, t: Theme) => Option
 const num = (v: Value) => (v === null || v === undefined || v === '' ? null : Number(v))
@@ -528,7 +528,8 @@ export const pointMap: Build = (d, t) => {
     ...base(t, d),
     legend: legend(d, t, groups.size),
     tooltip: rowTooltip(d, t),
-    geo: { map: d.geo.map, roam: true, top: d.options.title ? 48 : 12, bottom: 12, itemStyle: { areaColor: t.dark ? '#2a2a30' : '#ececf0', borderColor: t.dark ? '#18181b' : '#fff', borderWidth: 0.5 }, emphasis: { disabled: true }, silent: true },
+    // Over background tiles: Web Mercator (the tiles' projection), the areas only outlined.
+    geo: { map: d.geo.map, roam: true, top: d.options.title ? 48 : 12, bottom: 12, ...(d.geo.tiles ? { projection: MERCATOR } : {}), itemStyle: d.geo.tiles ? { areaColor: 'transparent', borderColor: 'rgba(0,0,0,0.15)', borderWidth: 0.5 } : { areaColor: t.dark ? '#2a2a30' : '#ececf0', borderColor: t.dark ? '#18181b' : '#fff', borderWidth: 0.5 }, emphasis: { disabled: true }, silent: true },
     series: [...groups].map(([name, rows]) => ({
       type: 'scatter',
       name: name || (byName ? place.title : lat?.title),
@@ -541,7 +542,11 @@ export const pointMap: Build = (d, t) => {
       })
     })),
     // Like Tableau's "unknown" indicator: values no place was found for.
-    ...(unknown ? { graphic: [{ type: 'text', right: 12, bottom: 10, style: { text: `${unknown.toLocaleString()} not found on the map`, fill: t.text2, fontSize: 11 } }] } : {})
+    graphic: [
+      ...(unknown ? [{ id: 'unknown', type: 'text', right: 12, bottom: 10, style: { text: `${unknown.toLocaleString()} not found on the map`, fill: t.text2, fontSize: 11 } }] : []),
+      // The tile provider's credit, as its terms require.
+      ...(d.geo.tiles ? [{ id: 'credit', type: 'text', left: 8, bottom: 6, z: 100, style: { text: d.geo.tiles.attribution || 'Map tiles', fill: t.text2, fontSize: 10, backgroundColor: t.dark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.75)', padding: [2, 4] } }] : [])
+    ]
   }
 }
 

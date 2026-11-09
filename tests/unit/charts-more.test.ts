@@ -175,3 +175,31 @@ describe('more chart types', () => {
     expect(JSON.stringify(o.grid)).not.toContain('calc(')
   })
 })
+
+import { mercator, unmercator, tilesFor, validTileTemplate } from '@/core/charts/geo'
+
+describe('background map tiles', () => {
+  it('Web Mercator: tile corners, round trips, the tiles of a view', () => {
+    expect(mercator(-180, 85.05112878)).toEqual([0, expect.closeTo(0, 9)])
+    expect(mercator(0, 0)).toEqual([0.5, expect.closeTo(0.5, 12)])
+    const [lon, lat] = unmercator(...mercator(-77.45, 37.55))
+    expect([lon, lat].map((v) => Math.round(v * 1e9) / 1e9)).toEqual([-77.45, 37.55])
+    // The whole world 512 px wide: zoom 1, its 4 tiles. A view of western Europe at 2^10 tiles' width: few tiles.
+    expect(tilesFor({ x0: 0, y0: 0, x1: 1, y1: 1 }, 512)).toEqual({ z: 1, tiles: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }] })
+    const [ax, ay] = mercator(-5, 52)
+    const [bx, by] = mercator(10, 42)
+    const v = tilesFor({ x0: ax, y0: ay, x1: bx, y1: by }, 256 * 2 ** 6)
+    expect(v.z).toBe(6)
+    expect(v.tiles).toContainEqual({ x: Math.floor(((2.35 + 180) / 360) * 64), y: Math.floor(mercator(2.35, 48.85)[1] * 64) }) // Paris
+    // Too many tiles for the view: a coarser zoom.
+    expect(tilesFor({ x0: 0, y0: 0, x1: 1, y1: 1 }, 256 * 2 ** 10).z).toBe(3)
+  })
+
+  it('tile server addresses: https with {z}/{x}/{y}, or http on this computer only', () => {
+    expect(validTileTemplate('https://tile.openstreetmap.org/{z}/{x}/{y}.png')).toBe(true)
+    expect(validTileTemplate('http://127.0.0.1:8080/{z}/{x}/{y}.png')).toBe(true)
+    expect(validTileTemplate('http://tiles.example.com/{z}/{x}/{y}.png')).toBe(false)
+    expect(validTileTemplate('https://tiles.example.com/{z}/{x}.png')).toBe(false)
+    expect(validTileTemplate('file:///etc/{z}/{x}/{y}')).toBe(false)
+  })
+})
