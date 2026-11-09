@@ -14,6 +14,7 @@ import { ChartBuilder } from './charts/ChartBuilder'
 import { DashboardsView } from './dashboards/DashboardsView'
 import { Analytics } from './Analytics'
 import { Dialogs } from './Dialogs'
+import { getDash } from './dashboards/runtime'
 import { TooltipProvider } from '../ui'
 
 async function boot() {
@@ -150,7 +151,7 @@ export function App() {
       api.onFileChanged((f) => P.onFileChanged(f))
     ]
     // Test/automation hook (renderer-only; exposes nothing the page could not already reach).
-    ;(window as unknown as Record<string, unknown>).__sv = { get, set, P, E, runCommand, toast }
+    ;(window as unknown as Record<string, unknown>).__sv = { get, set, P, E, runCommand, toast, dash: getDash }
     return () => {
       window.removeEventListener('keydown', handleKeydown, true)
       offs.forEach((o) => o())

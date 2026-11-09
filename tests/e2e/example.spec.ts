@@ -67,6 +67,27 @@ test('a story: dashboards in order with captions, presented point by point', asy
   await page.getByTestId('story-point-0').click()
   await expect(region).toHaveValue('Texas')
   expect(await page.evaluate(() => (window as any).__sv.get().project.stories[0].points[0].selections.region.values)).toEqual(['Texas'])
+  // A clicked mark is kept too: click a bar of a bar chart in the point, keep, and it is stored with the point.
+  const pt = await page.locator('[data-testid=story-view] [data-testid=echart]').evaluateAll((els) => {
+    for (const el of els) {
+      const c = (el as any).__echart
+      const o = c.getOption()
+      if (o.xAxis?.[0]?.type !== 'category' || o.series?.[0]?.type !== 'bar') continue
+      const i = o.series[0].data.findIndex((d: any) => Number(typeof d === 'object' ? d?.value : d) > 0)
+      const v = o.series[0].data[i]
+      const [x, y] = c.convertToPixel({ seriesIndex: 0 }, [i, Number(typeof v === 'object' ? v.value : v) / 2])
+      // The canvas is scaled to fit: chart pixels are scaled too.
+      const r = el.getBoundingClientRect()
+      const k = r.width / (el as HTMLElement).offsetWidth
+      return { x: r.left + x * k, y: r.top + y * k }
+    }
+    return null
+  })
+  expect(pt).not.toBeNull()
+  await page.mouse.click(pt!.x, pt!.y)
+  await expect(page.getByTestId('story-capture')).toContainText('Keep the new filters')
+  await page.getByTestId('story-capture').click()
+  expect(await page.evaluate(() => (window as any).__sv.get().project.stories[0].points[0].marks.length)).toBe(1)
   await page.getByTestId('story-point-1').click()
   await expect(page.locator('[data-testid=story-view] [data-testid=item-chart]')).toHaveCount(0) // the blank dashboard
   // Presented: full screen, ← → move between points, Esc leaves.

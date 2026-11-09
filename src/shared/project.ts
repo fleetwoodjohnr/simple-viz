@@ -156,7 +156,7 @@ export interface Story {
   id: string
   name: string
   /** Each point: a dashboard, its caption, and the filter choices it shows (captured with "Keep these filters"). */
-  points: { id: string; dashboard: string; caption: string; selections?: Selections }[]
+  points: { id: string; dashboard: string; caption: string; selections?: Selections; marks?: { item: string; values: Record<string, string | number | boolean | null> }[] }[]
 }
 
 /** The data a model table reads. */

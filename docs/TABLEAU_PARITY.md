@@ -60,7 +60,7 @@ _Checked against Tableau's documentation on 8 November 2026._
 | [Actions](https://help.tableau.com/current/pro/desktop/en-us/actions.htm) | Filter, highlight, go to dashboard, open a web page (`{Field}` or `<Field>` in the address), set a parameter, change set values | ✅ |
 | [Device layouts](https://help.tableau.com/current/pro/desktop/en-us/dashboards_dsd_create.htm) | Size presets; tablet and phone layouts made from the default (phone: one column), edited on their own (removing an object hides it there); view mode picks the layout by the window's width | ◐ The window is at least 960 px wide, so the phone layout is shown by choosing it (and in presentations on small screens) |
 | Presentation | Presentation mode with dashboard tabs | ✅ |
-| [Stories](https://help.tableau.com/current/pro/desktop/en-us/stories.htm) | Dashboards in order with captions; each point can keep its own filter choices; reorder, present full screen with ← → | ◐ Clicked-mark selections aren't kept, only filter choices |
+| [Stories](https://help.tableau.com/current/pro/desktop/en-us/stories.htm) | Dashboards in order with captions; each point can keep its own filter choices and clicked marks; reorder, present full screen with ← → | ✅ |
 | Export | Dashboards: PDF (page sizes), PNG and a self-contained web page (HTML); charts: PNG, SVG and CSV; query results: CSV, Excel and Parquet | ✅ |
 
 ## Sharing

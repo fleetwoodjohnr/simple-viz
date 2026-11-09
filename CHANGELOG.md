@@ -9,7 +9,7 @@
   combined sets.
 - **Models.** Level of detail expressions, table calculations, quick calculations and computed sets work on related
   tables, without double counting.
-- **Dashboards.** Tiled layout; tablet and phone layouts; story points that keep their filter choices; the size of a
+- **Dashboards.** Tiled layout; tablet and phone layouts; story points that keep their filter choices and clicked marks; the size of a
   chart in a tooltip.
 - **Calculations and parameters.** `+` joins text next to calculated fields that return text. Filters can follow a
   parameter (a value, a range's ends, top N); number parameters can have a range, shown as a slider.

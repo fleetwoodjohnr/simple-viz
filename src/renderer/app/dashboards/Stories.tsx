@@ -56,13 +56,14 @@ export function StoryView({ story, presenting }: { story: Story; presenting?: bo
   const cur = story.points[i]
   const d = cur && dashboards.find((x) => x.id === cur.dashboard)
   const go = (j: number) => j >= 0 && j < story.points.length && setDash({ storyPoint: j })
-  // A point with captured filters shows them (Tableau's story points keep their dashboard's state).
+  // A point with captured filters and clicked marks shows them (Tableau's story points keep their dashboard's state).
   const kept = cur?.selections
+  const keptMarks = cur?.marks
   useEffect(() => {
-    if (cur && kept) setDash((s) => ({ selections: { ...s.selections, [cur.dashboard]: structuredClone(kept) }, marks: { ...s.marks, [cur.dashboard]: [] } }))
-  }, [cur?.id, kept]) // eslint-disable-line react-hooks/exhaustive-deps
-  const live = useDash((s) => (cur ? (s.selections[cur.dashboard] ?? NO_SELECTIONS) : NO_SELECTIONS))
-  const capture = () => cur && setPoints((pts) => pts.map((p) => (p.id === cur.id ? { ...p, selections: structuredClone(getDash().selections[cur.dashboard] ?? {}) } : p)))
+    if (cur && kept) setDash((s) => ({ selections: { ...s.selections, [cur.dashboard]: structuredClone(kept) }, marks: { ...s.marks, [cur.dashboard]: structuredClone(keptMarks ?? []) } }))
+  }, [cur?.id, kept, keptMarks]) // eslint-disable-line react-hooks/exhaustive-deps
+  const live = useDash((s) => (cur ? JSON.stringify([s.selections[cur.dashboard] ?? NO_SELECTIONS, s.marks[cur.dashboard] ?? []]) : ''))
+  const capture = () => cur && setPoints((pts) => pts.map((p) => (p.id === cur.id ? { ...p, selections: structuredClone(getDash().selections[cur.dashboard] ?? {}), marks: structuredClone(getDash().marks[cur.dashboard] ?? []) } : p)))
   useEffect(() => {
     if (!presenting) return
     const k = (e: KeyboardEvent) => {
@@ -142,8 +143,8 @@ export function StoryView({ story, presenting }: { story: Story; presenting?: bo
           <IconBtn size="sm" label="Move later" disabled={i === story.points.length - 1} onClick={() => move(1)}>
             <ChevronRight className="size-4" />
           </IconBtn>
-          <Btn size="sm" variant="ghost" onClick={capture} title="This point will show the dashboard with the filter choices it has now" data-testid="story-capture">
-            <Filter className="size-3.5" /> {kept ? (JSON.stringify(kept) === JSON.stringify(live) ? 'Filters kept' : 'Keep the new filters') : 'Keep these filters'}
+          <Btn size="sm" variant="ghost" onClick={capture} title="This point will show the dashboard with the filter choices and clicked marks it has now" data-testid="story-capture">
+            <Filter className="size-3.5" /> {kept ? (JSON.stringify([kept, keptMarks ?? []]) === live ? 'Filters kept' : 'Keep the new filters') : 'Keep these filters'}
           </Btn>
           {kept && (
             <Btn size="sm" variant="ghost" onClick={() => setPoints((pts) => pts.map((p) => (p.id === cur.id ? { id: p.id, dashboard: p.dashboard, caption: p.caption } : p)))} data-testid="story-forget">
