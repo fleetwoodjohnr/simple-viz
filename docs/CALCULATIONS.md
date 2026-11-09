@@ -58,6 +58,13 @@ name has no spaces) — for example `IF [Sales] >= [Parameters].[Threshold] THEN
 can then filter or color by; draw a reference line at its value (Analytics → Line at); let readers change it with a
 parameter control on a dashboard; or set it by clicking a mark (a "Set a parameter" dashboard action).
 
+## On models (related tables)
+
+Fields are written `[table.column]`. As in Tableau, a row-level calculation reads one table — `[orders.revenue] -
+[orders.cost]` — and becomes a field of that table. An aggregate calculation can combine tables:
+`SUM([returns.refund]) / SUM([orders.revenue])` sums each table at its own level (no duplication by the join) and
+divides per mark. Level of detail expressions and table calculations aren't available on models yet.
+
 ## Groups
 
 Field menu → **Create group…** on a dimension: tick values, name the group, add it; repeat. The group becomes a

@@ -9,12 +9,12 @@ import { CanvasRenderer, SVGRenderer } from 'echarts/renderers'
 import { AlertTriangle, BarChart3, Loader2, Table2 } from 'lucide-react'
 import { useApp } from '../../state/store'
 import * as E from '../../state/engine'
-import { compileQuery, QueryError, type OutField } from '@/core/query/compile'
+import { compileQuery, QueryError, type CompiledQuery, type OutField } from '@/core/query/compile'
 import { compileModelQuery } from '@/core/query/model'
 import { plugin } from '@/core/charts/plugins'
 import { LIGHT, fmt, type ChartData, type Theme, type Value } from '@/core/charts/data'
 import type { Chart, ChartFilter } from '@/shared/charts'
-import type { Model } from '@/shared/project'
+import type { Model, Project } from '@/shared/project'
 import type { ColumnInfo, RelationInfo } from '@/shared/engine-protocol'
 import { DataGrid } from '../../ui/DataGrid'
 import { resolveMap } from './maps'
@@ -47,6 +47,15 @@ export function readTheme(dark: boolean): Theme {
 }
 
 /** A model's fields, named table.column, for the chart builder and the compiler. */
+/** The SQL for a chart over a dataset or a model, with the project's calculated fields and parameters. */
+export function compileChart(chart: Pick<Chart, 'dataset' | 'enc' | 'filters' | 'options' | 'type'>, project: Project, relations: RelationInfo[], opts: { extra?: ChartFilter[]; maxMarks?: number | null; mode?: 'raw' | 'aggregate' } = {}): CompiledQuery {
+  const calcs = project.calcs.filter((c) => c.dataset.toLowerCase() === chart.dataset.toLowerCase())
+  const model = project.models.find((m) => m.name.toLowerCase() === chart.dataset.toLowerCase())
+  if (model) return compileModelQuery({ chart, model, columns: Object.fromEntries(relations.map((r) => [r.name.toLowerCase(), r.columns])), extra: opts.extra, maxMarks: opts.maxMarks ?? undefined, calcs, params: project.params })
+  const columns = relations.find((r) => r.name.toLowerCase() === chart.dataset.toLowerCase())?.columns ?? []
+  return compileQuery({ chart, columns, calcs, params: project.params, extra: opts.extra, maxMarks: opts.maxMarks, mode: opts.mode })
+}
+
 export function modelColumns(model: Model, relations: RelationInfo[]): ColumnInfo[] {
   return model.tables.flatMap((t) => (relations.find((r) => r.name.toLowerCase() === t.name.toLowerCase())?.columns ?? []).map((c) => ({ name: `${t.name}.${c.name}`, type: c.type })))
 }
@@ -85,9 +94,7 @@ export function useChartData(chart: Chart | null, extra?: ChartFilter[], highlig
     const p = plugin(chart.type)
     let compiled
     try {
-      compiled = model
-        ? compileModelQuery({ chart, model, columns: Object.fromEntries(relations.map((r) => [r.name.toLowerCase(), r.columns])), extra, maxMarks: MAX_MARKS })
-        : compileQuery({ chart, columns, calcs: (calcs ?? []).filter((c) => c.dataset.toLowerCase() === chart.dataset.toLowerCase()), params, extra, maxMarks: p.wrap ? null : MAX_MARKS, mode: p.raw?.(chart.enc) ? 'raw' : 'aggregate' })
+      compiled = compileChart(chart, project!, relations, { extra, maxMarks: p.wrap && !model ? null : MAX_MARKS, mode: p.raw?.(chart.enc) ? 'raw' : 'aggregate' })
     } catch (e) {
       setState({ data: null, error: e instanceof QueryError ? e.message : `Couldn’t build this chart: ${(e as Error).message}`, loading: false, sql: null })
       return

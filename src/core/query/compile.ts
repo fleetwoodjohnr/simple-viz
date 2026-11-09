@@ -478,7 +478,7 @@ function orderBy(chart: QueryInput['chart'], fields: OutField[]): string {
 }
 
 /** Parameters in formulas: [Parameters].[Name] or $Name become literals. */
-function substituteParams(formula: string, params: Map<string, Parameter>): string {
+export function substituteParams(formula: string, params: Map<string, Parameter>): string {
   return formula.replace(/\[Parameters\]\.\[([^\]]+)\]|\$([A-Za-z_]\w*)/g, (m, a?: string, b?: string) => {
     const p = params.get((a ?? b ?? '').toLowerCase())
     return p ? lit(p.value as never) : m

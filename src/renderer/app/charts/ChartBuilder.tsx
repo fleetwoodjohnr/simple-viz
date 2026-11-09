@@ -11,7 +11,7 @@ import { useApp, set, get, toast } from '../../state/store'
 import * as P from '../../state/project'
 import * as E from '../../state/engine'
 import { Btn, IconBtn, Menu, MenuContent, MenuItem, MenuSep, MenuTrigger, MenuLabel, SubMenu, MenuCheck, Segmented, Switch, Tip, cx, inputCls } from '../../ui'
-import { ChartView, exportChart, modelColumns } from './ChartView'
+import { ChartView, compileChart, exportChart, modelColumns } from './ChartView'
 import { FilterDialog } from './FilterDialog'
 import { askText } from '../Dialogs'
 import { CalcDialog } from './CalcDialog'
@@ -175,8 +175,8 @@ function Builder({ chart }: { chart: Chart }) {
       const f = fields.find((x) => x.name === c.name)
       if (!f || f.calcKind !== 'row' || calcTypes[c.name]) continue
       try {
-        const q = compileQuery({ chart: { dataset: chart.dataset, type: 'table', enc: { ...emptyEncodings(), x: [{ field: c.name }] }, filters: [], options: {} }, columns: rel.columns, calcs, params: project.params })
-        void E.query(`SELECT * FROM (${q.sql.replace(/\nLIMIT \d+$/, '')}) LIMIT 0`).then((r) => useCharts.setState((s) => ({ calcTypes: { ...s.calcTypes, [chart.dataset.toLowerCase()]: { ...(s.calcTypes[chart.dataset.toLowerCase()] ?? {}), [c.name]: r.columns[0]?.type ?? 'VARCHAR' } } })), () => {})
+        const q = compileChart({ dataset: chart.dataset, type: 'table', enc: { ...emptyEncodings(), x: [{ field: c.name }] }, filters: [], options: {} }, project, get().relations)
+        void E.query(`SELECT * FROM (${q.sql.replace(/\n?LIMIT \d+$/, '')}) LIMIT 0`).then((r) => useCharts.setState((s) => ({ calcTypes: { ...s.calcTypes, [chart.dataset.toLowerCase()]: { ...(s.calcTypes[chart.dataset.toLowerCase()] ?? {}), [c.name]: r.columns[0]?.type ?? 'VARCHAR' } } })), () => {})
       } catch {
         /* shown in the field list */
       }

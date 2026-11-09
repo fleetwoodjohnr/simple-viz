@@ -36,9 +36,9 @@ beforeAll(async () => {
 })
 afterAll(() => engine?.close())
 
-const run = async (enc: Partial<Chart['enc']>, filters: Chart['filters'] = []) => {
+const run = async (enc: Partial<Chart['enc']>, filters: Chart['filters'] = [], calcs: { name: string; formula: string }[] = []) => {
   const columns = Object.fromEntries(engine.describe().relations.map((r) => [r.name.toLowerCase(), r.columns]))
-  const q = compileModelQuery({ chart: { type: 'bar', options: {}, filters, enc: { x: [], y: [], detail: [], tooltip: [], ...enc } }, model, columns })
+  const q = compileModelQuery({ chart: { type: 'bar', options: {}, filters, enc: { x: [], y: [], detail: [], tooltip: [], ...enc } }, model, columns, calcs })
   return rows(engine, q.sql)
 }
 
@@ -81,6 +81,25 @@ describe('models', () => {
     // Bottom 2 customers by revenue, with another filter applied first (East only: customers 1 and 2).
     const bottom = await run({ x: [{ field: 'customers.customer_id' }], y: [{ field: 'orders.revenue', agg: 'sum' }] }, [{ id: 'e', field: 'customers.region', op: 'in', values: ['East'] }, { id: 'b', field: 'customers.customer_id', op: 'top', top: { n: 1, bottom: true, by: { field: 'orders.revenue', agg: 'sum' } } }])
     expect(bottom).toEqual([{ d0: 2, m0: 5 }])
+  })
+
+  it('calculated fields: row-level on one table, aggregates of several tables combined per mark', async () => {
+    const calcs = [
+      { name: 'Size', formula: "IF [orders.revenue] >= 10 THEN 'big' ELSE 'small' END" },
+      { name: 'Double', formula: '[orders.revenue] * 2' },
+      { name: 'Refund rate', formula: 'SUM([returns.refund]) / SUM([orders.revenue])' },
+      { name: 'Buyers', formula: 'COUNTD([orders.customer_id])' },
+      { name: 'Mixed', formula: '[orders.revenue] * [customers.credit]' }
+    ]
+    expect(await run({ x: [{ field: 'Size' }], y: [{ field: 'orders.revenue', agg: 'sum' }] }, [], calcs)).toEqual([{ d0: 'big', m0: 30 }, { d0: 'small', m0: 13 }])
+    expect(await run({ x: [{ field: 'customers.region' }], y: [{ field: 'Double', agg: 'sum' }] }, [], calcs)).toEqual([{ d0: 'East', m0: 70 }, { d0: 'West', m0: 14 }, { d0: null, m0: 2 }])
+    // Refunds per region over revenue per region, each summed at its own table (no duplication by the join).
+    const rate = await run({ x: [{ field: 'customers.region' }], y: [{ field: 'Refund rate', agg: 'none' }] }, [], calcs)
+    expect(rate.map((r) => [r.d0, r.m0 === null ? null : Math.round(Number(r.m0) * 1e6) / 1e6])).toEqual([['East', Math.round((3 / 35) * 1e6) / 1e6], ['West', Math.round((3 / 7) * 1e6) / 1e6], [null, null]])
+    expect(await run({ x: [{ field: 'orders.product' }], y: [{ field: 'Buyers', agg: 'none' }] }, [], calcs)).toEqual([{ d0: 'A', m0: 3 }, { d0: 'B', m0: 2 }])
+    // A filter on a calculated field.
+    expect(await run({ x: [{ field: 'customers.region' }], y: [{ field: 'orders.revenue', agg: 'sum' }] }, [{ id: 'f', field: 'Size', op: 'in', values: ['big'] }], calcs)).toEqual([{ d0: 'East', m0: 30 }])
+    await expect(run({ x: [{ field: 'Mixed' }], y: [{ field: 'orders.revenue', agg: 'sum' }] }, [], calcs)).rejects.toThrow(/reads one table/)
   })
 
   it('explains missing relationships, loops and suggestions', async () => {

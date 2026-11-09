@@ -39,6 +39,16 @@ test('relate tables in a model and chart across them; transform with steps', asy
   const bars = await chartSeries(page)
   expect(bars.categories).toEqual([...exp.regions].sort())
   bars.categories.forEach((r, i) => near(bars.series['Sum of revenue'][i], exp.v1.revenueByRegion[r]))
+  // A calculated field on the model: each aggregate at its own table, combined per region.
+  await page.getByTestId('new-calc').click()
+  await page.getByTestId('calc-name').fill('Margin')
+  await page.getByTestId('calc-formula').fill('SUM([transactions.revenue] - [transactions.cost]) / SUM([transactions.revenue])')
+  await expect(page.getByTestId('calc-status')).toContainText('Valid. Aggregate')
+  await page.getByTestId('calc-save').click()
+  const margin = await sql(page, 'SELECT c.region, sum(t.revenue - t.cost) / sum(t.revenue) AS m FROM transactions t JOIN customers c USING (customer_id) GROUP BY 1')
+  await expect.poll(async () => Object.keys((await chartSeries(page)).series)).toContain('Margin')
+  const withMargin = await chartSeries(page)
+  for (const r of margin) near(withMargin.series.Margin[withMargin.categories.indexOf(String(r.region))], Number(r.m))
 
   // A visual transform: transactions with revenue over 1,000.
   await page.getByTestId('nav-data').click()

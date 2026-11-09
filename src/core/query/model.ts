@@ -7,12 +7,16 @@
 // UNION ALL BY NAME and combined per dimension combination. So two fact tables sharing a customer dimension, or a
 // measure from a "one" side shown by a field of the "many" side, come out the way Tableau shows them.
 //
-// Fields are written table.column. Calculated fields are a single-table feature for now.
+// Fields are written table.column. Calculated fields follow Tableau's rules for related tables: a row-level calculation
+// reads one table (it becomes a column of that table); an aggregate calculation aggregates each part at its own table
+// (SUM([orders.revenue]) / SUM([customers.credit])) and combines the results per mark. LOD expressions and table
+// calculations aren't available on models yet.
 
-import type { Chart } from '../../shared/charts'
+import type { Chart, Parameter } from '../../shared/charts'
+import { compileCalc, CalcError, type CalcSource } from '../calc/compile'
 import type { ColumnInfo } from '../../shared/engine-protocol'
 import type { Model } from '../../shared/project'
-import { fieldTitle, filterSql, isDate, lit, QueryError, type CompiledQuery, type OutField, type Role } from './compile'
+import { aggregateCalls, fieldTitle, filterSql, isDate, lit, substituteParams, QueryError, type CompiledQuery, type OutField, type Role } from './compile'
 
 const q = (s: string) => `"${s.replace(/"/g, '""')}"`
 
@@ -74,10 +78,46 @@ export function modelProblems(model: Model): string[] {
   return out
 }
 
-export function compileModelQuery(input: { chart: Pick<Chart, 'enc' | 'filters' | 'options' | 'type'>; model: Model; columns: Record<string, ColumnInfo[]>; maxMarks?: number; extra?: Chart['filters'] }): CompiledQuery {
+export function compileModelQuery(input: { chart: Pick<Chart, 'enc' | 'filters' | 'options' | 'type'>; model: Model; columns: Record<string, ColumnInfo[]>; maxMarks?: number; extra?: Chart['filters']; calcs?: CalcSource[]; params?: Parameter[] }): CompiledQuery {
   const { chart, model } = input
   const maxMarks = input.maxMarks ?? 20_000
-  const colOf = (field: string) => {
+  const calcs = input.calcs ?? []
+  const params = new Map((input.params ?? []).map((p) => [p.name.toLowerCase(), p]))
+  // Every field of the model, as table.column, for calculated fields' [table.column] references.
+  const allCols = model.tables.flatMap((t) => (input.columns[t.name.toLowerCase()] ?? []).map((c) => `${t.name}.${c.name}`))
+  const colSet = new Map(allCols.map((c) => [c.toLowerCase(), c]))
+  /** "table.column" (as the calc compiler writes a reference) → "table"."column". */
+  const toSql = (expr: string) => expr.replace(/"((?:[^"]|"")*)"/g, (m, name: string) => {
+    const full = colSet.get(name.replace(/""/g, '"').toLowerCase())
+    if (!full) return m
+    const { table, column } = splitField(full)
+    return `${q(table)}.${q(column)}`
+  })
+  const tablesIn = (expr: string) => [...new Set([...expr.matchAll(/"((?:[^"]|"")*)"/g)].map((x) => colSet.get(x[1].replace(/""/g, '"').toLowerCase())).filter((x): x is string => !!x).map((x) => splitField(x).table))]
+  const calcCache = new Map<string, ReturnType<typeof compileCalc>>()
+  const calcOf = (name: string) => {
+    const c = calcs.find((x) => x.name.toLowerCase() === name.toLowerCase())
+    if (!c) return null
+    if (!calcCache.has(c.name)) {
+      try {
+        const sub = (f: string) => substituteParams(f, params)
+        const comp = compileCalc(sub(c.formula), allCols, calcs.map((x) => ({ name: x.name, formula: sub(x.formula) })), `mc${calcCache.size}`)
+        if (comp.kind === 'tablecalc' || comp.lods.length) throw new QueryError(`“${c.name}”: level of detail expressions and table calculations aren’t available on models yet.`)
+        calcCache.set(c.name, comp)
+      } catch (e) {
+        throw e instanceof CalcError ? new QueryError(`Calculated field “${c.name}”: ${e.message}`) : e
+      }
+    }
+    return { name: c.name, ...calcCache.get(c.name)! }
+  }
+  const colOf = (field: string): { table: string; column: string; type: string; sql: string } => {
+    const calc = !field.includes('.') || !colSet.has(field.toLowerCase()) ? calcOf(field) : null
+    if (calc) {
+      if (calc.kind !== 'row') throw new QueryError(`“${calc.name}” aggregates: use it as a measure.`)
+      const tables = tablesIn(calc.expr)
+      if (tables.length !== 1) throw new QueryError(`“${calc.name}” reads ${tables.length ? `fields of ${tables.join(' and ')}` : 'no field'}; a row-level calculation on a model reads one table (aggregate each table’s part instead, e.g. SUM([a.x]) / SUM([b.y])).`)
+      return { table: tables[0], column: calc.name, type: 'VARCHAR', sql: `(${toSql(calc.expr)})` }
+    }
     const { table, column } = splitField(field)
     const t = model.tables.find((x) => x.name.toLowerCase() === table.toLowerCase())
     if (!t) throw new QueryError(`The model ${model.name} has no table “${table}”.`)
@@ -87,8 +127,17 @@ export function compileModelQuery(input: { chart: Pick<Chart, 'enc' | 'filters' 
   }
 
   const fields: OutField[] = []
+  /** Aggregate calculations in the view, by measure key. */
+  const aggCalcs = new Map<string, NonNullable<ReturnType<typeof calcOf>>>()
   const add = (role: Role, ref: Chart['enc']['x'][number] | undefined) => {
     if (!ref) return
+    const calc = colSet.has(ref.field.toLowerCase()) ? null : calcOf(ref.field)
+    if (calc && calc.kind === 'aggregate') {
+      const key = `m${fields.filter((f) => f.kind === 'measure').length}`
+      aggCalcs.set(key, calc)
+      fields.push({ key, role, ref: { ...ref, agg: 'none' }, kind: 'measure', title: ref.label ?? calc.name, type: 'DOUBLE' })
+      return
+    }
     const c = colOf(ref.field)
     const measure = !!ref.agg && ref.agg !== 'none'
     const key = measure ? `m${fields.filter((f) => f.kind === 'measure').length}` : `d${fields.filter((f) => f.kind === 'dim').length}`
@@ -153,15 +202,36 @@ export function compileModelQuery(input: { chart: Pick<Chart, 'enc' | 'filters' 
 
   const dimTables = [...new Set([...dims.map((d) => colOf(d.ref.field).table), ...filterTables])]
   const branches: string[] = []
-  const byTable = new Map<string, OutField[]>()
+  // What each table aggregates: the chart's measures, and the parts of aggregate calculations (hidden columns h0, h1…).
+  type Part = { key: string; sql: string; agg: (v: string) => string }
+  const byTable = new Map<string, Part[]>()
+  const put = (table: string, part: Part) => byTable.set(table, [...(byTable.get(table) ?? []), part])
+  const finalExpr = new Map<string, string>()
+  let hidden = 0
   for (const m of measures) {
-    const t = colOf(m.ref.field).table
-    byTable.set(t, [...(byTable.get(t) ?? []), m])
+    const calc = aggCalcs.get(m.key)
+    if (!calc) {
+      const c = colOf(m.ref.field)
+      put(c.table, { key: m.key, sql: c.sql, agg: (v) => AGG[m.ref.agg!](v) })
+      continue
+    }
+    let expr = calc.expr
+    for (const call of aggregateCalls(calc.expr).reverse()) {
+      const tables = tablesIn(call.inner)
+      if (tables.length !== 1) throw new QueryError(`“${calc.name}”: ${call.text} ${tables.length ? `reads fields of ${tables.join(' and ')}` : 'reads no field'}; on a model each aggregate reads one table.`)
+      const distinct = /^\s*DISTINCT\s+/i.test(call.inner)
+      const key = `h${hidden++}`
+      put(tables[0], { key, sql: toSql(call.inner.replace(/^\s*DISTINCT\s+/i, '')), agg: (v) => `${call.fn}(${distinct ? 'DISTINCT ' : ''}${v})` })
+      expr = expr.slice(0, call.start) + key + expr.slice(call.end)
+    }
+    if (tablesIn(expr).length) throw new QueryError(`“${calc.name}” uses a field outside an aggregate; on a model every field in an aggregate calculation must be aggregated.`)
+    finalExpr.set(m.key, expr)
   }
+  const partKeys = [...byTable.values()].flat().map((p) => p.key)
   for (const [table, ms] of byTable) {
     const from = fromClause(table, dimTables, true)
-    const inner = [...dims.map((d) => `${dimSql(d)} AS ${d.key}`), `${q(table)}.__rid`, ...ms.map((m) => `${colOf(m.ref.field).sql} AS __v_${m.key}`)]
-    const outer = [...dims.map((d) => d.key), ...ms.map((m) => `${AGG[m.ref.agg!](`__v_${m.key}`)} AS ${m.key}`)]
+    const inner = [...dims.map((d) => `${dimSql(d)} AS ${d.key}`), `${q(table)}.__rid`, ...ms.map((m) => `${m.sql} AS __v_${m.key}`)]
+    const outer = [...dims.map((d) => d.key), ...ms.map((m) => `${m.agg(`__v_${m.key}`)} AS ${m.key}`)]
     branches.push(`SELECT ${outer.join(', ')} FROM (\n  SELECT DISTINCT ${inner.join(', ')}\n  FROM ${from}${where.length ? `\n  WHERE ${where.join(' AND ')}` : ''}\n)${dims.length ? ' GROUP BY ALL' : ''}`)
   }
   if (!measures.length) {
@@ -178,8 +248,8 @@ export function compileModelQuery(input: { chart: Pick<Chart, 'enc' | 'filters' 
   })
   const sortDim = dims.find((d) => d.role === 'x') ?? dims[0]
   const order = chart.options.sort?.by === 'value' && measures[0] ? `${measures[0].key} ${chart.options.sort.dir === 'asc' ? 'ASC' : 'DESC'} NULLS LAST` : sortDim ? `${sortDim.key} ${chart.options.sort?.dir === 'desc' ? 'DESC' : 'ASC'} NULLS LAST` : ''
-  const combined = branches.length === 1 && !measures.length ? branches[0] : `SELECT ${[...dims.map((d) => d.key), ...measures.map((m) => `any_value(${m.key}) AS ${m.key}`)].join(', ')} FROM (\n${branches.join('\nUNION ALL BY NAME\n')}\n)${dims.length ? ' GROUP BY ALL' : ''}`
-  const sql = `SELECT ${[...dims.map((d) => d.key), ...measures.map((m) => m.key)].join(', ')} FROM (\n${combined}\n)${having.length ? ` WHERE ${having.join(' AND ')}` : ''}${order ? ` ORDER BY ${order}` : ''} LIMIT ${maxMarks + 1}`
+  const combined = branches.length === 1 && !measures.length ? branches[0] : `SELECT ${[...dims.map((d) => d.key), ...partKeys.map((k) => `any_value(${k}) AS ${k}`)].join(', ')} FROM (\n${branches.join('\nUNION ALL BY NAME\n')}\n)${dims.length ? ' GROUP BY ALL' : ''}`
+  const sql = `SELECT ${[...dims.map((d) => d.key), ...measures.map((m) => (finalExpr.has(m.key) ? `${finalExpr.get(m.key)} AS ${m.key}` : m.key))].join(', ')} FROM (\n${combined}\n)${having.length ? ` WHERE ${having.join(' AND ')}` : ''}${order ? ` ORDER BY ${order}` : ''} LIMIT ${maxMarks + 1}`
   return { sql, fields, limit: maxMarks }
 }
 

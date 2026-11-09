@@ -8,7 +8,7 @@ import * as P from '../../state/project'
 import * as E from '../../state/engine'
 import { Btn, Field, Modal, cx, inputCls } from '../../ui'
 import { compileCalc, CalcError } from '@/core/calc/compile'
-import { compileQuery } from '@/core/query/compile'
+import { compileChart, modelColumns } from './ChartView'
 import { newId } from '@/core/project/sviz'
 import { emptyEncodings, type CalcField } from '@/shared/charts'
 
@@ -42,7 +42,9 @@ const REFERENCE: [string, string, string][] = [
 export function CalcDialog({ dataset, calc, onClose, onCreated }: { dataset: string; calc: CalcField | null; onClose: () => void; onCreated?: (c: CalcField) => void }) {
   const project = useApp((s) => s.project!)
   const relations = useApp((s) => s.relations)
-  const rel = relations.find((r) => r.name.toLowerCase() === dataset.toLowerCase())
+  const model = project.models.find((m) => m.name.toLowerCase() === dataset.toLowerCase())
+  // A model's fields are table.column; a dataset's its columns.
+  const rel = model ? { name: model.name, columns: modelColumns(model, relations) } : relations.find((r) => r.name.toLowerCase() === dataset.toLowerCase())
   const others = project.calcs.filter((c) => c.dataset.toLowerCase() === dataset.toLowerCase() && c.id !== calc?.id)
   const [name, setName] = useState(calc?.name ?? '')
   const [formula, setFormula] = useState(calc?.formula ?? '')
@@ -68,7 +70,7 @@ export function CalcDialog({ dataset, calc, onClose, onCreated }: { dataset: str
         }
         try {
           const enc = kind === 'row' ? { ...emptyEncodings(), x: [{ field: me.name }] } : { ...emptyEncodings(), y: [{ field: me.name, agg: 'none' as const }] }
-          const q = compileQuery({ chart: { dataset, type: 'table', enc, filters: [], options: {} }, columns, calcs: [...others, me], params: project.params })
+          const q = compileChart({ dataset, type: 'table', enc, filters: [], options: {} }, { ...project, calcs: [...others, me] }, relations)
           const r = await E.query(`SELECT * FROM (${q.sql.replace(/\nLIMIT \d+$/, '')}) LIMIT 0`)
           const kindLabel = kind === 'row' ? 'Row-level' : kind === 'aggregate' ? 'Aggregate' : 'Table calculation'
           setStatus({ ok: true, msg: `${kindLabel} · ${r.columns[0]?.type ?? ''}`, kind })
@@ -77,7 +79,7 @@ export function CalcDialog({ dataset, calc, onClose, onCreated }: { dataset: str
         }
       }, 350)
     }
-  }, [rel, columns, others, dataset, project.params])
+  }, [rel, columns, others, dataset, project, relations])
   useEffect(() => check(formula, name), [formula, name, check])
 
   const insert = (text: string) => {
