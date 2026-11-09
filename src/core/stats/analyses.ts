@@ -381,11 +381,33 @@ export function olsFromMoments(names: string[], means: number[], my: number, Sxx
   return { names: ['Intercept', ...names], coef: [b0, ...b], se: [Math.sqrt(v0), ...b.map((_, i) => Math.sqrt(s2 * inv[i][i]))], n, df, r2, adjR2: 1 - ((1 - r2) * (n - 1)) / df, F: (Syy - sse) / k / s2, rmse: Math.sqrt(sse / n), sse }
 }
 
+/**
+ * The model's terms for its predictors: a number as itself; text or yes/no as indicator (dummy) terms, one per value
+ * except the first in sort order, which is the reference (as statsmodels and R do).
+ */
+async function designTerms(s: AnalysisSpec, run: Run): Promise<{ name: string; sql: string }[]> {
+  const out: { name: string; sql: string }[] = []
+  for (const x of s.x!) {
+    const [t] = await run(`SELECT typeof(${q(x)}) AS t FROM ${q(s.dataset)} WHERE ${q(x)} IS NOT NULL LIMIT 1`)
+    if (!t || !/^(VARCHAR|BOOLEAN|ENUM)/i.test(String(t.t))) {
+      out.push({ name: x, sql: `CAST(${q(x)} AS DOUBLE)` })
+      continue
+    }
+    const levels = (await run(`SELECT DISTINCT CAST(${q(x)} AS VARCHAR) AS v FROM ${q(s.dataset)} WHERE ${q(x)} IS NOT NULL ORDER BY 1 LIMIT 51`)).map((r) => String(r.v))
+    need(levels.length <= 50, `${x} has more than 50 values; group them first to use it as a predictor.`)
+    need(levels.length >= 2, `${x} has only one value, so it can't explain anything.`)
+    for (const v of levels.slice(1)) out.push({ name: `${x} = ${v}`, sql: `CAST(CAST(${q(x)} AS VARCHAR) = ${lit(v)} AS DOUBLE)` })
+  }
+  return out
+}
+
 async function regression(s: AnalysisSpec, run: Run): Promise<AnalysisResult> {
   need(s.y && s.x?.length, 'Choose the outcome (y) and at least one predictor (x).')
   const degree = Math.max(1, Math.min(6, s.degree ?? 1))
-  // Terms: each predictor, and for a polynomial on one predictor its powers.
-  const terms = degree > 1 ? Array.from({ length: degree }, (_, i) => ({ name: i ? `${s.x![0]}^${i + 1}` : s.x![0], sql: i ? `pow(${q(s.x![0])}, ${i + 1})` : q(s.x![0]) })) : s.x.map((x) => ({ name: x, sql: q(x) }))
+  // Terms: each predictor (text ones as indicators), and for a polynomial on one predictor its powers.
+  const base = await designTerms(s, run)
+  need(degree === 1 || (s.x.length === 1 && base[0].name === s.x[0]), 'A polynomial needs a single numeric predictor.')
+  const terms = degree > 1 ? Array.from({ length: degree }, (_, i) => ({ name: i ? `${s.x![0]}^${i + 1}` : s.x![0], sql: i ? `pow(${q(s.x![0])}, ${i + 1})` : q(s.x![0]) })) : base
   const y = q(s.y)
   const where = `${[s.y, ...s.x].map((c) => `${q(c)} IS NOT NULL`).join(' AND ')}`
   const [m] = await run(`SELECT count(*) AS n, avg(${y}) AS my, ${terms.map((t, i) => `avg(${t.sql}) AS m${i}`).join(', ')} FROM ${q(s.dataset)} WHERE ${where}`)
@@ -484,21 +506,22 @@ async function logistic(s: AnalysisSpec, run: Run): Promise<AnalysisResult> {
   const levels = (await run(`SELECT DISTINCT CAST(${q(s.y)} AS VARCHAR) AS v FROM ${q(s.dataset)} WHERE ${q(s.y)} IS NOT NULL ORDER BY 1 LIMIT 3`)).map((r) => String(r.v))
   need(levels.length === 2, `The outcome must have exactly two values; ${s.y} has ${levels.length === 3 ? 'more than two' : levels.length}.`)
   const positive = s.positive && levels.includes(s.positive) ? s.positive : levels[1]
-  const rows = await run(`SELECT CAST(${q(s.y)} AS VARCHAR) = ${lit(positive)} AS y, ${s.x.map((x, i) => `CAST(${q(x)} AS DOUBLE) AS x${i}`).join(', ')} FROM ${q(s.dataset)} WHERE ${where} USING SAMPLE reservoir(100000 ROWS) REPEATABLE (42)`)
-  const X = rows.map((r) => [1, ...s.x!.map((_, i) => num(r[`x${i}`]))])
+  const terms = await designTerms(s, run)
+  const rows = await run(`SELECT CAST(${q(s.y)} AS VARCHAR) = ${lit(positive)} AS y, ${terms.map((t, i) => `${t.sql} AS x${i}`).join(', ')} FROM ${q(s.dataset)} WHERE ${where} USING SAMPLE reservoir(100000 ROWS) REPEATABLE (42)`)
+  const X = rows.map((r) => [1, ...terms.map((_, i) => num(r[`x${i}`]))])
   const yv: number[] = rows.map((r) => (r.y ? 1 : 0))
   const fit = logisticFit(X, yv)
   const p0 = yv.reduce((a, b) => a + b, 0) / yv.length
   const ll0 = yv.reduce((a, b) => a + (b ? Math.log(p0) : Math.log(1 - p0)), 0)
   const total = await counts(run, s.dataset, [s.y, ...s.x])
   const z95 = normInv(1 - (1 - (s.level ?? 0.95)) / 2)
-  const names = ['Intercept', ...s.x]
+  const names = ['Intercept', ...terms.map((t) => t.name)]
   const lr = 2 * (fit.ll - ll0)
   return {
     title: 'Logistic regression',
     tables: [
       { title: `Coefficients (log-odds of ${s.y} = ${positive})`, columns: ['Term', 'Estimate', 'Std. error', 'z', 'p-value', 'Odds ratio', 'OR CI low', 'OR CI high'], rows: names.map((nm, i) => [nm, r4(fit.beta[i]), r4(fit.se[i]), r4(fit.beta[i] / fit.se[i]), fmtP(pZ(fit.beta[i] / fit.se[i])), r4(Math.exp(fit.beta[i])), r4(Math.exp(fit.beta[i] - z95 * fit.se[i])), r4(Math.exp(fit.beta[i] + z95 * fit.se[i]))]) },
-      { title: 'Model', columns: ['N', 'Log-likelihood', 'McFadden R²', 'Likelihood-ratio χ²', 'p-value', 'AIC', 'Accuracy (cut-off 0.5)'], rows: [[rows.length, r4(fit.ll), r4(1 - fit.ll / ll0), r4(lr), fmtP(pChi(lr, s.x.length)), r4(2 * names.length - 2 * fit.ll), r4(fit.accuracy)]] }
+      { title: 'Model', columns: ['N', 'Log-likelihood', 'McFadden R²', 'Likelihood-ratio χ²', 'p-value', 'AIC', 'Accuracy (cut-off 0.5)'], rows: [[rows.length, r4(fit.ll), r4(1 - fit.ll / ll0), r4(lr), fmtP(pChi(lr, terms.length)), r4(2 * names.length - 2 * fit.ll), r4(fit.accuracy)]] }
     ],
     summary: `${names.slice(1).map((nm, i) => `Each unit of ${nm} multiplies the odds of ${s.y} = ${positive} by ${r4(Math.exp(fit.beta[i + 1]))}${pZ(fit.beta[i + 1] / fit.se[i + 1]) < 0.05 ? '' : ' (not significant)'}`).join('; ')}. The model classifies ${r4(fit.accuracy * 100)}% of rows correctly.`,
     assumptions: ['The outcome has two values; log-odds are linear in the predictors.', 'Rows are independent.', `Fitted on ${rows.length < total.used ? `a reproducible random sample of ${rows.length.toLocaleString()} rows` : 'every complete row'}.`, 'Accuracy is measured on the same rows the model was fitted to (optimistic).'],

@@ -38,6 +38,11 @@ P = sm.add_constant(np.column_stack([x1, x1 ** 2])); poly = sm.OLS(y, P).fit()
 ref['poly2'] = dict(coef=poly.params.tolist(), r2=float(poly.rsquared))
 L = sm.add_constant(np.column_stack([x1[ok], x2[ok]])); logit = sm.Logit(b[ok], L).fit(disp=0)
 ref['logit'] = dict(coef=logit.params.tolist(), se=logit.bse.tolist(), llf=float(logit.llf), prsquared=float(logit.prsquared))
+# Text predictors as indicators, the first value in sort order as the reference.
+D = sm.add_constant(np.column_stack([x1, (grp == 'B').astype(float), (grp == 'C').astype(float)])); olsd = sm.OLS(y2, D).fit()
+ref['ols_dummy'] = dict(coef=olsd.params.tolist(), se=olsd.bse.tolist(), r2=float(olsd.rsquared))
+LD = sm.add_constant(np.column_stack([x1, (cat == 'Green').astype(float), (cat == 'Red').astype(float)])); logitd = sm.Logit(b, LD).fit(disp=0)
+ref['logit_dummy'] = dict(coef=logitd.params.tolist(), se=logitd.bse.tolist(), llf=float(logitd.llf))
 Z = np.column_stack([x1[ok], x2[ok], y[ok], y2[ok]]); R = np.corrcoef(Z, rowvar=False); ev = np.linalg.eigvalsh(R)[::-1]
 ref['pca_eigenvalues'] = ev.tolist()
 

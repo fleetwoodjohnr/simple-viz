@@ -131,7 +131,7 @@ export function Analytics() {
         {(kind === 'regression' || kind === 'logistic') && (
           <>
             {pick(kind === 'logistic' ? 'Outcome (two values)' : 'Outcome (y)', spec.y, kind === 'logistic' ? all : numeric, (v) => set({ y: v }), 'analysis-y')}
-            {multi('Predictors (x)', spec.x, numeric.filter((c) => c.name !== spec.y), (v) => set({ x: v }), 'analysis-x')}
+            {multi('Predictors (x) — text columns become indicators', spec.x, all.filter((c) => c.name !== spec.y && !isDate(c.type)), (v) => set({ x: v }), 'analysis-x')}
           </>
         )}
         {kind === 'regression' && (

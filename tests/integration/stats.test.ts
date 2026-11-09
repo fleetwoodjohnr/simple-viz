@@ -93,6 +93,21 @@ describe('statistics vs SciPy / statsmodels', () => {
     close(cell(r, 1, 0, 'McFadden R²'), ref.logit.prsquared, 1e-3)
   })
 
+  it('text predictors as indicators (first value the reference), linear and logistic, as statsmodels', async () => {
+    // Tables show 4 decimals: equal to statsmodels at that precision.
+    const close4 = (a: unknown, b: number) => expect(Math.abs(Number(a) - b)).toBeLessThanOrEqual(5.01e-5)
+    const r = await runAnalysis({ kind: 'regression', dataset: 'stats', y: 'y2', x: ['x1', 'grp'] }, run)
+    expect(r.tables[0].rows.map((row) => row[0])).toEqual(['Intercept', 'x1', 'grp = B', 'grp = C'])
+    ref.ols_dummy.coef.forEach((b: number, i: number) => close4(r.tables[0].rows[i][1], b))
+    ref.ols_dummy.se.forEach((se: number, i: number) => close4(r.tables[0].rows[i][2], se))
+    close4(cell(r, 1, 0, 'R²'), ref.ols_dummy.r2)
+    const l = await runAnalysis({ kind: 'logistic', dataset: 'stats', y: 'b', x: ['x1', 'cat'] }, run)
+    expect(l.tables[0].rows.map((row) => row[0])).toEqual(['Intercept', 'x1', 'cat = Green', 'cat = Red'])
+    ref.logit_dummy.coef.forEach((b: number, i: number) => close4(l.tables[0].rows[i][1], b))
+    ref.logit_dummy.se.forEach((se: number, i: number) => close4(l.tables[0].rows[i][2], se))
+    close(cell(l, 1, 0, 'Log-likelihood'), ref.logit_dummy.llf, 1e-4)
+  })
+
   it('PCA eigenvalues', async () => {
     const r = await runAnalysis({ kind: 'pca', dataset: 'stats', columns: ['x1', 'x2', 'y', 'y2'] }, run)
     ref.pca_eigenvalues.forEach((v: number, i: number) => close(r.tables[0].rows[i][1], v, 1e-3))

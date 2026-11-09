@@ -34,7 +34,7 @@
   (no code runs). Histograms and box plots now use every row (they used the first 20,001).
 - **Statistics.** An Analytics workspace: descriptive statistics, missing values, correlation, anomalies, t-tests
   (one-sample, Welch, paired), ANOVA, chi-square, Mann–Whitney, Kruskal–Wallis, simple/multiple/polynomial
-  regression, logistic regression, exponential-smoothing forecasts (trend and season chosen by AICc, prediction
+  regression and logistic regression (text predictors as indicators), exponential-smoothing forecasts (trend and season chosen by AICc, prediction
   intervals), k-means clustering (save the clusters as a dataset) and principal components. Each result has a
   chart, a plain-language summary, its assumptions, and the rows used. Validated against SciPy and statsmodels;
   regression on 10 million rows in under 2 seconds. Forecast overlays and standard-deviation bands on charts.
