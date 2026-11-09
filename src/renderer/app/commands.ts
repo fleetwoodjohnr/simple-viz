@@ -138,6 +138,8 @@ def({ id: 'data.remote', label: 'Add a file from the web or cloud storage…', k
 def({ id: 'data.connect-sqlserver', label: 'Connect to SQL Server…', keywords: 'database server mssql microsoft azure sql', run: () => set({ dialog: { kind: 'connect-db', kind2: 'sqlserver' } }) })
 def({ id: 'data.connect-clickhouse', label: 'Connect to ClickHouse…', keywords: 'database server olap clickhouse cloud', run: () => set({ dialog: { kind: 'connect-db', kind2: 'clickhouse' } }) })
 def({ id: 'data.connect-bigquery', label: 'Connect to BigQuery…', keywords: 'database warehouse google cloud gcp bigquery', run: () => set({ dialog: { kind: 'connect-db', kind2: 'bigquery' } }) })
+def({ id: 'data.connect-snowflake', label: 'Connect to Snowflake…', keywords: 'database warehouse cloud snowflake', run: () => set({ dialog: { kind: 'connect-db', kind2: 'snowflake' } }) })
+def({ id: 'data.connect-databricks', label: 'Connect to Databricks…', keywords: 'database warehouse lakehouse spark databricks', run: () => set({ dialog: { kind: 'connect-db', kind2: 'databricks' } }) })
 def({ id: 'data.connect-trino', label: 'Connect to Trino or Presto…', keywords: 'database query engine trino presto starburst athena', run: () => set({ dialog: { kind: 'connect-db', kind2: 'trino' } }) })
 def({ id: 'data.connect-mysql', label: 'Connect to MySQL or MariaDB…', keywords: 'database server mysql mariadb', run: () => set({ dialog: { kind: 'connect-db', kind2: 'mysql' } }) })
 def({ id: 'data.refresh', label: 'Refresh all data', needsProject: true, keywords: 'reload update', run: () => P.refreshSources(undefined, true) })

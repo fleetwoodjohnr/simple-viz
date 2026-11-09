@@ -225,10 +225,11 @@ Details per source, and what isn't supported (with reasons): [docs/CONNECTORS.md
 
 ### Known limitations
 
-- Excel 95 `.xls`, password-protected .xls and Excel 2007 workbooks, Redshift, Snowflake, Databricks, Athena, Oracle, Google
+- Excel 95 `.xls`, password-protected .xls and Excel 2007 workbooks, Redshift, Athena, Oracle, Google
   Sheets, ODBC/JDBC: not supported (reasons in docs/CONNECTORS.md).
-- SQL Server, ClickHouse, Trino and BigQuery are extract only. BigQuery is tested against its emulator, not Google's
-  service. S3-compatible services other than the S3 emulator (MinIO, R2, GCS) use the same code but
+- SQL Server, ClickHouse, Trino, BigQuery, Snowflake and Databricks are extract only. BigQuery is tested against its
+  emulator, not Google's service; Snowflake and Databricks against local servers answering as their documented APIs
+  do, not the services themselves. Databricks tables are read inline (up to 25 MB each). S3-compatible services other than the S3 emulator (MinIO, R2, GCS) use the same code but
   weren't tested against the services themselves.
 - SQL Server, MySQL, ClickHouse, Trino, BigQuery (emulator), S3 and Azure tests run where podman is available (Linux CI); they are skipped on Windows and macOS
   CI and say so.
@@ -261,6 +262,8 @@ Also done: reference lines, bands and trends over every mark of a pane (they use
 Also done: "compute using" several dimensions in a chosen order, restarting every one of them (datasets and models) — integration `charts`, e2e `charts`.
 
 Also done: `+` joins text next to calculated fields that return text — unit `calc`; filters bound to parameters (a value, a range's ends, top N; on datasets and models, where parameter filters had been ignored) and number parameters with a range (clamped, stepped, a slider on dashboards) — unit `charts`, integration `charts`, `model`, e2e `objects`.
+
+Also done: Snowflake (SQL API v2, key-pair JWT or OAuth) and Databricks (SQL Statement Execution API, token), extract only — integration `cloud-apis` (local stand-ins for the documented APIs: sign-in, still-running statements, partitions/chunks, value formats), e2e `example` (the dialog's fields for every database type).
 
 Also done: Google BigQuery (REST API, service-account key or access token, read-only scope), extract only — integration `warehouses` (the BigQuery emulator: types, paging, a join with Excel, table lists; JWT sign-in against a local token server).
 

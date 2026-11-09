@@ -12,7 +12,7 @@ _Checked against Tableau's documentation on 8 November 2026._
 
 | Tableau | Simple Viz | |
 |---|---|---|
-| [Connectors](https://help.tableau.com/current/pro/desktop/en-us/exampleconnections_overview.htm) | Excel (incl. .xls and .xlsb), OpenDocument, CSV/TSV, JSON, Parquet, Arrow, XML, SQLite, DuckDB; PostgreSQL, MySQL/MariaDB, SQL Server, ClickHouse, Trino/Presto, BigQuery; files on the web, S3 and Azure Blob | ◐ Snowflake, Databricks, Oracle, Redshift and others not yet ([CONNECTORS.md](CONNECTORS.md)) |
+| [Connectors](https://help.tableau.com/current/pro/desktop/en-us/exampleconnections_overview.htm) | Excel (incl. .xls and .xlsb), OpenDocument, CSV/TSV, JSON, Parquet, Arrow, XML, SQLite, DuckDB; PostgreSQL, MySQL/MariaDB, SQL Server, ClickHouse, Trino/Presto, BigQuery, Snowflake, Databricks; files on the web, S3 and Azure Blob | ◐ Oracle, Redshift and others not yet; Snowflake and Databricks tested against their documented APIs, not the services ([CONNECTORS.md](CONNECTORS.md)) |
 | [Extracts](https://help.tableau.com/current/pro/desktop/en-us/extracting_data.htm) | Every source can be a local extract (DuckDB), refreshed on open, on file change, on focus or on a timer; last good data kept on failure | ✅ |
 | Live connections | PostgreSQL and MySQL, read-only | ◐ SQL Server is extract only |
 | [Relationships and the data model](https://help.tableau.com/current/pro/desktop/en-us/datasource_datamodel.htm), [relating tables](https://help.tableau.com/current/pro/desktop/en-us/relate_tables.htm) | Models: tables related by fields, measures aggregated at their own grain (no double counting), unmatched rows kept; one table in several roles (order and ship dates); LOD expressions, table calculations and computed sets on models | ✅ |

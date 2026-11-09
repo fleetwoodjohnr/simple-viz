@@ -22,17 +22,24 @@ test('open the example: its dashboard shows the sales data', async () => {
   await quit(app)
 })
 
-test('the database dialog switches between PostgreSQL, MySQL and SQL Server', async () => {
+test('the database dialog switches between database types (each with its port and fields)', async () => {
   const { app, page } = await launch()
   await page.getByTestId('new-project').click()
   await page.getByTestId('add-data').click()
   await page.getByTestId('add-postgres').click()
   await expect(page.getByTestId('pg-port')).toHaveValue('5432')
-  await page.getByRole('radio', { name: 'MySQL / MariaDB' }).click()
+  await page.getByTestId('db-type').selectOption('mysql')
   await expect(page.getByRole('dialog')).toContainText('Connect to MySQL / MariaDB')
   await expect(page.getByTestId('pg-port')).toHaveValue('3306')
-  await page.getByRole('radio', { name: 'SQL Server' }).click()
+  await page.getByTestId('db-type').selectOption('sqlserver')
   await expect(page.getByTestId('pg-port')).toHaveValue('1433')
+  for (const [kind, label, field] of [['clickhouse', 'Connect to ClickHouse', 'Database'], ['trino', 'Connect to Trino / Presto', 'Catalog (or catalog.schema)'], ['bigquery', 'Connect to BigQuery', 'Service account key (JSON) or access token'], ['snowflake', 'Connect to Snowflake', 'Account address'], ['databricks', 'Connect to Databricks', 'SQL warehouse ID']] as const) {
+    await page.getByTestId('db-type').selectOption(kind)
+    await expect(page.getByRole('dialog')).toContainText(label)
+    await expect(page.getByRole('dialog')).toContainText(field)
+    // Extract only: no live mode to choose.
+    await expect(page.getByRole('radiogroup', { name: 'Connection mode' })).toHaveCount(0)
+  }
   await quit(app)
 })
 

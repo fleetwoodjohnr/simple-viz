@@ -89,6 +89,12 @@ export function DataView() {
                 <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-bigquery')} data-testid="add-bigquery">
                   Google BigQuery
                 </MenuItem>
+                <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-snowflake')} data-testid="add-snowflake">
+                  Snowflake
+                </MenuItem>
+                <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-databricks')} data-testid="add-databricks">
+                  Databricks
+                </MenuItem>
                 <MenuSep />
                 <MenuItem icon={<SquareTerminal />} onSelect={() => openInSql('', { asDataset: true })}>
                   Dataset from SQL

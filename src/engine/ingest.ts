@@ -69,7 +69,7 @@ export async function extractSelect(conn: DuckDBConnection, s: ResolvedSource, r
     throw new Error(`Unsupported file format: ${s.format}`)
   }
   if (s.kind === 'sqlserver') return stageSqlServer(conn, s, ref ?? '')
-  if (s.kind === 'clickhouse' || s.kind === 'trino' || s.kind === 'bigquery') return stageWarehouse(conn, s, ref ?? '')
+  if (['clickhouse', 'trino', 'bigquery', 'snowflake', 'databricks'].includes(s.kind)) return stageWarehouse(conn, s, ref ?? '')
   const db = ident(`db_${s.id}`)
   const r = ref ?? ''
   const dot = r.indexOf('.')

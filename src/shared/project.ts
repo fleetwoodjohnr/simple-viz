@@ -8,9 +8,9 @@ import type { FeatureCollection } from '../core/charts/geo'
 export const PROJECT_SCHEMA_VERSION = 1
 
 export type FileFormat = 'csv' | 'tsv' | 'json' | 'jsonl' | 'parquet' | 'arrow' | 'xlsx' | 'xls' | 'xlsb' | 'ods' | 'xml2003'
-export type DbKind = 'postgres' | 'mysql' | 'sqlserver' | 'clickhouse' | 'trino' | 'bigquery' | 'sqlite' | 'duckdb'
+export type DbKind = 'postgres' | 'mysql' | 'sqlserver' | 'clickhouse' | 'trino' | 'bigquery' | 'snowflake' | 'databricks' | 'sqlite' | 'duckdb'
 /** Database servers (host, port, user, password), as opposed to database files. */
-export type ServerKind = 'postgres' | 'mysql' | 'sqlserver' | 'clickhouse' | 'trino' | 'bigquery'
+export type ServerKind = 'postgres' | 'mysql' | 'sqlserver' | 'clickhouse' | 'trino' | 'bigquery' | 'snowflake' | 'databricks'
 export const isServer = (k: string): k is ServerKind => Object.hasOwn(SERVER, k)
 export const SERVER: Record<ServerKind, { label: string; port: number; database: string }> = {
   postgres: { label: 'PostgreSQL', port: 5432, database: 'postgres' },
@@ -23,10 +23,16 @@ export const SERVER: Record<ServerKind, { label: string; port: number; database:
   trino: { label: 'Trino / Presto', port: 8443, database: '' },
   /** Extract only, over the BigQuery REST API; the database is the Google Cloud project (or project.dataset), the
    *  password a service-account key (JSON) or an access token. */
-  bigquery: { label: 'BigQuery', port: 443, database: '' }
+  bigquery: { label: 'BigQuery', port: 443, database: '' },
+  /** Extract only, over the Snowflake SQL API; host is the account address, database DB or DB.SCHEMA, the password a
+   *  key-pair private key (PEM) or an OAuth token. */
+  snowflake: { label: 'Snowflake', port: 443, database: '' },
+  /** Extract only, over the Databricks SQL Statement Execution API; user is the SQL warehouse ID, database
+   *  catalog.schema, the password a personal access token. */
+  databricks: { label: 'Databricks', port: 443, database: '' }
 }
 /** Servers read by their own drivers and copied into the cache (DuckDB can't attach them): no live mode. */
-export const extractOnly = (k: string) => k === 'sqlserver' || k === 'clickhouse' || k === 'trino' || k === 'bigquery'
+export const extractOnly = (k: string) => ['sqlserver', 'clickhouse', 'trino', 'bigquery', 'snowflake', 'databricks'].includes(k)
 
 /** One relation a source exposes to SQL under `alias` (a sheet, named table, cell range, or database table). */
 export interface SourceTable {

@@ -149,7 +149,7 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
               Add {picked.size} table{picked.size === 1 ? '' : 's'}
             </Btn>
           ) : (
-            <Btn variant="primary" disabled={busy || !f.host || ((kind === 'postgres' || kind === 'trino' || kind === 'bigquery') && !f.database)} onClick={test} data-testid="pg-test">
+            <Btn variant="primary" disabled={busy || !f.host || ((kind === 'postgres' || kind === 'trino' || kind === 'bigquery' || kind === 'snowflake' || kind === 'databricks') && !f.database)} onClick={test} data-testid="pg-test">
               {busy && <Loader2 className="size-4 animate-spin" />} Connect
             </Btn>
           )}
@@ -157,16 +157,22 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
       }
     >
       <div className="mb-3">
-        <Segmented value={kind} onChange={(v) => setStore({ dialog: { kind: 'connect-db', kind2: v } })} label="Database type" options={(Object.keys(SERVER) as ServerKind[]).map((k) => ({ value: k, label: SERVER[k].label }))} />
+        <select aria-label="Database type" className={cx(inputCls, 'w-56')} value={kind} onChange={(e) => setStore({ dialog: { kind: 'connect-db', kind2: e.target.value as ServerKind } })} data-testid="db-type">
+          {(Object.keys(SERVER) as ServerKind[]).map((k) => (
+            <option key={k} value={k}>
+              {SERVER[k].label}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="grid grid-cols-[1fr_110px] gap-3">
-        <Field label="Host">
+        <Field label={kind === 'snowflake' ? 'Account address' : kind === 'databricks' ? 'Workspace address' : 'Host'} hint={kind === 'snowflake' ? 'e.g. xy12345.eu-west-1.snowflakecomputing.com' : kind === 'databricks' ? 'e.g. adb-1234567890.12.azuredatabricks.net' : undefined}>
           <input className={inputCls} value={f.host} onChange={(e) => upd({ host: e.target.value })} aria-label="Host" data-testid="pg-host" />
         </Field>
         <Field label="Port">
           <input className={inputCls} type="number" value={f.port} onChange={(e) => upd({ port: Number(e.target.value) })} aria-label="Port" data-testid="pg-port" />
         </Field>
-        <Field label={kind === 'mysql' ? 'Database (empty: all)' : kind === 'trino' ? 'Catalog (or catalog.schema)' : kind === 'bigquery' ? 'Project (or project.dataset)' : 'Database'}>
+        <Field label={kind === 'mysql' ? 'Database (empty: all)' : kind === 'trino' || kind === 'databricks' ? 'Catalog (or catalog.schema)' : kind === 'bigquery' ? 'Project (or project.dataset)' : kind === 'snowflake' ? 'Database (or DATABASE.SCHEMA)' : 'Database'}>
           <input className={inputCls} value={f.database} onChange={(e) => upd({ database: e.target.value })} aria-label="Database" data-testid="pg-database" />
         </Field>
         <Field label="SSL">
@@ -177,19 +183,24 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
             <option value="verify-full">Verify</option>
           </select>
         </Field>
-        {kind === 'bigquery' ? (
+        {kind === 'bigquery' || kind === 'snowflake' ? (
           <div className="col-span-2">
-            <Field label="Service account key (JSON) or access token" hint="Read-only access is asked for. Kept in your system keychain, never in the project file.">
+            {kind === 'snowflake' && (
+              <Field label="User">
+                <input className={inputCls} value={f.user} onChange={(e) => upd({ user: e.target.value })} aria-label="User" autoComplete="off" data-testid="pg-user" />
+              </Field>
+            )}
+            <Field label={kind === 'bigquery' ? 'Service account key (JSON) or access token' : 'Private key (PEM, key-pair authentication) or OAuth token'} hint={kind === 'bigquery' ? 'Read-only access is asked for. Kept in your system keychain, never in the project file.' : 'Kept in your system keychain, never in the project file. The user’s default warehouse runs the queries.'}>
               <textarea className={cx(inputCls, 'h-20 py-1.5 font-mono text-[11.5px]')} value={f.password} onChange={(e) => upd({ password: e.target.value })} aria-label="Service account key" autoComplete="off" spellCheck={false} data-testid="pg-password" />
             </Field>
           </div>
         ) : (
           <>
-        <Field label="User">
+        <Field label={kind === 'databricks' ? 'SQL warehouse ID' : 'User'}>
           <input className={inputCls} value={f.user} onChange={(e) => upd({ user: e.target.value })} aria-label="User" autoComplete="off" data-testid="pg-user" />
         </Field>
         <div />
-        <Field label="Password" hint={keychain && !keychain.secure ? 'No system keychain was found: the password is kept until you quit.' : undefined}>
+        <Field label={kind === 'databricks' ? 'Personal access token' : 'Password'} hint={keychain && !keychain.secure ? 'No system keychain was found: the password is kept until you quit.' : undefined}>
           <input className={inputCls} type="password" value={f.password} onChange={(e) => upd({ password: e.target.value })} aria-label="Password" autoComplete="off" data-testid="pg-password" />
         </Field>
           </>

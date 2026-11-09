@@ -1,5 +1,5 @@
-// ClickHouse (its HTTP interface), Trino / Presto (its REST protocol) and BigQuery (its REST API): tables are copied
-// into the cache (extract only; DuckDB can't attach them). Only the catalog query and SELECT * of a chosen table are ever sent, with names
+// ClickHouse (its HTTP interface), Trino / Presto (its REST protocol), BigQuery, Snowflake and Databricks (their REST
+// APIs): tables are copied into the cache (extract only; DuckDB can't attach them). Only the catalog query and SELECT * of a chosen table are ever sent, with names
 // quoted; user SQL runs in DuckDB over the copy. ClickHouse requests also carry readonly=1, so the server refuses
 // anything else.
 import { dateValue, timestampValue, type DuckDBConnection } from '@duckdb/node-api'
@@ -212,6 +212,137 @@ function bigqueryValue(v: unknown, type: string, mode?: string): unknown {
   return v
 }
 
+// ---------------------------------------------------------------- Snowflake (SQL API v2)
+
+export function snowflakeType(t: { type: string; scale?: number | null }): Duck {
+  const u = t.type.toLowerCase()
+  if (u === 'fixed') return t.scale ? 'DOUBLE' : 'BIGINT'
+  if (u === 'real') return 'DOUBLE'
+  if (u === 'boolean') return 'BOOLEAN'
+  if (u === 'date') return 'DATE'
+  if (u.startsWith('timestamp')) return 'TIMESTAMP'
+  return 'VARCHAR'
+}
+
+/**
+ * Snowflake's Authorization: a private key (PEM) signs a key-pair JWT (issuer ACCOUNT.USER.SHA256:fingerprint of the
+ * public key); any other password is an OAuth token.
+ */
+async function snowflakeAuth(s: ResolvedSource): Promise<Record<string, string>> {
+  const secret = (s.password ?? '').trim()
+  if (!secret) throw new Error('Snowflake: enter a key-pair private key (PEM) or an OAuth token.')
+  if (!secret.includes('PRIVATE KEY')) return { Authorization: `Bearer ${secret}`, 'X-Snowflake-Authorization-Token-Type': 'OAUTH' }
+  const { createPrivateKey, createPublicKey, createHash, createSign } = await import('node:crypto')
+  const key = createPrivateKey(secret)
+  const fp = createHash('sha256').update(createPublicKey(key).export({ type: 'spki', format: 'der' })).digest('base64')
+  const account = (s.host ?? '').split('.')[0].toUpperCase()
+  const user = (s.user ?? '').toUpperCase()
+  const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url')
+  const now = Math.floor(Date.now() / 1000)
+  const unsigned = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({ iss: `${account}.${user}.SHA256:${fp}`, sub: `${account}.${user}`, iat: now, exp: now + 3600 })}`
+  return { Authorization: `Bearer ${unsigned}.${createSign('RSA-SHA256').update(unsigned).sign(key).toString('base64url')}`, 'X-Snowflake-Authorization-Token-Type': 'KEYPAIR_JWT' }
+}
+
+type SfPage = { resultSetMetaData?: { rowType: { name: string; type: string; scale?: number | null }[]; partitionInfo?: unknown[] }; data?: (string | null)[][]; statementHandle?: string; message?: string; code?: string }
+
+async function snowflake(s: ResolvedSource, path: string, body?: unknown): Promise<SfPage> {
+  const headers = { ...(await snowflakeAuth(s)), 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': 'SimpleViz' }
+  let res = await fetch(`${base(s, 443)}/api/v2/statements${path}`, { method: body ? 'POST' : 'GET', headers, body: body ? JSON.stringify(body) : undefined, signal: timeout(s) })
+  let json = (await res.json().catch(() => ({}))) as SfPage
+  // 202: still running; ask again by its handle.
+  for (let i = 0; res.status === 202 && json.statementHandle && i < 600; i++) {
+    await new Promise((r) => setTimeout(r, 500))
+    res = await fetch(`${base(s, 443)}/api/v2/statements/${encodeURIComponent(json.statementHandle)}`, { headers, signal: timeout(s) })
+    json = (await res.json().catch(() => ({}))) as SfPage
+  }
+  if (!res.ok) throw new Error(`Snowflake: ${json.message ?? `HTTP ${res.status}`}`)
+  return json
+}
+
+const sfDb = (s: ResolvedSource) => {
+  const [database, schema] = (s.database ?? '').split('.')
+  if (!database) throw new Error('Enter the Snowflake database (or DATABASE.SCHEMA).')
+  return { database, schema }
+}
+
+/** Runs a statement; yields the first page, then each further partition. */
+async function* snowflakeRows(s: ResolvedSource, sql: string): AsyncGenerator<SfPage> {
+  const { database, schema } = sfDb(s)
+  const first = await snowflake(s, '', { statement: sql, timeout: Math.max(5, s.timeoutSec) * 6, database, ...(schema ? { schema } : {}) })
+  yield first
+  const parts = first.resultSetMetaData?.partitionInfo?.length ?? 1
+  for (let p = 1; p < parts && first.statementHandle; p++) yield { ...(await snowflake(s, `/${encodeURIComponent(first.statementHandle)}?partition=${p}`)), resultSetMetaData: first.resultSetMetaData }
+}
+
+export async function snowflakeTables(s: ResolvedSource): Promise<string[]> {
+  const { schema } = sfDb(s)
+  const out: string[] = []
+  for await (const p of snowflakeRows(s, `SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema <> 'INFORMATION_SCHEMA'${schema ? ` AND table_schema = '${schema.replace(/'/g, "''").toUpperCase()}'` : ''} ORDER BY 1, 2`)) for (const r of p.data ?? []) out.push(`${r[0]}.${r[1]}`)
+  return out
+}
+
+/** Snowflake JSON values as the staging appender reads them: dates are days since 1970, timestamps seconds. */
+function snowflakeValue(v: string | null, t: { type: string }): unknown {
+  if (v === null) return null
+  const u = t.type.toLowerCase()
+  if (u === 'date') return new Date(Number(v) * 86_400_000).toISOString().slice(0, 10)
+  if (u.startsWith('timestamp')) return new Date(Number(v.split(' ')[0]) * 1000).toISOString().replace('T', ' ').replace('Z', '')
+  return v
+}
+
+// ---------------------------------------------------------------- Databricks (SQL Statement Execution API)
+
+export function databricksType(t: string): Duck {
+  const u = t.toUpperCase()
+  if (['TINYINT', 'SMALLINT', 'INT', 'BIGINT', 'LONG', 'SHORT', 'BYTE'].includes(u)) return 'BIGINT'
+  if (['FLOAT', 'DOUBLE', 'DECIMAL'].includes(u)) return 'DOUBLE'
+  if (u === 'BOOLEAN') return 'BOOLEAN'
+  if (u === 'DATE') return 'DATE'
+  if (u.startsWith('TIMESTAMP')) return 'TIMESTAMP'
+  return 'VARCHAR'
+}
+
+type DbxPage = { statement_id?: string; status?: { state: string; error?: { message: string } }; manifest?: { schema?: { columns: { name: string; type_name: string }[] } }; result?: { data_array?: (string | null)[][]; next_chunk_internal_link?: string }; data_array?: (string | null)[][]; next_chunk_internal_link?: string; message?: string }
+
+async function* databricksRows(s: ResolvedSource, sql: string): AsyncGenerator<{ columns?: { name: string; type_name: string }[]; data: (string | null)[][] }> {
+  if (!s.user) throw new Error('Enter the SQL warehouse ID (in the User field).')
+  const [catalog, schema] = (s.database ?? '').split('.')
+  const headers = { Authorization: `Bearer ${s.password ?? ''}`, 'Content-Type': 'application/json' }
+  const origin = new URL(base(s, 443)).origin
+  const get = async (path: string) => {
+    const url = new URL(path, origin)
+    if (url.origin !== origin) throw new Error('Databricks: the server pointed to another address.')
+    const res = await fetch(url, { headers, signal: timeout(s) })
+    const json = (await res.json().catch(() => ({}))) as DbxPage
+    if (!res.ok) throw new Error(`Databricks: ${json.message ?? `HTTP ${res.status}`}`)
+    return json
+  }
+  let res = await fetch(`${origin}/api/2.0/sql/statements`, { method: 'POST', headers, body: JSON.stringify({ statement: sql, warehouse_id: s.user, ...(catalog ? { catalog } : {}), ...(schema ? { schema } : {}), wait_timeout: '30s', on_wait_timeout: 'CONTINUE', disposition: 'INLINE', format: 'JSON_ARRAY' }), signal: timeout(s) })
+  let page = (await res.json().catch(() => ({}))) as DbxPage
+  if (!res.ok) throw new Error(`Databricks: ${page.message ?? `HTTP ${res.status}`}`)
+  for (let i = 0; page.status && ['PENDING', 'RUNNING'].includes(page.status.state) && i < 600; i++) {
+    await new Promise((r) => setTimeout(r, 1000))
+    page = await get(`/api/2.0/sql/statements/${encodeURIComponent(page.statement_id ?? '')}`)
+  }
+  if (page.status?.state !== 'SUCCEEDED') throw new Error(`Databricks: ${page.status?.error?.message ?? `the statement ${page.status?.state?.toLowerCase() ?? 'failed'}`}`)
+  yield { columns: page.manifest?.schema?.columns, data: page.result?.data_array ?? [] }
+  // Further chunks, by the server's own links.
+  let next = page.result?.next_chunk_internal_link
+  while (next) {
+    const chunk = await get(next)
+    yield { data: chunk.data_array ?? [] }
+    next = chunk.next_chunk_internal_link
+  }
+}
+
+export async function databricksTables(s: ResolvedSource): Promise<string[]> {
+  const [catalog, schema] = (s.database ?? '').split('.')
+  if (!catalog) throw new Error('Enter the catalog (or catalog.schema).')
+  const out: string[] = []
+  for await (const p of databricksRows(s, `SELECT table_schema, table_name FROM ${trQuote(catalog).replace(/"/g, '`')}.information_schema.tables WHERE table_schema <> 'information_schema'${schema ? ` AND table_schema = '${schema.replace(/'/g, "''")}'` : ''} ORDER BY 1, 2`)) for (const r of p.data) out.push(`${r[0]}.${r[1]}`)
+  return out
+}
+
 // ---------------------------------------------------------------- staging
 
 let seq = 0
@@ -237,6 +368,25 @@ export async function stageWarehouse(duck: DuckDBConnection, s: ResolvedSource, 
         if (!names) names = row as string[]
         else if (!app) await start(names, (row as string[]).map(clickhouseType))
         else append(row)
+      }
+    } else if (s.kind === 'snowflake') {
+      const { database } = sfDb(s)
+      const q2 = (n: string) => `"${n.replace(/"/g, '""')}"`
+      let types: { type: string }[] = []
+      for await (const p of snowflakeRows(s, `SELECT * FROM ${q2(database)}.${q2(schema || sfDb(s).schema || 'PUBLIC')}.${q2(table)}`)) {
+        const rt = p.resultSetMetaData?.rowType ?? []
+        if (!app && rt.length) {
+          types = rt
+          await start(rt.map((c) => c.name), rt.map(snowflakeType))
+        }
+        for (const r of p.data ?? []) append(r.map((v, i) => snowflakeValue(v, types[i] ?? { type: 'text' })))
+      }
+    } else if (s.kind === 'databricks') {
+      const [catalog] = (s.database ?? '').split('.')
+      const bq2 = (n: string) => '`' + n.replace(/`/g, '``') + '`'
+      for await (const p of databricksRows(s, `SELECT * FROM ${[catalog, schema, table].filter(Boolean).map(bq2).join('.')}`)) {
+        if (!app && p.columns?.length) await start(p.columns.map((c) => c.name), p.columns.map((c) => databricksType(c.type_name)))
+        for (const r of p.data) append(r)
       }
     } else if (s.kind === 'bigquery') {
       const { project, dataset } = bqProject(s)

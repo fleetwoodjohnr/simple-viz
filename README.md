@@ -15,7 +15,7 @@ and [Simple Cell](https://github.com/fleetwoodjohnr/simple-cell).
 
 - **Connect.** Excel (`.xlsx`, `.xlsm`, `.xls`, `.xlsb`), OpenDocument (`.ods`), CSV, TSV, JSON, Parquet, Arrow/Feather, XML,
   SQLite and DuckDB files — on your computer, on the web, in Amazon S3 (and compatible storage) or Azure Blob storage —
-  and PostgreSQL, MySQL/MariaDB, SQL Server, ClickHouse, Trino/Presto and BigQuery. Choose sheets, Excel tables, named ranges or cell ranges. Drop files
+  and PostgreSQL, MySQL/MariaDB, SQL Server, ClickHouse, Trino/Presto, BigQuery, Snowflake and Databricks. Choose sheets, Excel tables, named ranges or cell ranges. Drop files
   anywhere in the window. See [docs/CONNECTORS.md](docs/CONNECTORS.md).
 - **SQL on any of it.** A sheet called `Transactions` becomes a table called `transactions`. Join it with a PostgreSQL
   table, add calculated columns, and save the query as a dataset — no database import needed. Powered by DuckDB.
