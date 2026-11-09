@@ -115,8 +115,9 @@ test('edit a dashboard, cross-filter, drill down, export, save and reopen', asyn
   // Drill down: Virginia → its products.
   await clickBar(page, region, 'Virginia')
   await expect(region.getByTestId('drill-up')).toBeVisible()
+  // The drill-up button shows at once; the drilled query arrives after it.
+  await expect.poll(async () => (await chartSeries(page, region)).categories).toContain('Laptop')
   const drilled = await chartSeries(page, region)
-  expect(drilled.categories).toContain('Laptop')
   expect(Math.abs(drilled.series['Sum of revenue'].reduce((a, b) => a + b, 0) - exp.v1.revenueByRegion.Virginia)).toBeLessThan(0.01)
   await region.getByTestId('drill-up').click()
   await expect.poll(async () => (await chartSeries(page, region)).categories.length).toBe(exp.regions.length)

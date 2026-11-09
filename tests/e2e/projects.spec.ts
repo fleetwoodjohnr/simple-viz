@@ -1,5 +1,6 @@
 // A project's life outside one session: opened on another computer (it asks before reading sources), files moved
 // (relink), and unsaved work after a crash (recovery).
+import { execSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect, launch, quit, salesProject, tempDir, stubDialogs, messagesShown, MOD } from './helpers'
@@ -72,10 +73,11 @@ test('unsaved work comes back after a crash', async () => {
   await page.getByTestId('add-file').click()
   await page.getByTestId('relation-customers').waitFor()
   await expect.poll(() => (existsSync(path.join(userData, 'recovery')) ? readdirSync(path.join(userData, 'recovery')).length : 0), { timeout: 15_000 }).toBe(1)
-  // Wait until the killed instance is gone: on Windows it holds the single-instance lock a moment longer, and a new
-  // instance started meanwhile hands over to it and quits.
+  // Kill the app with its child processes: Windows doesn't end the children with the main process, and while they
+  // live they hold the single-instance lock, so a new instance hands over to them and quits.
   const gone = new Promise((r) => app.process().once('exit', r))
-  app.process().kill('SIGKILL')
+  if (process.platform === 'win32') execSync(`taskkill /pid ${app.process().pid} /T /F`, { stdio: 'ignore' })
+  else app.process().kill('SIGKILL')
   await gone
   await new Promise((r) => setTimeout(r, 1500))
   const again = await launch({ userData })
