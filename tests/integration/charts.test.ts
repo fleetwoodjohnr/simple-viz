@@ -122,6 +122,18 @@ describe('chart queries', () => {
     restart.forEach((r) => near(r.m0, want2.get(key(r, 'd0', 'd1'))!))
   })
 
+  it('show missing values: every combination of the axis and color values, empty ones with no value', async () => {
+    const [{ c }] = await rows(engine, 'SELECT count(*) AS c FROM (SELECT DISTINCT region, product_name FROM sales WHERE customer_id < 1010)')
+    const [{ r, p }] = await rows(engine, 'SELECT count(DISTINCT region) AS r, count(DISTINCT product_name) AS p FROM sales WHERE customer_id < 1010')
+    const chart = { enc: { x: [dim('region')], color: dim('product_name'), y: [sum('revenue')] }, filters: [{ id: 'f', field: 'customer_id', op: 'between' as const, min: null, max: 1009 }] }
+    const plain = await run(chart)
+    expect(plain.length).toBe(Number(c))
+    const dense = await run({ ...chart, options: { showMissing: true } })
+    expect(dense.length).toBe(Number(r) * Number(p))
+    expect(Number(r) * Number(p)).toBeGreaterThan(Number(c)) // some combinations really are missing
+    expect(dense.filter((x) => x.m0 === null).length).toBe(Number(r) * Number(p) - Number(c))
+  })
+
   it('+ joins text, as in Tableau', async () => {
     const out = await run({ enc: { x: [dim('Label')], y: [sum('revenue')] } }, [calc('Label', "[region] + ' / ' + UPPER([segment])")])
     const ref = await rows(engine, `SELECT region || ' / ' || upper(segment) AS l, sum(revenue) r FROM sales GROUP BY 1 ORDER BY 1`)

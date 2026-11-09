@@ -835,10 +835,10 @@ function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fie
             )}
             {cartesian && <ParamLine lines={lines} setLines={(refLines) => setO({ refLines })} />}
             <TooltipChartPicker chart={chart} setO={setO} />
-            {cartesian && chart.enc.x.length === 1 && chart.enc.x[0].grain && chart.enc.x[0].grain !== 'exact' && (
-              <label className="mt-2 flex items-center gap-2 text-[12px] text-text-2" title="Every period from the first to the last; table calculations run over the empty ones">
+            {(cartesian || chart.type === 'heatmap' || chart.type === 'table' || chart.type === 'crosstab') && ((chart.enc.x.length === 1 && chart.enc.x[0].grain && chart.enc.x[0].grain !== 'exact') || chartDims(chart).length >= 2) && (
+              <label className="mt-2 flex items-center gap-2 text-[12px] text-text-2" title="Every period of a date axis from the first to the last, and every combination of the values on the axes, colors and panels; table calculations run over the empty ones">
                 <input type="checkbox" className="size-3.5 accent-[var(--accent)]" checked={!!o.showMissing} onChange={(e) => setO({ showMissing: e.target.checked || undefined })} data-testid="show-missing" />
-                Show missing dates
+                Show missing values
               </label>
             )}
             {(chart.type === 'line' || chart.type === 'area') && chart.enc.x[0]?.grain && chart.enc.x[0].grain !== 'exact' && (

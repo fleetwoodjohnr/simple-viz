@@ -360,18 +360,24 @@ export function compileQuery(input: QueryInput): CompiledQuery {
     return { sql, fields, limit: maxMarks ?? Infinity }
   }
 
-  // Densification: with "show missing dates", every period of the date axis from the first to the last, crossed with
-  // the other dimensions' combinations; periods without data have null measures (table calculations run over them).
+  // Densification ("show missing values"): every period of a date axis from the first to the last, and every
+  // combination of the axes', colors' and panels' values (Tableau's empty rows and columns); marks without data have
+  // null measures, and table calculations run over them. With fields on detail, tooltip, label or size only the dates
+  // are filled (their combinations are kept as they are).
   const xs = dims.filter((d) => d.role === 'x')
   const x = xs[0]
   const step = x && xs.length === 1 && isDate(x.type) && x.ref.grain && x.ref.grain !== 'exact' ? DENSE_STEP[x.ref.grain] : undefined
-  const dense = !!chart.options.showMissing && !!step && aggCols.length > dims.length
+  const crossable = dims.every((d) => ['x', 'y', 'color', 'facet'].includes(d.role))
+  const dense = !!chart.options.showMissing && aggCols.length > dims.length && (!!step || (crossable && dims.length >= 2))
   const aggName = dense ? 'a0' : 'a'
   sql += `,\n${aggName} AS (\n  SELECT ${aggCols.join(', ')}\n  FROM f${dims.length ? '\n  GROUP BY ALL' : ''}${having.length ? `\n  HAVING ${having.join(' AND ')}` : ''}\n)`
   if (dense) {
-    const others = dims.filter((d) => d !== x).map((d) => d.key)
-    const spine = `CAST(unnest(generate_series(min(${x.key}), max(${x.key}), INTERVAL '${step}')) AS ${x.ref.grain === 'hour' ? 'TIMESTAMP' : 'DATE'})`
-    sql += `,\na AS (\n  SELECT g.${x.key}${others.length ? ', p.*' : ''}, a0.* EXCLUDE (${dims.map((d) => d.key).join(', ')})\n  FROM (SELECT ${spine} AS ${x.key} FROM a0) g${others.length ? `\n  CROSS JOIN (SELECT DISTINCT ${others.join(', ')} FROM a0) p` : ''}\n  LEFT JOIN a0 ON a0.${x.key} = g.${x.key}${others.map((k) => ` AND a0.${k} IS NOT DISTINCT FROM p.${k}`).join('')}\n)`
+    const spine = (d: OutField) => (d === x && step ? `SELECT CAST(unnest(generate_series(min(${d.key}), max(${d.key}), INTERVAL '${step}')) AS ${d.ref.grain === 'hour' ? 'TIMESTAMP' : 'DATE'}) AS ${d.key} FROM a0` : `SELECT DISTINCT ${d.key} FROM a0`)
+    // Each crossable dimension on its own (all combinations); the rest as the combinations the data has.
+    const parts = crossable ? dims.map((d) => ({ keys: [d.key], sql: spine(d) })) : [{ keys: [x.key], sql: spine(x) }, ...(dims.length > 1 ? [{ keys: dims.filter((d) => d !== x).map((d) => d.key), sql: `SELECT DISTINCT ${dims.filter((d) => d !== x).map((d) => d.key).join(', ')} FROM a0` }] : [])]
+    const from = parts.map((p, i) => `(${p.sql}) g${i}`).join('\n  CROSS JOIN ')
+    const on = parts.flatMap((p, i) => p.keys.map((k) => `a0.${k} IS NOT DISTINCT FROM g${i}.${k}`)).join(' AND ')
+    sql += `,\na AS (\n  SELECT ${parts.map((_, i) => `g${i}.*`).join(', ')}, a0.* EXCLUDE (${dims.map((d) => d.key).join(', ')})\n  FROM ${from}\n  LEFT JOIN a0 ON ${on}\n)`
   }
   for (const t of tuples) sql += `,\n${t}`
   sql += `\nSELECT ${finalCols.join(', ')} FROM a${joins.length ? `\n${joins.join('\n')}` : ''}${ordered ? `\nORDER BY ${ordered}` : ''}${limitSql}`

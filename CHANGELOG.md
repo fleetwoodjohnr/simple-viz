@@ -13,7 +13,8 @@
   chart in a tooltip.
 - **Calculations and parameters.** `+` joins text next to calculated fields that return text. Filters can follow a
   parameter (a value, a range's ends, top N); number parameters can have a range, shown as a slider.
-  Table calculations computed along several dimensions, restarting every one of them.
+  Table calculations computed along several dimensions, restarting every one of them. Show missing values fills
+  empty combinations of categories as well as dates.
 - **Protected workbooks.** Password-protected Excel workbooks open with their password (kept in the keychain).
 - **Messy sheets.** The tables inside a sheet with titles, notes or several tables are found and picked.
 - **More sources.** Oracle, Amazon Redshift, ClickHouse, Trino/Presto, Google BigQuery, Snowflake and Databricks (extract;

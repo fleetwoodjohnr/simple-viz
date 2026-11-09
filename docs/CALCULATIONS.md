@@ -99,6 +99,8 @@ Densification beyond a date axis, and "compute using" a combination of dimension
 runs along the x axis and restarts for each value of the other dimensions; choose another dimension of the view to run
 along it instead, restarting for each combination of the rest.
 
-**Show missing dates** (chart format panel, for a date axis with a grain such as month) fills every period from the
-first to the last; empty periods have no value, so lines show a gap, and table calculations (running totals, moving
-averages, differences) run over them as Tableau's densification does.
+**Show missing values** (chart format panel) fills every period of a date axis with a grain (such as month) from the
+first to the last, and every combination of the values on the axes, colors and panels (Tableau's empty rows and
+columns); empty marks have no value, so lines show a gap, and table calculations (running totals, moving averages,
+differences) run over them as Tableau's densification does. With fields on detail, tooltip, label or size, only dates
+are filled.
