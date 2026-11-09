@@ -1,6 +1,6 @@
 // Loads and registers the maps map charts draw on: the bundled ones (loaded on first use) and the project's own.
 import * as echarts from 'echarts/core'
-import { geoLookup, normalizeName, type FeatureCollection } from '@/core/charts/geo'
+import { geoLookup, normalizeName, placeLocator, type FeatureCollection, type Locate, type PlaceRow } from '@/core/charts/geo'
 import type { CustomMap } from '@/shared/project'
 import type { ChartData, Value } from '@/core/charts/data'
 
@@ -39,4 +39,14 @@ export async function resolveMap(chosen: string | undefined, values: Value[], cu
   }
   if (best.hits < 0) best = { map: 'world', lookup: (await load('world', custom))!, hits: 0 }
   return { map: best.map, lookup: best.lookup }
+}
+
+let places: Promise<PlaceRow[]> | null = null
+let zips: Promise<Record<string, [number, number]>> | null = null
+/** Finds places by name for point maps (loaded on first use; ZIP codes only when the values look like them). */
+export async function placeLocate(values: Value[]): Promise<Locate> {
+  places ??= import('@/core/charts/geo/places.json').then((m) => (m.default as unknown as { rows: PlaceRow[] }).rows)
+  const wantZips = values.some((v) => /^\d{5}(-\d{4})?$/.test(String(v ?? '').trim()))
+  if (wantZips) zips ??= import('@/core/charts/geo/us-zip.json').then((m) => m.default as unknown as Record<string, [number, number]>)
+  return placeLocator(await places, wantZips ? await zips! : undefined)
 }

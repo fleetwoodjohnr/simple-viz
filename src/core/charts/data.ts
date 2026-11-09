@@ -32,7 +32,7 @@ export interface ChartData {
   /** Values selected by a dashboard action, keyed by field name: other marks are dimmed. */
   highlight?: Record<string, Value[]>
   /** Map charts: the registered map and how data values find its areas (core/charts/geo.ts). */
-  geo?: { map: string; lookup: Map<string, string> }
+  geo?: { map: string; lookup: Map<string, string>; locate?: import('./geo').Locate }
 }
 
 export const LIGHT: Theme = { dark: false, text: '#17171c', text2: '#55555f', grid: '#ececf0', axis: '#d6d6dc', bg: 'transparent', font: 'Inter Variable, system-ui, sans-serif', palette: ['#2f6fde', '#e8662a', '#1b9e77', '#c23f8c', '#7a46c9', '#b8860b', '#2697a6', '#d1414b'], seq: ['#fde7d8', '#9a3412'], accent: '#c2410c' }

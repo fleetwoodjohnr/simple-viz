@@ -63,6 +63,7 @@ test('more chart types draw; maps match areas; custom GeoJSON; small multiples',
   expect(d.option.title[0].subtext).toContain('4 values not on the map')
   expect(await page.evaluate(() => (window as any).__sv.get().project.maps.map((m: any) => m.geojson.features.length))).toEqual([2])
 
+
   // Each type below draws its own series (and components): a type missing from the build would leave none.
   const cases: [string, string[], string[]][] = [
     ['waterfall', ['bar', 'bar'], ['grid']],
@@ -141,5 +142,21 @@ test('more chart types draw; maps match areas; custom GeoJSON; small multiples',
   expect(d.types).toEqual(['gauge'])
   expect(Math.abs(d.option.series[0].data[0].value - exp.v1.profit)).toBeLessThan(0.01)
 
+  // Points placed by name: each state's capital ("City, ST"), sized by revenue, on the US map.
+  await page.getByTestId('new-chart').click()
+  await page.getByTestId('chart-dataset').selectOption('sales_enriched')
+  await page.getByTestId('new-calc').click()
+  await page.getByTestId('calc-name').fill('Capital')
+  await page.getByTestId('calc-formula').fill("CASE [region] WHEN 'Virginia' THEN 'Richmond, VA' WHEN 'Texas' THEN 'Austin, TX' WHEN 'California' THEN 'Sacramento, CA' WHEN 'New York' THEN 'Albany, NY' WHEN 'Florida' THEN 'Tallahassee, FL' WHEN 'Washington' THEN 'Olympia, WA' END")
+  await page.getByTestId('calc-save').click()
+  await page.getByTestId('type-pointmap').click()
+  await addField(page, 'Capital', 'detail')
+  await addField(page, 'revenue', 'size')
+  await page.getByTestId('chart-map').selectOption('us-states')
+  await expect.poll(async () => (await drawn(page)).option.series[0]?.data?.length).toBe(exp.regions.length)
+  d = await drawn(page)
+  const richmond = d.option.series[0].data.find((p: any) => p.value[0] === -77.452)
+  expect(richmond.value.slice(0, 2)).toEqual([-77.452, 37.552])
+  expect(Math.abs(richmond.value[2] - exp.v1.revenueByRegion.Virginia)).toBeLessThan(0.01)
   await quit(app)
 })

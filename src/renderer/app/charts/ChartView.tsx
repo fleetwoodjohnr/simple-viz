@@ -17,7 +17,7 @@ import type { Chart, ChartFilter } from '@/shared/charts'
 import { tableSource, type Model, type Project } from '@/shared/project'
 import type { ColumnInfo, RelationInfo } from '@/shared/engine-protocol'
 import { DataGrid } from '../../ui/DataGrid'
-import { resolveMap } from './maps'
+import { resolveMap, placeLocate } from './maps'
 import { cx } from '../../ui'
 
 echarts.use([BarChart, LineChart, PieChart, ScatterChart, HeatmapChart, TreemapChart, BoxplotChart, FunnelChart, GaugeChart, RadarChart, SankeyChart, GraphChart, SunburstChart, CandlestickChart, MapChart, CustomChart, GridComponent, LegendComponent, TooltipComponent, TitleComponent, VisualMapComponent, MarkLineComponent, MarkAreaComponent, AriaComponent, CalendarComponent, GeoComponent, RadarComponent, CanvasRenderer, SVGRenderer])
@@ -112,8 +112,11 @@ export function useChartData(chart: Chart | null, extra?: ChartFilter[], highlig
         if (!p.geo) return setState({ data, error: null, loading: false, sql })
         // Map charts: load the map (and pick one if none is chosen) before drawing.
         const area = compiled.fields.findIndex((f) => f.kind === 'dim')
-        resolveMap(p.id === 'pointmap' ? (chart.options.map ?? 'world') : chart.options.map, area < 0 ? [] : data.rows.map((x) => x[area]), maps).then(
-          (geo) => alive && setState({ data: { ...data, geo }, error: null, loading: false, sql }),
+        // Point maps without longitude/latitude place their Detail values by name.
+        const place = compiled.fields.findIndex((f) => f.kind === 'dim' && f.role === 'detail')
+        const byName = p.id === 'pointmap' && place >= 0 && !(compiled.fields.some((f) => f.kind === 'measure' && f.role === 'x') && compiled.fields.some((f) => f.kind === 'measure' && f.role === 'y'))
+        Promise.all([resolveMap(p.id === 'pointmap' ? (chart.options.map ?? 'world') : chart.options.map, area < 0 ? [] : data.rows.map((x) => x[area]), maps), byName ? placeLocate(data.rows.map((x) => x[place])) : undefined]).then(
+          ([geo, locate]) => alive && setState({ data: { ...data, geo: geo && { ...geo, locate } }, error: null, loading: false, sql }),
           (e: Error) => alive && setState({ data: null, error: `Couldn’t load the map: ${e.message}`, loading: false, sql })
         )
       },

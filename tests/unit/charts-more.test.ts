@@ -3,7 +3,9 @@ import { describe, it, expect } from 'vitest'
 import { plugin } from '@/core/charts/plugins'
 import { LIGHT, type ChartData, type Value } from '@/core/charts/data'
 import { densities, fillTemplate, niceMax } from '@/core/charts/more'
-import { geoLookup, checkGeoJson, normalizeName } from '@/core/charts/geo'
+import { geoLookup, checkGeoJson, normalizeName, placeLocator, type PlaceRow } from '@/core/charts/geo'
+import places from '@/core/charts/geo/places.json'
+import zips from '@/core/charts/geo/us-zip.json'
 import type { OutField } from '@/core/query/compile'
 import world from '@/core/charts/geo/world.json'
 import usStates from '@/core/charts/geo/us-states.json'
@@ -121,6 +123,25 @@ describe('more chart types', () => {
     expect(o.title.subtext).toContain('1 value not on the map: Atlantis')
     const pts = opt('pointmap', data([f('m0', 'lon', 'measure', 'x'), f('m1', 'lat', 'measure', 'y')], [[-77, 38.9]], {}, { geo: { map: 'world', lookup } }))
     expect([pts.geo.map, pts.series[0].coordinateSystem, pts.series[0].data[0].value]).toEqual(['world', 'geo', [-77, 38.9, 0]])
+  })
+
+  it('places by name: cities (the most populous, or qualified), "City, State", accents, US ZIP codes', () => {
+    const locate = placeLocator((places as unknown as { rows: PlaceRow[] }).rows, zips as unknown as Record<string, [number, number]>)
+    expect(locate('Paris')).toEqual([2.331, 48.869])
+    expect(locate('Portland')).toEqual([-122.682, 45.522]) // Oregon: the most populous Portland
+    expect(locate('Portland, ME')).toEqual([-70.246, 43.672])
+    expect(locate('Portland', 'Maine')).toEqual([-70.246, 43.672])
+    expect(locate('London', 'GB')).toEqual([-0.119, 51.502])
+    expect(locate('London, Ontario')).toEqual([-81.25, 42.97])
+    expect(locate('sao paulo')).toEqual(locate('São Paulo'))
+    expect(locate('10001')).toEqual([-73.997, 40.751])
+    expect(locate('94103-1234')).toEqual([-122.411, 37.773])
+    expect([locate('Atlantis'), locate('Springfield', 'Narnia'), locate(null)]).toEqual([null, null, null])
+    // On a point map: one point per city, the unknown ones counted.
+    const city = f('d0', 'city', 'dim', 'detail')
+    const o = opt('pointmap', data([city, f('m0', 'sales', 'measure', 'size')], [['Lyon', 5], ['Paris', 7], ['Atlantis', 1]], {}, { geo: { map: 'world', lookup: new Map(), locate } }))
+    expect(o.series[0].data.map((x: O) => x.value)).toEqual([[4.828, 45.772, 5], [2.331, 48.869, 7]])
+    expect(o.graphic[0].style.text).toBe('1 not found on the map')
   })
 
   it('custom GeoJSON is checked before it is kept', () => {

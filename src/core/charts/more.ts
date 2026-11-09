@@ -500,8 +500,20 @@ export const choropleth: Build = (d, t) => {
 export const pointMap: Build = (d, t) => {
   if (!d.geo) return { ...base(t, d), series: [] }
   const ms = measures(d)
-  const lon = measures(d, 'x')[0] ?? ms[0]
-  const lat = measures(d, 'y')[0] ?? ms.find((f) => f !== lon)
+  // Placed by name (a city, "City, State", a ZIP code on Detail, optionally qualified by a second Detail field) when
+  // there's no longitude and latitude.
+  const place = dims(d, 'detail')[0]
+  const qual = dims(d, 'detail')[1]
+  const byName = !!place && !!d.geo.locate && !(measures(d, 'x')[0] && measures(d, 'y')[0])
+  const lon = byName ? undefined : (measures(d, 'x')[0] ?? ms[0])
+  const lat = byName ? undefined : (measures(d, 'y')[0] ?? ms.find((f) => f !== lon))
+  let unknown = 0
+  const at = (r: Value[]): [unknown, unknown] | null => {
+    if (!byName) return [lon ? r[col(d, lon.key)] : null, lat ? r[col(d, lat.key)] : null]
+    const c = d.geo!.locate!(r[col(d, place.key)], qual ? r[col(d, qual.key)] : undefined)
+    if (!c) unknown++
+    return c
+  }
   const size = d.fields.find((f) => f.role === 'size')
   const color = dims(d, 'color')[0]
   const groups = new Map<string, Value[][]>()
@@ -517,7 +529,19 @@ export const pointMap: Build = (d, t) => {
     legend: legend(d, t, groups.size),
     tooltip: rowTooltip(d, t),
     geo: { map: d.geo.map, roam: true, top: d.options.title ? 48 : 12, bottom: 12, itemStyle: { areaColor: t.dark ? '#2a2a30' : '#ececf0', borderColor: t.dark ? '#18181b' : '#fff', borderWidth: 0.5 }, emphasis: { disabled: true }, silent: true },
-    series: [...groups].map(([name, rows]) => ({ type: 'scatter', name: name || lat?.title, coordinateSystem: 'geo', symbolSize: size ? (v: Value[]) => 5 + 25 * Math.sqrt(Math.abs(Number(v[2]) || 0) / smax) : 7, itemStyle: { opacity: 0.8 }, data: rows.map((r) => ({ value: [lon ? r[col(d, lon.key)] : null, lat ? r[col(d, lat.key)] : null, size ? r[col(d, size.key)] : 0], row: r, itemStyle: dimmed(d, r) ? { opacity: 0.2 } : undefined })) }))
+    series: [...groups].map(([name, rows]) => ({
+      type: 'scatter',
+      name: name || (byName ? place.title : lat?.title),
+      coordinateSystem: 'geo',
+      symbolSize: size ? (v: Value[]) => 5 + 25 * Math.sqrt(Math.abs(Number(v[2]) || 0) / smax) : 7,
+      itemStyle: { opacity: 0.8 },
+      data: rows.flatMap((r) => {
+        const c = at(r)
+        return c ? [{ value: [c[0], c[1], size ? r[col(d, size.key)] : 0], row: r, itemStyle: dimmed(d, r) ? { opacity: 0.2 } : undefined }] : []
+      })
+    })),
+    // Like Tableau's "unknown" indicator: values no place was found for.
+    ...(unknown ? { graphic: [{ type: 'text', right: 12, bottom: 10, style: { text: `${unknown.toLocaleString()} not found on the map`, fill: t.text2, fontSize: 11 } }] } : {})
   }
 }
 

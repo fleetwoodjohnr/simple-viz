@@ -10,6 +10,7 @@
   tables, without double counting.
 - **Dashboards.** Tiled layout; tablet and phone layouts; story points that keep their filter choices; the size of a
   chart in a tooltip.
+- **Maps.** Point maps place cities and US ZIP codes by name.
 - **Chart analytics.** Logarithmic, exponential, power and polynomial trend lines; percentile lines, confidence
   intervals of the mean and quartile reference boxes.
 
