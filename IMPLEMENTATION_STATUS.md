@@ -274,6 +274,8 @@ Also done: Google BigQuery (REST API, service-account key or access token, read-
 
 Also done: ClickHouse (HTTP interface, `readonly=1`) and Trino/Presto (REST protocol) sources, extract only, in the connection dialog — integration `warehouses` (real ClickHouse 24.8 and Trino 470 containers: types, a join with Excel, refresh, table lists, a wrong password).
 
+Also done: postal codes of 12 more countries on point maps (GeoNames, CC BY 4.0, SHA-256 pinned; UK outward codes and Canadian FSAs by their form, others with their country as a field or after a comma) — unit `charts-more`.
+
 Also done: background map tiles under point maps from a tile server set in Settings (off by default; fetched by the main process with the address, coordinates, type and size checked; Web Mercator; redrawn on pan and zoom; the provider's credit shown) — unit `charts-more` (projection, tiles of a view, addresses), e2e `maps` (a local tile server; an invalid address refused).
 
 Also done: custom maps from shapefiles (polygons with holes and parts, .dbf attributes in UTF-8 or Windows-1252, zipped or picked together; projected ones refused) and KML/KMZ (placemark polygons, ExtendedData) — unit `spatial` (files written by pyshp, `scripts/spatial-ref.py`), e2e `maps`.

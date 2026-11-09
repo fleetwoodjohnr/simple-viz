@@ -43,10 +43,14 @@ export async function resolveMap(chosen: string | undefined, values: Value[], cu
 
 let places: Promise<PlaceRow[]> | null = null
 let zips: Promise<Record<string, [number, number]>> | null = null
-/** Finds places by name for point maps (loaded on first use; ZIP codes only when the values look like them). */
+let postcodes: Promise<Record<string, Record<string, [number, number]>>> | null = null
+/** Finds places by name for point maps (loaded on first use; postal codes only when the values hold digits). */
 export async function placeLocate(values: Value[]): Promise<Locate> {
   places ??= import('@/core/charts/geo/places.json').then((m) => (m.default as unknown as { rows: PlaceRow[] }).rows)
-  const wantZips = values.some((v) => /^\d{5}(-\d{4})?$/.test(String(v ?? '').trim()))
-  if (wantZips) zips ??= import('@/core/charts/geo/us-zip.json').then((m) => m.default as unknown as Record<string, [number, number]>)
-  return placeLocator(await places, wantZips ? await zips! : undefined)
+  const digits = values.some((v) => /\d/.test(String(v ?? '')))
+  if (digits) {
+    zips ??= import('@/core/charts/geo/us-zip.json').then((m) => m.default as unknown as Record<string, [number, number]>)
+    postcodes ??= import('@/core/charts/geo/postcodes.json').then((m) => m.default as unknown as Record<string, Record<string, [number, number]>>)
+  }
+  return placeLocator(await places, digits ? await zips! : undefined, digits ? await postcodes! : undefined)
 }

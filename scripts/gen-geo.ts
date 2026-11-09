@@ -60,3 +60,40 @@ for (const line of text.split('\n').slice(1)) {
 }
 writeFileSync(path.join(out, 'us-zip.json'), JSON.stringify(zip))
 console.log(`US ZIP codes: ${Object.keys(zip).length}`)
+
+// Postal codes outside the US: GeoNames (CC BY 4.0, geonames.org), each code at the mean of its places. GB: outward
+// codes (SW1A); CA: forward sortation areas (K1A); the rest as written. GeoNames updates these files: when a hash no
+// longer matches, check the new file and update the hash here.
+const POSTCODES: Record<string, string> = {
+  DE: '8be0dbbdca8d370bcbbbb20e46ed207d8bfc9a542619fb4cd3143eb6d5cd6dc7',
+  FR: 'ac59301e4754ecf3663b30cc36509b3093e07464be83714bbf31be32f14f6d23',
+  GB: 'e1e0c9f6e234d77b77bfe27ca567fdc81818d01b306f4a7508b5c3bc466723f7',
+  CA: '5f6237799474d75fa53c9294ab6c469e8ce7f680034fca4b219aeeb1fdad1917',
+  AU: 'd48d428de4fd3bcacbab8b5cffaa4ffa8ea36b43e3799ac7c0f67928d0942327',
+  ES: '597bd501cc8d9abf254bfa08c8475b941ba619cd4e7c548a2cd580d1b641a23a',
+  IT: '6d1b1af41e0506c48feba5378a92e406af7335439773ead1be0b24cd831e7d7e',
+  NL: '51351c517d5b41012eb31eac520913238fcb5a7742265aed9d3c1d565cf1c841',
+  CH: 'f462d719848ea1bfe33c29a617c10e1de838c52bf67df66c7a0cd8f113952ada',
+  AT: 'ec00a43b7df6e6af8c995de5e650088698c713192de5946e5cc50c3efadec0f6',
+  BE: 'd16187e42a12ac980d914e5c7b22e3cb00d9518a6f202f4618064149e8cdd1c5',
+  IN: 'a06a825c9ebb7648736a32c12c7662f6e38722a361cf376d437e5cb11344d095'
+}
+const postcodes: Record<string, Record<string, [number, number]>> = {}
+for (const [cc, sha] of Object.entries(POSTCODES)) {
+  const files = unzipSync(await pinned(`https://download.geonames.org/export/zip/${cc}.zip`, sha))
+  const text = new TextDecoder().decode(files[`${cc}.txt`])
+  const sums = new Map<string, [number, number, number]>()
+  for (const line of text.split('\n')) {
+    const c = line.split('\t')
+    if (c.length < 11 || !c[1] || /CEDEX/i.test(c[1])) continue
+    const lat = Number(c[9])
+    const lon = Number(c[10])
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue
+    const key = c[1].trim().toUpperCase()
+    const s = sums.get(key) ?? [0, 0, 0]
+    sums.set(key, [s[0] + lon, s[1] + lat, s[2] + 1])
+  }
+  postcodes[cc] = Object.fromEntries([...sums].map(([k, [x, y, n]]) => [k, [r3(x / n), r3(y / n)]]))
+}
+writeFileSync(path.join(out, 'postcodes.json'), JSON.stringify(postcodes))
+console.log(`postcodes: ${Object.entries(postcodes).map(([cc, m]) => `${cc} ${Object.keys(m).length}`).join(', ')}`)

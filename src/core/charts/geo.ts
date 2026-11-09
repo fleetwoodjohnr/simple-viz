@@ -58,12 +58,22 @@ const US_STATES: Record<string, string> = { AL: 'Alabama', AK: 'Alaska', AZ: 'Ar
 
 export type Locate = (value: unknown, qualifier?: unknown) => [number, number] | null
 
+/** A postal code as stored for its country: UK outward codes (SW1A), Canadian forward sortation areas (K1A), Dutch 4 digits. */
+export function postcodeKey(cc: string, code: string): string {
+  const c = code.trim().toUpperCase().replace(/\s+/g, ' ')
+  if (cc === 'GB') return c.includes(' ') ? c.split(' ')[0] : c.length >= 5 ? c.slice(0, -3) : c
+  if (cc === 'CA') return c.replace(/\s/g, '').slice(0, 3)
+  if (cc === 'NL') return c.replace(/\D/g, '').slice(0, 4)
+  return c.replace(/\s/g, '')
+}
+
 /**
  * Finds places by name: a city ("Lyon"), qualified by a state, province or country ("Portland, Oregon", "Portland,
- * ME", "Paris, France", or the qualifier as a second field), or a US ZIP code ("10001", "10001-1234"). Several places
- * with the same name: the qualified one, else the most populous.
+ * ME", "Paris, France", or the qualifier as a second field), or a postal code: US ZIP codes ("10001", "10001-1234"),
+ * UK and Canadian codes by their form ("SW1A 1AA", "K1A 0B1"), and the codes of other countries with the country
+ * ("75001, France", or a country field). Several places with the same name: the qualified one, else the most populous.
  */
-export function placeLocator(places: PlaceRow[], zips?: Record<string, [number, number]>): Locate {
+export function placeLocator(places: PlaceRow[], zips?: Record<string, [number, number]>, postcodes?: Record<string, Record<string, [number, number]>>): Locate {
   const byName = new Map<string, PlaceRow[]>()
   for (const p of places)
     for (const n of new Set([normalizeName(p[0]), p[1] ? normalizeName(p[1]) : ''])) {
@@ -72,6 +82,12 @@ export function placeLocator(places: PlaceRow[], zips?: Record<string, [number, 
       byName.get(n)!.push(p)
     }
   for (const list of byName.values()) list.sort((a, b) => b[7] - a[7])
+  // Country names (and codes) → ISO code, for postal codes.
+  const countries = new Map<string, string>()
+  for (const p of places) if (p[3] && p[4]) countries.set(normalizeName(p[4]), p[3])
+  for (const [k, v] of Object.entries({ uk: 'GB', 'great britain': 'GB', england: 'GB', scotland: 'GB', wales: 'GB', usa: 'US', 'united states of america': 'US', deutschland: 'DE', espana: 'ES', italia: 'IT', nederland: 'NL', 'the netherlands': 'NL', schweiz: 'CH', suisse: 'CH', osterreich: 'AT', belgique: 'BE', belgie: 'BE', bharat: 'IN' })) countries.set(k, v)
+  const country = (q: string) => (/^[A-Za-z]{2}$/.test(q.trim()) && (q.trim().toUpperCase() === 'US' || postcodes?.[q.trim().toUpperCase()]) ? q.trim().toUpperCase() : countries.get(normalizeName(q)))
+  const post = (cc: string, code: string): [number, number] | null => (cc === 'US' ? (zips?.[code.trim().slice(0, 5)] ?? null) : (postcodes?.[cc]?.[postcodeKey(cc, code)] ?? null))
   const fits = (p: PlaceRow, q: string) => {
     const n = normalizeName(q)
     const state = US_STATES[q.trim().toUpperCase()]
@@ -80,13 +96,21 @@ export function placeLocator(places: PlaceRow[], zips?: Record<string, [number, 
   return (value, qualifier) => {
     if (value === null || value === undefined) return null
     let text = String(value).trim()
-    const zip = /^(\d{5})(-\d{4})?$/.exec(text)
-    if (zip) return zips?.[zip[1]] ?? null
     let q = qualifier === null || qualifier === undefined ? '' : String(qualifier).trim()
     const comma = text.lastIndexOf(',')
     if (!q && comma > 0) {
       q = text.slice(comma + 1).trim()
       text = text.slice(0, comma).trim()
+    }
+    // A postal code: with its country, or recognised by its form (US, UK, Canada).
+    if (/\d/.test(text)) {
+      const cc = q ? country(q) : undefined
+      if (cc) return post(cc, text)
+      if (!q) {
+        if (/^\d{5}(-\d{4})?$/.test(text)) return post('US', text)
+        if (/^[A-Z]{1,2}\d[A-Z\d]?(\s*\d[A-Z]{2})?$/i.test(text)) return post('GB', text)
+        if (/^[A-Z]\d[A-Z](\s*\d[A-Z]\d)?$/i.test(text)) return post('CA', text)
+      }
     }
     const list = byName.get(normalizeName(text))
     if (!list) return null

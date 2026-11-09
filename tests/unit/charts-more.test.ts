@@ -6,6 +6,7 @@ import { densities, fillTemplate, niceMax } from '@/core/charts/more'
 import { geoLookup, checkGeoJson, normalizeName, placeLocator, type PlaceRow } from '@/core/charts/geo'
 import places from '@/core/charts/geo/places.json'
 import zips from '@/core/charts/geo/us-zip.json'
+import postcodes from '@/core/charts/geo/postcodes.json'
 import type { OutField } from '@/core/query/compile'
 import world from '@/core/charts/geo/world.json'
 import usStates from '@/core/charts/geo/us-states.json'
@@ -137,6 +138,17 @@ describe('more chart types', () => {
     expect(locate('10001')).toEqual([-73.997, 40.751])
     expect(locate('94103-1234')).toEqual([-122.411, 37.773])
     expect([locate('Atlantis'), locate('Springfield', 'Narnia'), locate(null)]).toEqual([null, null, null])
+    // Postal codes elsewhere: UK and Canada by their form; the rest with their country (a field, or after a comma).
+    const all = placeLocator((places as unknown as { rows: PlaceRow[] }).rows, zips as unknown as Record<string, [number, number]>, postcodes as unknown as Record<string, Record<string, [number, number]>>)
+    expect(all('SW1A 1AA')).toEqual([-0.133, 51.502])
+    expect(all('k1a 0b1')).toEqual([-75.702, 45.421])
+    expect(all('75001, France')).toEqual([2.345, 48.856])
+    expect(all('10115', 'Germany')).toEqual([13.385, 52.532])
+    expect(all('1012 AB', 'NL')).toEqual([4.895, 52.374])
+    expect(all('110001', 'India')).toEqual([77.219, 28.643])
+    expect(all('10001')).toEqual([-73.997, 40.751]) // five digits alone: a US ZIP code
+    expect(all('99999', 'Germany')).toBeNull()
+    expect(all('Paris, France')).toEqual([2.331, 48.869]) // still a city when there are no digits
     // On a point map: one point per city, the unknown ones counted.
     const city = f('d0', 'city', 'dim', 'detail')
     const o = opt('pointmap', data([city, f('m0', 'sales', 'measure', 'size')], [['Lyon', 5], ['Paris', 7], ['Atlantis', 1]], {}, { geo: { map: 'world', lookup: new Map(), locate } }))
