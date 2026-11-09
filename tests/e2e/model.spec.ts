@@ -55,6 +55,16 @@ test('relate tables in a model and chart across them; transform with steps', asy
   await expect.poll(async () => Object.keys((await chartSeries(page)).series)).toContain('Margin')
   const withMargin = await chartSeries(page)
   for (const r of margin) near(withMargin.series.Margin[withMargin.categories.indexOf(String(r.region))], Number(r.m))
+  // A level of detail on the model: each customer's revenue, averaged per region.
+  await page.getByTestId('new-calc').click()
+  await page.getByTestId('calc-name').fill('Per customer')
+  await page.getByTestId('calc-formula').fill('AVG({FIXED [customers.customer_id] : SUM([transactions.revenue])})')
+  await expect(page.getByTestId('calc-status')).toContainText('Valid. Aggregate')
+  await page.getByTestId('calc-save').click()
+  const perCustomer = await sql(page, 'SELECT region, avg(s) AS m FROM (SELECT c.region, c.customer_id, sum(t.revenue) AS s FROM transactions t JOIN customers c USING (customer_id) GROUP BY 1, 2) GROUP BY 1')
+  await expect.poll(async () => Object.keys((await chartSeries(page)).series)).toContain('Per customer')
+  const withLod = await chartSeries(page)
+  for (const r of perCustomer) near(withLod.series['Per customer'][withLod.categories.indexOf(String(r.region))], Number(r.m))
 
   // A visual transform: transactions with revenue over 1,000.
   await page.getByTestId('nav-data').click()

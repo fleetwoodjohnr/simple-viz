@@ -400,14 +400,14 @@ export function windowAgg(agg: string, partition: string[]): string {
   return plain.replace(AGG_CALL, (m) => `${m}${over}`)
 }
 
-interface Windows {
+export interface Windows {
   /** OVER (PARTITION BY panes ORDER BY the x axis, or `order`) */
   ordered: (order?: string) => string
   /** OVER (PARTITION BY panes) — the whole pane */
   all: () => string
 }
 
-function tableCalcSql(c: Compiled, w: Windows): string {
+export function tableCalcSql(c: Compiled, w: Windows): string {
   let expr = c.expr
   for (const t of c.tcs) {
     const a = t.arg ? q(t.arg) : ''
@@ -472,7 +472,7 @@ function tableCalcSql(c: Compiled, w: Windows): string {
 }
 
 /** Quick table calculations on a measure (running total, percent of total, rank, difference, year over year…). */
-function quickCalc(m: OutField, w: Windows, dims: OutField[]): string {
+export function quickCalc(m: OutField, w: Windows, dims: OutField[]): string {
   const k = m.key
   switch (m.ref.quick) {
     case 'running_sum':
@@ -572,7 +572,7 @@ export function filterSql(f: ChartFilter, rowExpr: (n: string) => { sql: string;
 }
 
 /** Double-quoted identifiers in SQL text (outside single-quoted strings). */
-function quotedNames(sql: string): string[] {
+export function quotedNames(sql: string): string[] {
   const out: string[] = []
   for (let i = 0; i < sql.length; i++) {
     const ch = sql[i]

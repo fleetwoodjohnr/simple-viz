@@ -6,6 +6,8 @@
   stepwise by AICc and estimated by exact maximum likelihood (checked against statsmodels and R's airline model).
 - **Sets.** Sets computed from a condition or the top N by a measure (after context filters, as in Tableau), and
   combined sets.
+- **Models.** Level of detail expressions, table calculations, quick calculations and computed sets work on related
+  tables, without double counting.
 - **Chart analytics.** Logarithmic, exponential, power and polynomial trend lines; percentile lines, confidence
   intervals of the mean and quartile reference boxes.
 

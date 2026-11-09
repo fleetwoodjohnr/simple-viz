@@ -63,7 +63,15 @@ parameter control on a dashboard; or set it by clicking a mark (a "Set a paramet
 Fields are written `[table.column]`. As in Tableau, a row-level calculation reads one table — `[orders.revenue] -
 [orders.cost]` — and becomes a field of that table. An aggregate calculation can combine tables:
 `SUM([returns.refund]) / SUM([orders.revenue])` sums each table at its own level (no duplication by the join) and
-divides per mark. Level of detail expressions and table calculations aren't available on models yet.
+divides per mark.
+
+Level of detail expressions work on models with Tableau's rules. `{FIXED [customers.customer_id] :
+SUM([orders.revenue])}` is computed per customer (after context filters, before dimension filters); used row by row
+(a dimension, `IF {FIXED …} > 100 THEN …`) it becomes a field of the table holding its dimensions, and aggregated
+(`AVG({FIXED …})`) it counts once per combination of the view's and its own dimensions. INCLUDE and EXCLUDE follow the
+view and respect dimension filters; they must be aggregated (they have no single table to belong to). Table
+calculations and quick calculations run over the marks as on a dataset. Not on models: `TOTAL()` (use
+`WINDOW_SUM(SUM(…))`), an LOD inside another LOD, and an aggregate mixing an LOD with a table's fields.
 
 ## Groups
 
