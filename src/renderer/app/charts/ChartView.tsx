@@ -145,9 +145,30 @@ export interface MarkClick {
   values: Record<string, Value>
 }
 
-export function ChartView({ chart, extra, highlight, onMark, className, testid }: { chart: Chart; extra?: ChartFilter[]; highlight?: ChartData['highlight']; onMark?: (m: MarkClick) => void; className?: string; testid?: string }) {
+export function ChartView({ chart, extra, highlight, onMark, className, testid, noTip }: { chart: Chart; extra?: ChartFilter[]; highlight?: ChartData['highlight']; onMark?: (m: MarkClick) => void; className?: string; testid?: string; noTip?: boolean }) {
   const { data, error, loading } = useChartData(chart, extra, highlight)
   const [asTable, setAsTable] = useState(false)
+  // Viz in tooltip: another chart, filtered to the hovered mark's values of the fields it has (after a short pause,
+  // so sweeping across marks doesn't query each one).
+  const tipChart = useApp((s) => (noTip || !chart.options.tooltipChart ? undefined : s.project?.charts.find((c) => c.id === chart.options.tooltipChart && c.id !== chart.id)))
+  const tipFields = useApp((s) => {
+    if (!tipChart || !s.project) return undefined
+    const model = s.project.models.find((m) => m.name.toLowerCase() === tipChart.dataset.toLowerCase())
+    const cols = model ? modelColumns(model, s.relations) : s.relations.find((r) => r.name.toLowerCase() === tipChart.dataset.toLowerCase())?.columns ?? []
+    return cols.map((c) => c.name.toLowerCase()).join('\u0000')
+  })
+  const [tip, setTip] = useState<{ x: number; y: number; filters: ChartFilter[] } | null>(null)
+  const tipTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(tipTimer.current), [])
+  const onHover = tipChart
+    ? (m: (MarkClick & { x: number; y: number }) | null) => {
+        clearTimeout(tipTimer.current)
+        if (!m) return setTip(null)
+        const has = new Set((tipFields ?? '').split('\u0000'))
+        const filters = Object.entries(m.values).filter(([f]) => has.has(f.toLowerCase())).map(([f, v]) => ({ id: `tip:${f}`, field: f, op: 'in' as const, values: [v] }))
+        tipTimer.current = setTimeout(() => setTip({ x: m.x, y: m.y, filters }), 250)
+      }
+    : undefined
   const p = plugin(chart.type)
   let body: ReactNode
   if (error) body = <Message icon={<AlertTriangle className="size-5 text-danger" />} text={error} />
@@ -157,7 +178,7 @@ export function ChartView({ chart, extra, highlight, onMark, className, testid }
   else if (p.render === 'table') body = <TableView data={data} />
   else if (p.render === 'crosstab') body = <Crosstab data={data} />
   else if (asTable) body = <TableView data={data} />
-  else body = <EChart data={data} type={chart.type} onMark={onMark} />
+  else body = <EChart data={data} type={chart.type} onMark={onMark} onHover={onHover} />
   // Every drawn chart can be read as a table (screen readers, keyboard, exact values). Wrapped charts (bins, density…)
   // return other columns than their fields, so they keep only the chart's text summary.
   const tableable = !!data?.rows.length && p.render === 'echarts' && !p.wrap
@@ -178,6 +199,11 @@ export function ChartView({ chart, extra, highlight, onMark, className, testid }
       )}
       {data?.truncated && <div className="absolute bottom-1 left-2 rounded bg-warn/15 px-2 py-0.5 text-[11px] text-warn">Showing the first {MAX_MARKS.toLocaleString()} marks — add a filter to see the rest.</div>}
       {loading && data && <Loader2 className="absolute right-2 top-2 size-4 animate-spin text-text-3" aria-label="Updating" />}
+      {tip && tipChart && (
+        <div className="pointer-events-none absolute z-30 h-[180px] w-[280px] rounded-lg bg-elev p-1 shadow-[0_0_0_1px_var(--border),0_8px_24px_-8px_rgb(0_0_0/0.35)]" style={{ left: Math.max(0, tip.x + 12), top: Math.max(0, tip.y + 12) }} role="tooltip" aria-label={tipChart.name}>
+          <ChartView chart={tipChart} extra={tip.filters} testid="viz-tooltip" noTip />
+        </div>
+      )}
     </div>
   )
 }
@@ -194,7 +220,7 @@ function Message({ icon, text }: { icon?: ReactNode; text: string }) {
 /** Holds the live ECharts instances, for image export (PNG, SVG) and tests. */
 export const liveCharts = new Set<echarts.ECharts>()
 
-function EChart({ data, type, onMark }: { data: ChartData; type: string; onMark?: (m: MarkClick) => void }) {
+function EChart({ data, type, onMark, onHover }: { data: ChartData; type: string; onMark?: (m: MarkClick) => void; onHover?: (m: (MarkClick & { x: number; y: number }) | null) => void }) {
   const host = useRef<HTMLDivElement>(null)
   const inst = useRef<echarts.ECharts | null>(null)
   const dark = useApp((s) => s.dark)
@@ -203,6 +229,8 @@ function EChart({ data, type, onMark }: { data: ChartData; type: string; onMark?
   const calm = useApp((s) => s.settings.reduceMotion)
   const markRef = useRef(onMark)
   markRef.current = onMark
+  const hoverRef = useRef(onHover)
+  hoverRef.current = onHover
   const dataRef = useRef(data)
   dataRef.current = data
 
@@ -221,6 +249,16 @@ function EChart({ data, type, onMark }: { data: ChartData; type: string; onMark?
       dataRef.current.fields.forEach((f, i) => f.kind === 'dim' && (values[f.ref.field] = row[i]))
       markRef.current({ values })
     })
+    chart.on('mouseover', (p) => {
+      const row = (p.data as { row?: Value[] } | undefined)?.row
+      const ev = (p.event as { offsetX?: number; offsetY?: number } | undefined) ?? {}
+      if (!row || !hoverRef.current) return
+      const values: Record<string, Value> = {}
+      dataRef.current.fields.forEach((f, i) => f.kind === 'dim' && (values[f.ref.field] = row[i]))
+      hoverRef.current({ values, x: ev.offsetX ?? 0, y: ev.offsetY ?? 0 })
+    })
+    chart.on('mouseout', () => hoverRef.current?.(null))
+    chart.on('globalout', () => hoverRef.current?.(null))
     return () => {
       ro.disconnect()
       liveCharts.delete(chart)

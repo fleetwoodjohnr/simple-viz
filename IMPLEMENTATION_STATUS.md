@@ -69,6 +69,7 @@ Linux, Windows and macOS._
 | Filters: values (include/exclude), ranges, measure (HAVING), top N, context filters | integration `charts`, e2e `charts` |
 | Calculated fields: DuckDB SQL + `[Field]`, Tableau `IF … ELSEIF … END`, Tableau function names (ZN, IIF, COUNTD, DATEADD…), `+` joining text | unit `calc`, integration `charts`, e2e `charts` |
 | Compute using: a table calculation runs along a chosen dimension of the view, partitioned by the others | integration `charts`, e2e `charts` |
+| Viz in tooltip: hovering a mark shows another saved chart filtered to the mark's values (fields the two share) | e2e `charts` |
 | Show missing dates: every period of a date axis from the first to the last, empty ones null; table calculations run over them | integration `charts`, e2e `charts` |
 | Sets: a dimension's chosen members In, the rest Out (field menu → Create set…); a dashboard set action makes the clicked value the member | unit `calc`, e2e `objects` |
 | Groups: a dimension's values combined under names (field menu → Create group…), the rest kept or put in Other; saved as a calculated field | unit `calc`, e2e `charts` |
@@ -243,6 +244,8 @@ Done (rows in the sections above): `+` joining text, groups, sets and set action
 saved views, stories, HTML export, calculated fields, top-N filters and role-playing tables on models, text predictors
 in regression, multiplicative seasonality, `.xlsb` files.
 
-Not yet: viz in tooltip; tiled (automatic) dashboard layout beyond row/column containers; LOD expressions and table
+Also done: viz in tooltip.
+
+Not yet: tiled (automatic) dashboard layout beyond row/column containers; LOD expressions and table
 calculations on models; conditional and top-N sets; ARIMA; map tiles, geocoding of cities, Shapefile/KML; cloud
 warehouses (Snowflake, BigQuery, Databricks, Oracle, …).

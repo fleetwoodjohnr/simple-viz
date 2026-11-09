@@ -745,6 +745,7 @@ function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fie
               ))}
             </div>
             {cartesian && <ParamLine lines={lines} setLines={(refLines) => setO({ refLines })} />}
+            <TooltipChartPicker chart={chart} setO={setO} />
             {cartesian && chart.enc.x.length === 1 && chart.enc.x[0].grain && chart.enc.x[0].grain !== 'exact' && (
               <label className="mt-2 flex items-center gap-2 text-[12px] text-text-2" title="Every period from the first to the last; table calculations run over the empty ones">
                 <input type="checkbox" className="size-3.5 accent-[var(--accent)]" checked={!!o.showMissing} onChange={(e) => setO({ showMissing: e.target.checked || undefined })} data-testid="show-missing" />
@@ -912,4 +913,24 @@ function chartDims(c: Chart): string[] {
   const e = c.enc
   const refs = [...e.x, ...e.y, ...[e.color, e.size, e.label, e.facet].filter((r): r is FieldRef => !!r), ...e.detail]
   return [...new Set(refs.filter((r) => !r.agg).map((r) => r.field))]
+}
+
+/** Viz in tooltip: another saved chart shown, filtered to the hovered mark, when hovering this one. */
+function TooltipChartPicker({ chart, setO }: { chart: Chart; setO: (p: Partial<ChartOptions>) => void }) {
+  const charts = useApp((s) => s.project!.charts)
+  const others = charts.filter((c) => c.id !== chart.id)
+  if (!others.length) return null
+  return (
+    <label className="mt-2 flex items-center gap-2 text-[12px] text-text-2" title="Hovering a mark shows this chart, filtered to the mark">
+      Chart in tooltip
+      <select className={cx(inputCls, 'h-6 flex-1 px-1 text-[12px]')} aria-label="Chart in tooltip" value={chart.options.tooltipChart ?? ''} onChange={(e) => setO({ tooltipChart: e.target.value || undefined })} data-testid="tooltip-chart">
+        <option value="">none</option>
+        {others.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
 }

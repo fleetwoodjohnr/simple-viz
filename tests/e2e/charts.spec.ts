@@ -171,3 +171,43 @@ test('quick table calculation computed along a chosen dimension', async () => {
   }).toBe(true)
   await quit(app)
 })
+
+test('viz in tooltip: hovering a bar shows another chart filtered to it', async () => {
+  const { app, page } = await launch()
+  await salesProject(app, page, tempDir())
+  await page.getByTestId('nav-charts').click()
+  // The chart for the tooltip: revenue by product.
+  await page.getByTestId('new-chart-empty').click()
+  await page.getByTestId('chart-dataset').selectOption('sales_enriched')
+  await addField(page, 'product_name', 'x')
+  await addField(page, 'revenue', 'y')
+  // The main chart: revenue by region, with the product chart in its tooltip.
+  await page.getByTestId('new-chart').click()
+  await page.getByTestId('chart-dataset').selectOption('sales_enriched')
+  await addField(page, 'region', 'x')
+  await addField(page, 'revenue', 'y')
+  await page.getByTestId('tooltip-chart').selectOption({ index: 1 })
+  await expect.poll(async () => (await chartSeries(page)).categories.length).toBeGreaterThan(1)
+  const pt = await page.locator('[data-testid=chart-canvas] [data-testid=echart]').first().evaluate((el) => {
+    const c = (el as any).__echart
+    const opt = c.getOption()
+    const i = opt.xAxis[0].data.indexOf('Texas')
+    const v = opt.series[0].data[i]
+    const [x, y] = c.convertToPixel({ seriesIndex: 0 }, [i, (typeof v === 'object' ? v.value : v) / 2])
+    const r = el.getBoundingClientRect()
+    return { x: r.left + x, y: r.top + y }
+  })
+  await page.mouse.move(pt.x, pt.y)
+  const tip = page.getByTestId('viz-tooltip')
+  await expect(tip).toHaveAttribute('data-chart-state', 'ready')
+  const [ref] = await sql(page, "SELECT count(DISTINCT product_name) AS n, sum(revenue) AS r FROM sales_enriched WHERE region = 'Texas'")
+  const shown = await tip.locator('[data-testid=echart]').evaluate((el) => {
+    const o = (el as any).__echart.getOption()
+    return { n: o.xAxis[0].data.length, total: o.series[0].data.reduce((a: number, d: any) => a + Number(typeof d === 'object' ? d.value : d), 0) }
+  })
+  expect(shown.n).toBe(Number(ref.n))
+  near(shown.total, Number(ref.r))
+  await page.mouse.move(5, 5)
+  await expect(tip).toHaveCount(0)
+  await quit(app)
+})

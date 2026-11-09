@@ -97,6 +97,8 @@ export interface ChartOptions {
   /** Densify a date axis: every period between the first and last, empty ones as null (Tableau's "Show Missing
    *  Values"); table calculations run over them. */
   showMissing?: boolean
+  /** Viz in tooltip: another saved chart, shown filtered to the hovered mark. */
+  tooltipChart?: string
   /** Combo chart: series index (from y) drawn as lines instead of bars, and on the right axis. */
   lineSeries?: number[]
   rightAxis?: number[]
