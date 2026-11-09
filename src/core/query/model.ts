@@ -7,7 +7,7 @@
 // UNION ALL BY NAME and combined per dimension combination. So two fact tables sharing a customer dimension, or a
 // measure from a "one" side shown by a field of the "many" side, come out the way Tableau shows them.
 //
-// Fields are written table.column. Calculated fields and top-N filters are single-table features for now.
+// Fields are written table.column. Calculated fields are a single-table feature for now.
 
 import type { Chart } from '../../shared/charts'
 import type { ColumnInfo } from '../../shared/engine-protocol'
@@ -111,14 +111,26 @@ export function compileModelQuery(input: { chart: Pick<Chart, 'enc' | 'filters' 
     return isDate(c.type) && f.ref.grain && f.ref.grain !== 'exact' ? `CAST(date_trunc('${f.ref.grain}', ${c.sql}) AS DATE)` : c.sql
   }
   const allFilters = [...chart.filters, ...(input.extra ?? [])]
-  if (allFilters.some((f) => f.op === 'top')) throw new QueryError('Top N filters work on single tables and datasets for now, not on models.')
-  const dimFilters = allFilters.filter((f) => !f.agg)
-  const measureFilters = allFilters.filter((f) => f.agg)
-  const filterTables = dimFilters.map((f) => colOf(f.field).table)
+  const dimFilters = allFilters.filter((f) => !f.agg && f.op !== 'top')
+  const measureFilters = allFilters.filter((f) => f.agg && f.op !== 'top')
+  const tops = allFilters.filter((f) => f.op === 'top' && f.top)
+  const filterTables = [...dimFilters, ...tops].map((f) => colOf(f.field).table)
   const where = dimFilters.map((f) => filterSql(f, (n) => {
     const c = colOf(n)
     return { sql: c.sql, type: c.type }
   }))
+  // Top N: the values with the highest (or lowest) measure, computed by the same planner (after the other
+  // dimension filters), so the measure is not duplicated by joins either.
+  for (const f of tops) {
+    const by = f.top!.by
+    const sub = compileModelQuery({
+      chart: { type: 'bar', enc: { x: [{ field: f.field }], y: [{ field: by.field, agg: by.agg && by.agg !== 'none' ? by.agg : 'sum' }], detail: [], tooltip: [] }, filters: dimFilters, options: { sort: { by: 'value', dir: f.top!.bottom ? 'asc' : 'desc' } } },
+      model,
+      columns: input.columns,
+      maxMarks: Math.max(1, Math.floor(f.top!.n)) - 1
+    })
+    where.push(`${colOf(f.field).sql} IN (SELECT d0 FROM (${sub.sql}))`)
+  }
 
   /** FROM the start table, left-joining every table needed along the relationships. */
   const fromClause = (start: string, needed: string[], numbered: boolean) => {

@@ -120,6 +120,7 @@ Linux, Windows and macOS._
 |---|---|
 | Models: tables related by fields (logical layer); charts over a model use fields of every table | integration `model`, e2e `model` |
 | No duplicated measures: each measure is counted once per combination of dimension values it relates to (fan-out safe); two fact tables sharing dimensions; coarser tables not multiplied; unmatched rows in a Null group | integration `model` (5 cases against known answers) |
+| Top N filters on models: the values with the highest or lowest measure of any related table, after the other filters, without duplication | integration `model` |
 | Relationship canvas: draggable table cards, relationship lines, suggestions (same-named keys, `id` ↔ `table_id`), loop and unrelated-table warnings | integration `model`, e2e `model` |
 | Relationship preview: cardinality (one/many on each side) and matched rows | e2e `model` |
 | Visual transforms: keep columns, rename, filter, calculated column, change type, fill empty, clean text, split, remove duplicates, sort, group and summarize, join, append (union), pivot, unpivot, custom SQL — each step previewed | integration `transform`, e2e `model` |
@@ -129,7 +130,7 @@ Linux, Windows and macOS._
 
 ### Known limitations
 
-- Calculated fields and top-N filters work on single tables and datasets, not on models yet.
+- Calculated fields work on single tables and datasets, not on models yet (top-N filters do work on models).
 - A model can't contain the same table twice (role-playing dimensions); loops are reported, not resolved.
 - Transform steps are applied in the order listed; reordering a step doesn't rewrite the steps after it.
 

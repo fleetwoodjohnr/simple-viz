@@ -71,6 +71,18 @@ describe('models', () => {
     expect(big.map((r) => r.d0)).toEqual(['East', 'West'])
   })
 
+  it('top N by a measure of another table, computed without duplication', async () => {
+    // The best customer by revenue is customer 1 (30): only their orders remain.
+    const top = await run({ x: [{ field: 'customers.region' }], y: [{ field: 'orders.revenue', agg: 'sum' }] }, [{ id: 't', field: 'customers.customer_id', op: 'top', top: { n: 1, by: { field: 'orders.revenue', agg: 'sum' } } }])
+    expect(top).toEqual([{ d0: 'East', m0: 30 }])
+    // The product with the most customer credit (A: 230 against B: 100), as a filter on the orders.
+    const prod = await run({ x: [{ field: 'customers.region' }], y: [{ field: 'orders.revenue', agg: 'sum' }] }, [{ id: 't', field: 'orders.product', op: 'top', top: { n: 1, by: { field: 'customers.credit', agg: 'sum' } } }])
+    expect(prod).toEqual([{ d0: 'East', m0: 15 }, { d0: 'West', m0: 7 }])
+    // Bottom 2 customers by revenue, with another filter applied first (East only: customers 1 and 2).
+    const bottom = await run({ x: [{ field: 'customers.customer_id' }], y: [{ field: 'orders.revenue', agg: 'sum' }] }, [{ id: 'e', field: 'customers.region', op: 'in', values: ['East'] }, { id: 'b', field: 'customers.customer_id', op: 'top', top: { n: 1, bottom: true, by: { field: 'orders.revenue', agg: 'sum' } } }])
+    expect(bottom).toEqual([{ d0: 2, m0: 5 }])
+  })
+
   it('explains missing relationships, loops and suggestions', async () => {
     const lone: Model = { ...model, tables: [...model.tables, { name: 'other', x: 0, y: 0 }] }
     expect(modelProblems(lone)).toEqual(['other isn’t related to any other table yet.'])
