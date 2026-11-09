@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+<Placemark><name>North</name><ExtendedData><Data name="pop"><value>1200</value></Data></ExtendedData>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>0,10,0 0,0,0 10,0,0 10,10,0 0,10,0</coordinates></LinearRing></outerBoundaryIs><innerBoundaryIs><LinearRing><coordinates>2,2,0 2,4,0 4,4,0 4,2,0 2,2,0</coordinates></LinearRing></innerBoundaryIs></Polygon></Placemark>
+<Placemark><name>Südfeld</name><ExtendedData><SchemaData><SimpleData name="pop">85</SimpleData></SchemaData></ExtendedData>
+<MultiGeometry><Polygon><outerBoundaryIs><LinearRing><coordinates>0,-1,0 0,-6,0 5,-6,0 5,-1,0 0,-1,0</coordinates></LinearRing></outerBoundaryIs></Polygon><Polygon><outerBoundaryIs><LinearRing><coordinates>6,-1,0 6,-6,0 9,-6,0 9,-1,0 6,-1,0</coordinates></LinearRing></outerBoundaryIs></Polygon></MultiGeometry></Placemark>
+<Placemark><name>A point</name><Point><coordinates>1,1,0</coordinates></Point></Placemark>
+</Document></kml>

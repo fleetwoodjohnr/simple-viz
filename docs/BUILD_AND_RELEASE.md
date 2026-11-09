@@ -32,11 +32,12 @@ Generated and reference data, committed (rerun after changing what they depend o
 
 ```bash
 npm run fixtures                                 # test workbooks, CSVs, expected totals (deterministic)
-npm run geo                                      # bundled maps from Natural Earth (SHA-256 pinned)
+npm run geo                                      # bundled maps and places (Natural Earth, US Census; SHA-256 pinned)
 .venv/bin/python scripts/stats-ref.py            # statistics reference values (SciPy, statsmodels)
 .venv/bin/python scripts/arrow-fixtures.py       # Arrow/Feather files (pyarrow)
 .venv/bin/python scripts/xlsb-ref.py            # .xlsb reference values (pyxlsb) for tests/fixtures/xlsb
 .venv/bin/python scripts/xls-fixtures.py         # .xls workbook and xlrd reference values (xlwt, xlrd, openpyxl)
+.venv/bin/python scripts/spatial-ref.py          # shapefiles (pyshp) and KML/KMZ for tests/fixtures/spatial
 node scripts/fetch-duckdb-extensions.ts --update-lock   # after a DuckDB upgrade: pin new extension hashes (review the diff)
 ```
 

@@ -249,6 +249,8 @@ in regression, multiplicative seasonality, `.xlsb` files.
 
 Also done: viz in tooltip.
 
+Also done: custom maps from shapefiles (polygons with holes and parts, .dbf attributes in UTF-8 or Windows-1252, zipped or picked together; projected ones refused) and KML/KMZ (placemark polygons, ExtendedData) — unit `spatial` (files written by pyshp, `scripts/spatial-ref.py`), e2e `maps`.
+
 Also done: point maps placed by name — cities from Natural Earth's populated places (the most populous of a name unless qualified by state, province or country) and US ZIP codes from the Census Bureau's 2020 gazetteer, both public domain, pinned by SHA-256 in `npm run geo`, loaded on first use; unknown values counted on the map — unit `charts-more`, e2e `maps`.
 
 Also done: tiled dashboards and tablet/phone layouts — unit `charts` (tiling fills without overlap and keeps proportions; device edits written back; layout by width), e2e `tiled`; story points keeping their filter choices — unit `project`, e2e `example`; viz-in-tooltip size and filter field — e2e `charts`; LOD, table calculations and computed sets on models (row above).

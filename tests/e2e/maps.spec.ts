@@ -62,6 +62,15 @@ test('more chart types draw; maps match areas; custom GeoJSON; small multiples',
   expect(withData(d.option).map((x: any) => x.name).sort()).toEqual(['Florida', 'Texas'])
   expect(d.option.title[0].subtext).toContain('4 values not on the map')
   expect(await page.evaluate(() => (window as any).__sv.get().project.maps.map((m: any) => m.geojson.features.length))).toEqual([2])
+  // A zipped shapefile and a KML file become maps too.
+  await stubDialogs(app, { open: [fixture('spatial/areas.zip')] })
+  await page.getByTestId('add-map').click()
+  await expect(page.getByText('Added the map “areas”: 2 areas named by “NAME”')).toBeVisible()
+  await stubDialogs(app, { open: [fixture('spatial/areas.kml')] })
+  await page.getByTestId('add-map').click()
+  await expect(page.getByText('Added the map “areas”: 2 areas named by “name”', { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => (window as any).__sv.get().project.maps.map((m: any) => m.geojson.features.map((f: any) => f.properties.name))))
+    .toEqual([['Texas', 'Florida'], ['North', 'Südfeld'], ['North', 'Südfeld']])
 
 
   // Each type below draws its own series (and components): a type missing from the build would leave none.

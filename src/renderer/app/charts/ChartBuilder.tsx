@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from 're
 import { create } from 'zustand'
 import * as Icons from 'lucide-react'
 import { BUILTIN_MAPS, checkGeoJson } from '@/core/charts/geo'
+import { spatialToGeoJson } from '@/core/charts/spatial'
 import { DEFAULT_TEMPLATE } from '@/core/charts/more'
 import { BarChart3, Calculator, ChevronDown, Copy, Filter, Hash, Calendar, Type, Plus, Search, Star, Trash2, X, MoreHorizontal, Sparkles, Image, FileCode2, Table2 } from 'lucide-react'
 import { useApp, set, get, toast } from '../../state/store'
@@ -794,15 +795,16 @@ function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fie
 function MapPicker({ chart, setO }: { chart: Chart; setO: (p: Partial<ChartOptions>) => void }) {
   const maps = useApp((s) => s.project?.maps) ?? NO_MAPS
   const addMap = async () => {
-    const [file] = await window.simpleViz.openDialog({ name: 'GeoJSON', extensions: ['geojson', 'json'] })
+    const files = await window.simpleViz.openDialog({ name: 'Maps (GeoJSON, KML, KMZ, shapefile)', extensions: ['geojson', 'json', 'kml', 'kmz', 'zip', 'shp', 'dbf', 'prj', 'cpg'] }, true)
+    const file = files.find((f) => !/\.(dbf|prj|cpg)$/i.test(f.name)) ?? files[0]
     if (!file) return
     try {
-      if (file.data.byteLength > 25 * 2 ** 20) throw new Error('The file is over 25 MB. Simplify it first (for example with mapshaper).')
-      const { fc, nameProps } = checkGeoJson(new TextDecoder().decode(file.data))
+      if (files.reduce((a, f) => a + f.data.byteLength, 0) > 25 * 2 ** 20) throw new Error('The file is over 25 MB. Simplify it first (for example with mapshaper).')
+      const { fc, nameProps } = checkGeoJson(spatialToGeoJson(Object.fromEntries(files.map((f) => [f.name, new Uint8Array(f.data)]))))
       const nameProp = nameProps[0]
       // Areas are matched on "name": keep the naming property under that key (and nothing else, to stay small).
       const geojson = { ...fc, features: fc.features.map((f) => ({ ...f, properties: { name: String(f.properties![nameProp]) } })) }
-      const m = { id: newId(), name: file.name.replace(/\.(geo)?json$/i, ''), nameProp, geojson }
+      const m = { id: newId(), name: file.name.replace(/\.(geo)?json$|\.(kml|kmz|zip|shp)$/i, ''), nameProp, geojson }
       P.edit((p) => ({ ...p, maps: [...(p.maps ?? []), m] }))
       setO({ map: m.id })
       toast(`Added the map “${m.name}”: ${geojson.features.length} areas named by “${nameProp}”`, 'success')
@@ -827,7 +829,7 @@ function MapPicker({ chart, setO }: { chart: Chart; setO: (p: Partial<ChartOptio
         ))}
       </select>
       <button className="mt-1 text-[11.5px] text-accent-ink hover:underline" onClick={addMap} data-testid="add-map">
-        Add a map (GeoJSON)…
+        Add a map (GeoJSON, KML, shapefile)…
       </button>
     </div>
   )
