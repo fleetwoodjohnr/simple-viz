@@ -1,7 +1,7 @@
 // Dashboard objects beyond charts: text, a shape, an image (embedded), a button that resets filters, a row layout
 // that arranges its items side by side; and the dashboard scaled to the window or shown at its fixed size.
 import { type Page, type Locator } from '@playwright/test'
-import { writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect, launch, quit, salesProject, tempDir, stubDialogs } from './helpers'
 
@@ -101,6 +101,18 @@ test('text, shape, image, reset button, row layout; fit to window', async () => 
   await clickBar(page, page.locator('[data-testid=item-chart]').first(), 'New York')
   await expect.poll(() => app.evaluate(() => (globalThis as any).__opened)).toEqual(['https://example.com/search?q=New%20York'])
   await page.getByTestId('dash-button').click()
+
+  // A web page of the dashboard: self-contained, charts as images, no scripts.
+  const html = path.join(dir, 'report.html')
+  await stubDialogs(app, { save: html })
+  await page.getByTestId('dashboard-export').click()
+  await page.getByTestId('export-html').click()
+  await expect.poll(() => existsSync(html)).toBe(true)
+  const report = readFileSync(html, 'utf8')
+  expect(report).toMatch(/^<!doctype html>/)
+  expect(report.match(/<img[^>]+src="data:image\/png;base64,/g)?.length).toBeGreaterThanOrEqual(2) // the chart and the image
+  expect(report).toContain('Reset filters')
+  expect(report).not.toMatch(/<script|data-testid="echart"/)
 
   // Fit to window scales a dashboard wider than the window down; fixed size shows it at 100%.
   const scale = () => page.locator('[data-scale]').first().getAttribute('data-scale').then(Number)

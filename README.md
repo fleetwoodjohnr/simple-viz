@@ -25,7 +25,7 @@ and [Simple Cell](https://github.com/fleetwoodjohnr/simple-cell).
 - **Charts and dashboards.** 33 chart types — from bars and lines to waterfalls, sankeys, Gantt charts, cohorts,
   violins, maps of countries or states (or your own GeoJSON) and small multiples. Drag fields to build charts, with calculated fields that follow Tableau's rules (level of
   detail, table calculations). Put charts on a dashboard: clicking one filters the others; filters, drill-down, text
-  that shows the current selection; export to PDF or PNG.
+  that shows the current selection; export to PDF, PNG or a self-contained web page.
 - **Statistics.** Descriptive statistics, correlation, t-tests, ANOVA, chi-square, rank tests, linear and logistic
   regression, forecasting, clustering and principal components, each with a plain-language summary and its
   assumptions, checked against SciPy and statsmodels. Forecasts and bands on charts.

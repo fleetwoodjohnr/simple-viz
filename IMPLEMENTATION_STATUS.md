@@ -102,7 +102,7 @@ Linux, Windows and macOS._
 | Sizes (desktop, laptop, tablet, phone, A4, Letter), fit-to-window, presentation mode with tabs | e2e `layout` (size preset keeps tiles inside, presentation and Escape), e2e `objects` (fit to window vs fixed size) |
 | Refresh on open, on file change, on focus, on a timer, per source; per-dashboard timer; status and stale badges; last good data kept | integration `engine`, `postgres`; e2e `acceptance` |
 | Password asked again when the keychain can't keep it or the server refuses it | e2e `acceptance` (CI has no keychain) |
-| PDF export (exact page size, charts as images), PNG export | e2e `acceptance` (PDF, text checked with pdftotext), e2e `dashboards` (PNG) |
+| PDF export (exact page size, charts as images), PNG export, HTML export (one self-contained page: styles inline, charts as images, no scripts) | e2e `acceptance` (PDF, text checked with pdftotext), e2e `dashboards` (PNG), e2e `objects` (HTML) |
 
 ### Known limitations
 

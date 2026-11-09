@@ -208,7 +208,8 @@ function refLines(d: ChartData, t: Theme, values: (number | null)[]): Option | u
   const sorted = [...nums].sort((a, b) => a - b)
   const data: unknown[] = []
   for (const l of lines) {
-    const label = { formatter: l.label ?? l.kind, color: t.text2 }
+    // Inside the plot, above the line's end: past the end it is cut off by the chart's edge.
+    const label = { formatter: l.label ?? l.kind, color: t.text2, position: 'insideEndTop' as const }
     if (l.kind === 'trend') {
       const pts = values.map((v, i) => [i, v] as const).filter((p): p is readonly [number, number] => p[1] !== null)
       if (pts.length < 2) continue

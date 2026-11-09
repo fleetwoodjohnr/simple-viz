@@ -11,12 +11,12 @@ import { useDash, setDash, getDash, resetFilters, NO_SELECTIONS, NO_MARKS } from
 import { ChartTile, TextTile, FilterTile, ButtonTile } from './Tile'
 import { ChartIcon, openChart } from '../charts/ChartBuilder'
 import { askText } from '../Dialogs'
-import { exportDashboardPdf, exportDashboardPng } from './export'
+import { exportDashboardPdf, exportDashboardPng, exportDashboardHtml } from './export'
 import { align, distribute, clampItem, snap, layoutContainer, findSlot, TEMPLATES, type Align } from '@/core/dashboard'
 import { newId } from '@/core/project/sviz'
 import { GRID, SIZES, type DashAction, type DashItem, type Dashboard, type Selections } from '@/shared/dashboards'
 
-const { LayoutDashboard, Bookmark, Plus, Copy, Star, Trash2, MoreHorizontal, Type, Filter, MousePointerClick, Image, Square, Columns3, Rows3, Lock, Unlock, Group, Ungroup, Eye, Pencil, Maximize, Download, RotateCcw, AlignLeft, AlignCenterHorizontal, AlignRight, AlignStartHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignHorizontalSpaceAround, AlignVerticalSpaceAround, X, FileText } = Icons
+const { LayoutDashboard, Bookmark, Plus, Copy, Star, Trash2, MoreHorizontal, Type, Filter, MousePointerClick, Image, Square, Columns3, Rows3, Lock, Unlock, Group, Ungroup, Eye, Pencil, Maximize, Download, RotateCcw, AlignLeft, AlignCenterHorizontal, AlignRight, AlignStartHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignHorizontalSpaceAround, AlignVerticalSpaceAround, X, FileText, FileCode2 } = Icons
 
 export function newDashboard(name: string, items: DashItem[] = []): Dashboard {
   return { id: newId(), name, size: { mode: 'fit', w: 1366, h: 768 }, items, actions: [{ id: newId(), kind: 'filter', source: '*', target: '*' }], updatedAt: Date.now() }
@@ -251,6 +251,9 @@ function Workspace({ d }: { d: Dashboard }) {
               </MenuItem>
               <MenuItem icon={<Image />} onSelect={() => void exportDashboardPng(d, canvasRef.current)} data-testid="export-png">
                 PNG image
+              </MenuItem>
+              <MenuItem icon={<FileCode2 />} onSelect={() => void exportDashboardHtml(d, canvasRef.current, dark)} data-testid="export-html">
+                Web page (HTML)
               </MenuItem>
             </MenuContent>
           </Menu>

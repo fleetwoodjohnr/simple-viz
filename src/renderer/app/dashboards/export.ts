@@ -1,14 +1,16 @@
 // Dashboard export. PDF: a copy of the dashboard at its design size, charts as high-resolution images, printed by
-// Chromium on a page of exactly that size. PNG: the dashboard as shown.
+// Chromium on a page of exactly that size. PNG: the dashboard as shown. HTML: the same copy as one self-contained page
+// (the app's styles inline, charts as images, no scripts).
 
 import { toast } from '../../state/store'
 import { setDash, getDash } from './runtime'
 import type { Dashboard } from '@/shared/dashboards'
+import { esc } from '@/core/charts/data'
 
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r(null)))
 
-/** Builds the print copy of a dashboard canvas; returns a cleanup function. */
-export async function preparePrint(d: Dashboard, canvas: HTMLElement, dark: boolean, scale = 2): Promise<() => void> {
+/** Builds the print copy of a dashboard canvas; returns it and a cleanup function. */
+export async function preparePrint(d: Dashboard, canvas: HTMLElement, dark: boolean, scale = 2): Promise<{ clone: HTMLElement; cleanup: () => void }> {
   const prevSel = getDash().selected
   setDash({ selected: [] })
   await nextFrame()
@@ -39,18 +41,19 @@ export async function preparePrint(d: Dashboard, canvas: HTMLElement, dark: bool
   document.body.appendChild(host)
   // Let images decode before printing.
   await Promise.all([...host.querySelectorAll('img')].map((i) => i.decode().catch(() => {})))
-  return () => {
+  const cleanup = () => {
     host.remove()
     style.remove()
     setDash({ selected: prevSel })
   }
+  return { clone, cleanup }
 }
 
 export async function exportDashboardPdf(d: Dashboard, canvas: HTMLElement | null, dark: boolean) {
   if (!canvas) return
   const path = await window.simpleViz.saveDialog(`${d.name}.pdf`, ['pdf'])
   if (!path) return
-  const cleanup = await preparePrint(d, canvas, dark)
+  const { cleanup } = await preparePrint(d, canvas, dark)
   try {
     const pdf = await window.simpleViz.exportPdf({ landscape: d.size.w > d.size.h })
     await window.simpleViz.writeFile(path, pdf)
@@ -73,4 +76,21 @@ export async function exportDashboardPng(d: Dashboard, canvas: HTMLElement | nul
   if (!png) return toast('Nothing could be captured. Make the window visible and try again.', 'error')
   await window.simpleViz.writeFile(path, png)
   toast(`Exported ${path.split(/[\\/]/).pop()}`, 'success')
+}
+
+export async function exportDashboardHtml(d: Dashboard, canvas: HTMLElement | null, dark: boolean) {
+  if (!canvas) return
+  const path = await window.simpleViz.saveDialog(`${d.name}.html`, ['html'])
+  if (!path) return
+  const { clone, cleanup } = await preparePrint(d, canvas, dark)
+  try {
+    const css = [...document.styleSheets].map((s) => [...s.cssRules].map((r) => r.cssText).join('\n')).join('\n')
+    const html = `<!doctype html>\n<html lang="en"${dark ? ' class="dark"' : ''}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(d.name)}</title><style>${css}\nbody{margin:0;padding:24px;overflow:auto;background:var(--panel-2)}</style></head><body>${clone.outerHTML}</body></html>\n`
+    await window.simpleViz.writeFile(path, new TextEncoder().encode(html))
+    toast(`Exported ${path.split(/[\\/]/).pop()}`, 'success')
+  } catch (e) {
+    toast(`HTML export failed: ${(e as Error).message}`, 'error')
+  } finally {
+    cleanup()
+  }
 }

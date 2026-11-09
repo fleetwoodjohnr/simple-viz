@@ -61,7 +61,7 @@ _Checked against Tableau's documentation on 8 November 2026._
 | [Device layouts](https://help.tableau.com/current/pro/desktop/en-us/dashboards_dsd_create.htm) | Size presets (desktop, laptop, tablet, phone, A4, Letter) | ◐ One layout per dashboard |
 | Presentation | Presentation mode with dashboard tabs | ✅ |
 | [Stories](https://help.tableau.com/current/pro/desktop/en-us/stories.htm) | — | ✗ |
-| Export | Dashboards: PDF (page sizes) and PNG; charts: PNG, SVG and CSV; query results: CSV, Excel and Parquet | ✅ |
+| Export | Dashboards: PDF (page sizes), PNG and a self-contained web page (HTML); charts: PNG, SVG and CSV; query results: CSV, Excel and Parquet | ✅ |
 
 ## Sharing
 
