@@ -69,7 +69,7 @@ export function useChartData(chart: Chart | null, extra?: ChartFilter[], highlig
   const calcs = project?.calcs
   const params = project?.params
   const maps = project?.maps ?? []
-  const key = JSON.stringify([chart?.dataset, chart?.type, chart?.enc, chart?.filters, chart?.options.sort, chart?.options.bins, chart?.options.map, maps.map((m) => m.id), extra, calcs?.filter((c) => c.dataset === chart?.dataset), params, dataVersion, !!columns, model])
+  const key = JSON.stringify([chart?.dataset, chart?.type, chart?.enc, chart?.filters, chart?.options.sort, chart?.options.bins, chart?.options.map, chart?.options.showMissing, maps.map((m) => m.id), extra, calcs?.filter((c) => c.dataset === chart?.dataset), params, dataVersion, !!columns, model])
 
   useEffect(() => {
     if (!chart) return

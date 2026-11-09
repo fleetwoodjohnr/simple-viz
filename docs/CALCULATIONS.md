@@ -72,6 +72,9 @@ anything else, such as another calculated field that returns text, use `||` or `
 
 ## Not supported (yet)
 
-Tableau's data densification (filling missing marks), and
-table calculations "compute using" an arbitrary set of fields (they compute along the chart's first axis, partitioned
-by the other dimensions).
+Densification beyond a date axis, and table calculations "compute using" an arbitrary set of fields (they compute
+along the chart's first axis, partitioned by the other dimensions).
+
+**Show missing dates** (chart format panel, for a date axis with a grain such as month) fills every period from the
+first to the last; empty periods have no value, so lines show a gap, and table calculations (running totals, moving
+averages, differences) run over them as Tableau's densification does.

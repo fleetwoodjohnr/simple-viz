@@ -730,6 +730,12 @@ function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fie
               ))}
             </div>
             {cartesian && <ParamLine lines={lines} setLines={(refLines) => setO({ refLines })} />}
+            {cartesian && chart.enc.x.length === 1 && chart.enc.x[0].grain && chart.enc.x[0].grain !== 'exact' && (
+              <label className="mt-2 flex items-center gap-2 text-[12px] text-text-2" title="Every period from the first to the last; table calculations run over the empty ones">
+                <input type="checkbox" className="size-3.5 accent-[var(--accent)]" checked={!!o.showMissing} onChange={(e) => setO({ showMissing: e.target.checked || undefined })} data-testid="show-missing" />
+                Show missing dates
+              </label>
+            )}
             {(chart.type === 'line' || chart.type === 'area') && chart.enc.x[0]?.grain && chart.enc.x[0].grain !== 'exact' && (
               <label className="mt-2 flex items-center gap-2 text-[12px] text-text-2">
                 <input type="checkbox" className="size-3.5 accent-[var(--accent)]" checked={!!o.forecast} onChange={(e) => setO({ forecast: e.target.checked ? { periods: 6 } : undefined })} data-testid="forecast-toggle" />

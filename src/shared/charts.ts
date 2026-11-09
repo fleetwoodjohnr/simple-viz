@@ -91,6 +91,9 @@ export interface ChartOptions {
   template?: string
   /** Line/area over a date axis: exponential-smoothing forecast of each series, with a prediction interval. */
   forecast?: { periods: number; level?: number }
+  /** Densify a date axis: every period between the first and last, empty ones as null (Tableau's "Show Missing
+   *  Values"); table calculations run over them. */
+  showMissing?: boolean
   /** Combo chart: series index (from y) drawn as lines instead of bars, and on the right axis. */
   lineSeries?: number[]
   rightAxis?: number[]

@@ -119,3 +119,29 @@ test('group values of a dimension (Create group)', async () => {
   near(s.series['Sum of revenue'][2], r.California + r.Washington)
   await quit(app)
 })
+
+test('show missing dates fills the empty months of a filtered line chart', async () => {
+  const { app, page } = await launch()
+  await salesProject(app, page, tempDir())
+  await page.getByTestId('nav-charts').click()
+  await page.getByTestId('new-chart-empty').click()
+  await page.getByTestId('chart-dataset').selectOption('sales_enriched')
+  await addField(page, 'order_date', 'x')
+  await addField(page, 'revenue', 'y')
+  // Only sales above the median of each month's largest: about half the months have none.
+  const [{ t }] = await sql(page, `SELECT quantile_disc(m, 0.5) AS t FROM (SELECT date_trunc('month', order_date) AS mo, max(revenue) AS m FROM sales_enriched GROUP BY 1)`)
+  await page.evaluate((min) => {
+    const sv = (window as any).__sv
+    const id = sv.get().project.charts.at(-1).id
+    sv.P.edit((p: any) => ({ ...p, charts: p.charts.map((c: any) => (c.id === id ? { ...c, filters: [{ id: 'f', field: 'revenue', op: 'between', min }] } : c)) }))
+  }, Number(t) + 0.01)
+  // From the first to the last month left by the filter.
+  const [{ span, n }] = await sql(page, `SELECT datediff('month', min(mo), max(mo)) + 1 AS span, count(DISTINCT mo) AS n FROM (SELECT date_trunc('month', order_date) AS mo FROM sales_enriched WHERE revenue >= ${Number(t) + 0.01})`)
+  const months = Number(span)
+  expect(Number(n)).toBeLessThan(months)
+  await expect.poll(async () => (await chartSeries(page)).categories.length).toBe(Number(n))
+  await page.getByTestId('show-missing').check()
+  await expect.poll(async () => (await chartSeries(page)).categories.length).toBe(months)
+  expect((await chartSeries(page)).series['Sum of revenue'].some((v) => v === null)).toBe(true)
+  await quit(app)
+})

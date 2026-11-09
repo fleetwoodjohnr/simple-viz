@@ -314,11 +314,25 @@ export function compileQuery(input: QueryInput): CompiledQuery {
     return { sql, fields, limit: maxMarks ?? Infinity }
   }
 
-  sql += `,\na AS (\n  SELECT ${aggCols.join(', ')}\n  FROM f${dims.length ? '\n  GROUP BY ALL' : ''}${having.length ? `\n  HAVING ${having.join(' AND ')}` : ''}\n)`
+  // Densification: with "show missing dates", every period of the date axis from the first to the last, crossed with
+  // the other dimensions' combinations; periods without data have null measures (table calculations run over them).
+  const xs = dims.filter((d) => d.role === 'x')
+  const x = xs[0]
+  const step = x && xs.length === 1 && isDate(x.type) && x.ref.grain && x.ref.grain !== 'exact' ? DENSE_STEP[x.ref.grain] : undefined
+  const dense = !!chart.options.showMissing && !!step && aggCols.length > dims.length
+  const aggName = dense ? 'a0' : 'a'
+  sql += `,\n${aggName} AS (\n  SELECT ${aggCols.join(', ')}\n  FROM f${dims.length ? '\n  GROUP BY ALL' : ''}${having.length ? `\n  HAVING ${having.join(' AND ')}` : ''}\n)`
+  if (dense) {
+    const others = dims.filter((d) => d !== x).map((d) => d.key)
+    const spine = `CAST(unnest(generate_series(min(${x.key}), max(${x.key}), INTERVAL '${step}')) AS ${x.ref.grain === 'hour' ? 'TIMESTAMP' : 'DATE'})`
+    sql += `,\na AS (\n  SELECT g.${x.key}${others.length ? ', p.*' : ''}, a0.* EXCLUDE (${dims.map((d) => d.key).join(', ')})\n  FROM (SELECT ${spine} AS ${x.key} FROM a0) g${others.length ? `\n  CROSS JOIN (SELECT DISTINCT ${others.join(', ')} FROM a0) p` : ''}\n  LEFT JOIN a0 ON a0.${x.key} = g.${x.key}${others.map((k) => ` AND a0.${k} IS NOT DISTINCT FROM p.${k}`).join('')}\n)`
+  }
   for (const t of tuples) sql += `,\n${t}`
   sql += `\nSELECT ${finalCols.join(', ')} FROM a${joins.length ? `\n${joins.join('\n')}` : ''}${ordered ? `\nORDER BY ${ordered}` : ''}${limitSql}`
   return { sql, fields, limit: maxMarks ?? Infinity }
 }
+
+const DENSE_STEP: Record<string, string> = { year: '1 year', quarter: '3 months', month: '1 month', week: '1 week', day: '1 day', hour: '1 hour' }
 
 const WINDOWABLE = 'sum|avg|mean|min|max|count|median|mode|stddev_samp|stddev_pop|var_samp|var_pop|quantile_cont|quantile_disc|any_value|first|last|string_agg|bool_and|bool_or|corr|covar_samp|covar_pop|approx_count_distinct|product|kurtosis|skewness|entropy'
 const AGG_CALL = new RegExp(`\\b(${WINDOWABLE})\\s*\\(((?:[^()]|\\((?:[^()]|\\([^()]*\\))*\\))*)\\)`, 'gi')

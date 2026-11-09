@@ -78,6 +78,26 @@ describe('chart queries', () => {
     expect(two.map((r) => r.d0)).toEqual([false])
   })
 
+  it('show missing dates: every month from the first to the last, running totals carried over the gaps', async () => {
+    // Keep only sales above the median of each month's largest: about half the months are left without any.
+    const [{ t }] = await rows(engine, `SELECT quantile_disc(m, 0.5) AS t FROM (SELECT date_trunc('month', order_date) AS mo, max(revenue) AS m FROM sales GROUP BY 1)`)
+    const chart = { type: 'line', filters: [{ id: 'f', field: 'revenue', op: 'between' as const, min: Number(t) + 0.01 }], enc: { x: [dim('order_date', { grain: 'month' as const })], y: [sum('revenue'), sum('revenue', { quick: 'running_sum' as const })] } }
+    const sparse = await run(chart)
+    const dense = await run({ ...chart, options: { showMissing: true } })
+    const month = (v: unknown) => String(v).slice(0, 7)
+    const [y0, m0] = month(sparse[0].d0).split('-').map(Number)
+    const [y1, m1] = month(sparse[sparse.length - 1].d0).split('-').map(Number)
+    const span = (y1 - y0) * 12 + (m1 - m0) + 1
+    expect(sparse.length).toBeLessThan(span) // the filter leaves months without data
+    expect(dense.length).toBe(span)
+    expect(dense.filter((r) => r.m0 === null)).toHaveLength(span - sparse.length)
+    // The running total is defined on the empty months too, equal to the month before.
+    dense.forEach((r, i) => {
+      if (r.m0 === null && i > 0) near(r.m1, Number(dense[i - 1].m1))
+    })
+    near(dense[dense.length - 1].m1, sparse.reduce((a, r) => a + Number(r.m0), 0))
+  })
+
   it('+ joins text, as in Tableau', async () => {
     const out = await run({ enc: { x: [dim('Label')], y: [sum('revenue')] } }, [calc('Label', "[region] + ' / ' + UPPER([segment])")])
     const ref = await rows(engine, `SELECT region || ' / ' || upper(segment) AS l, sum(revenue) r FROM sales GROUP BY 1 ORDER BY 1`)
