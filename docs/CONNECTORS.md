@@ -67,7 +67,7 @@ the password again.
 | Excel 95 and older (.xls BIFF5) | Old 8-bit format | Save as .xlsx |
 | Password-protected .xls (Excel 97–2003) and Excel 2007 workbooks | Older encryption schemes (RC4, Standard) | Open in Excel and save as .xlsx (Excel 2010 and later encryption is read) |
 | Amazon Redshift | The postgres extension relies on server features Redshift lacks; untested | Unload to S3 (Parquet) and read from S3 |
-| Athena, Oracle | Each needs its own driver or API and authentication (often OAuth), none bundled yet | Export to Parquet/CSV in cloud storage and read it from there; Athena and Starburst Galaxy users can connect through Trino |
+| Athena, Oracle | Each needs its own driver or API and authentication (often OAuth), none bundled yet | Export to Parquet/CSV in cloud storage and read it from there; Athena’s tables are files in S3, which Simple Viz reads directly (Starburst Galaxy connects as Trino) |
 | Google Sheets | Needs OAuth sign-in | Publish to the web as CSV and add its address |
 | ODBC / JDBC | Would need native drivers outside the sandbox | — |
 | Writing back to a source | Simple Viz is read-only by design | — |
