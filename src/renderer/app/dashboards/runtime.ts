@@ -14,6 +14,9 @@ export interface Drill {
 
 interface Runtime {
   active: string | null
+  /** A story being shown instead of a dashboard, and its current point. */
+  story: string | null
+  storyPoint: number
   mode: 'edit' | 'view'
   presenting: boolean
   selected: string[]
@@ -23,7 +26,7 @@ interface Runtime {
   drill: Record<string, Record<string, Drill>>
 }
 
-export const useDash = create<Runtime>(() => ({ active: null, mode: 'edit', presenting: false, selected: [], selections: {}, marks: {}, drill: {} }))
+export const useDash = create<Runtime>(() => ({ active: null, story: null, storyPoint: 0, mode: 'edit', presenting: false, selected: [], selections: {}, marks: {}, drill: {} }))
 export const setDash = useDash.setState
 export const getDash = useDash.getState
 

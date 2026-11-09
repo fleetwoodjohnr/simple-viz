@@ -101,6 +101,7 @@ Linux, Windows and macOS._
 | Filter controls (list, dropdown, search, number range, date range) affecting every chart with the field | e2e `acceptance` |
 | Cross-filtering by clicking marks, highlight actions, drill-through (go to dashboard with the selection), reset | unit `dashboard filtering`, e2e `dashboards` |
 | Drill-down through a field path (categories or date grains), drill up | e2e `dashboards` |
+| Stories: dashboards in order with captions (add, reorder, remove points), presented full screen with ← → | unit `project`, e2e `example` |
 | Saved views: the filter controls' choices kept under a name in the project, applied from the Views menu | e2e `objects` |
 | Parameters: created and edited in the chart builder; used in formulas (`[Parameters].[Name]`, `$Name`), as a reference line, through a dashboard control, and set by a parameter action | unit `parameters`, integration `charts`, e2e `objects` |
 | URL actions: a click on a mark opens a web or email address filled with its values (other schemes refused) | unit `URL actions`, e2e `objects` |

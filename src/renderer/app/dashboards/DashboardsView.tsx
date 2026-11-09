@@ -7,6 +7,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useApp, set, get, toast } from '../../state/store'
 import * as P from '../../state/project'
 import { Btn, IconBtn, Menu, MenuContent, MenuItem, MenuSep, MenuTrigger, Segmented, Switch, Tip, cx, inputCls } from '../../ui'
+import { StoryList, StoryView } from './Stories'
 import { useDash, setDash, getDash, resetFilters, NO_SELECTIONS, NO_MARKS } from './runtime'
 import { ChartTile, TextTile, FilterTile, ButtonTile, ParamTile } from './Tile'
 import { ChartIcon, openChart } from '../charts/ChartBuilder'
@@ -30,7 +31,8 @@ const editItems = (id: string, fn: (items: DashItem[]) => DashItem[]) => updateD
 
 export function DashboardsView() {
   const project = useApp((s) => s.project!)
-  const { active, mode, presenting } = useDash(useShallow((s) => ({ active: s.active, mode: s.mode, presenting: s.presenting })))
+  const { active, mode, presenting, storyId } = useDash(useShallow((s) => ({ active: s.active, mode: s.mode, presenting: s.presenting, storyId: s.story })))
+  const story = project.stories?.find((s) => s.id === storyId)
   const d = project.dashboards.find((x) => x.id === active) ?? project.dashboards[0] ?? null
   useEffect(() => {
     if (d && d.id !== active) setDash({ active: d.id })
@@ -56,6 +58,7 @@ export function DashboardsView() {
     setDash({ active: nd.id, selected: [], mode: 'edit' })
   }
 
+  if (presenting && story) return <StoryView story={story} presenting />
   if (presenting && d) return <Presentation d={d} />
   return (
     <div className="flex h-full" data-testid="dashboards-view">
@@ -84,7 +87,7 @@ export function DashboardsView() {
         <ul className="space-y-0.5 px-2" aria-label="Dashboards">
           {project.dashboards.map((x) => (
             <li key={x.id} className="group flex items-center rounded-lg hover:bg-hover">
-              <button aria-current={d?.id === x.id ? 'page' : undefined} onClick={() => setDash({ active: x.id, selected: [] })} className={cx('flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-[12.5px]', d?.id === x.id ? 'bg-accent-soft font-medium text-accent-ink' : 'text-text-2')} data-testid="dashboard-item">
+              <button aria-current={!story && d?.id === x.id ? 'page' : undefined} onClick={() => setDash({ active: x.id, story: null, selected: [] })} className={cx('flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-[12.5px]', !story && d?.id === x.id ? 'bg-accent-soft font-medium text-accent-ink' : 'text-text-2')} data-testid="dashboard-item">
                 <LayoutDashboard className="size-3.5 shrink-0" />
                 <span className="truncate">{x.name}</span>
                 {x.favorite && <Star className="size-3 shrink-0 fill-current" />}
@@ -94,9 +97,10 @@ export function DashboardsView() {
           ))}
           {!project.dashboards.length && <li className="px-2 text-[12px] leading-relaxed text-text-3">No dashboards yet. Start blank or from a layout.</li>}
         </ul>
-        {d && mode === 'edit' && <Palette d={d} />}
+        <StoryList />
+        {d && !story && mode === 'edit' && <Palette d={d} />}
       </aside>
-      {d ? <Workspace d={d} /> : (
+      {story ? <StoryView story={story} /> : d ? <Workspace d={d} /> : (
         <div className="flex flex-1 items-center justify-center p-10 text-center">
           <div>
             <LayoutDashboard className="mx-auto mb-3 size-8 text-text-3" />
@@ -364,7 +368,7 @@ function resolved(items: DashItem[]): DashItem[] {
   return out
 }
 
-function Canvas({ d, edit, canvasRef }: { d: Dashboard; edit: boolean; canvasRef: React.RefObject<HTMLDivElement | null> }) {
+export function Canvas({ d, edit, canvasRef }: { d: Dashboard; edit: boolean; canvasRef: React.RefObject<HTMLDivElement | null> }) {
   const host = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ w: 1000, h: 700 })
   const selected = useDash((s) => s.selected)

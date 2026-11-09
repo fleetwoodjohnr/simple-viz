@@ -129,6 +129,12 @@ export interface Model {
   relationships: Relationship[]
 }
 
+export interface Story {
+  id: string
+  name: string
+  points: { id: string; dashboard: string; caption: string }[]
+}
+
 /** The data a model table reads. */
 export const tableSource = (t: { name: string; source?: string }) => t.source ?? t.name
 
@@ -165,6 +171,8 @@ export interface Project {
   dashboards: Dashboard[]
   /** Custom maps (GeoJSON areas) for map charts, kept in the project so it stays portable. */
   maps?: CustomMap[]
+  /** Stories: dashboards in order, each with a caption (Tableau's story points). */
+  stories?: Story[]
 }
 
 export interface CustomMap {

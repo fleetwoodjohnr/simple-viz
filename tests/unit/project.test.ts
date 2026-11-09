@@ -22,6 +22,19 @@ describe('.sviz project files', () => {
     expect(p.sources[0].refresh).toEqual(DEFAULT_REFRESH)
     expect(p.datasets).toEqual([])
   })
+
+  it('keeps stories, role-playing tables and sets; drops malformed story points', () => {
+    const p = migrate({
+      schemaVersion: 1,
+      id: 'x',
+      stories: [{ id: 's', name: 'Story', points: [{ id: 'a', dashboard: 'd1', caption: 'First' }, { caption: 'no dashboard' }] }, { name: 'no id' }],
+      models: [{ id: 'm', name: 'M', tables: [{ name: 'origin', source: 'regions', x: 0, y: 0 }], relationships: [] }],
+      calcs: [{ id: 'c', dataset: 'sales', name: 'region (set)', formula: "'Out'", set: { field: 'region', values: ['Texas'] } }]
+    })
+    expect(p.stories).toEqual([{ id: 's', name: 'Story', points: [{ id: 'a', dashboard: 'd1', caption: 'First' }] }])
+    expect(unpackProject(packProject(p)).project.models[0].tables[0].source).toBe('regions')
+    expect(unpackProject(packProject(p)).project.calcs[0].set).toEqual({ field: 'region', values: ['Texas'] })
+  })
 })
 
 describe('names', () => {
