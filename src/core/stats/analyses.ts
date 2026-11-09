@@ -957,3 +957,31 @@ export async function runAnalysis(s: AnalysisSpec, run: Run): Promise<AnalysisRe
   const fn = { describe, missing, correlation, ttest, anova, chisq, mannwhitney, kruskal, regression, logistic, forecast, kmeans: clusters, pca, anomalies }[s.kind]
   return fn(s, run)
 }
+
+/**
+ * Clusters of a chart's marks (Tableau's Cluster on a view): the marks' values standardized, k from 2 to 8 by the
+ * Calinski–Harabasz index (on at most 2,000 marks) unless given, k-means++ (seed 42). Returns each mark's cluster
+ * (0-based), or -1 for marks with a missing value.
+ */
+export function clusterMarks(points: (number | null)[][], k?: number): number[] {
+  const ok = points.map((p) => p.length > 0 && p.every((v) => v !== null && Number.isFinite(v)))
+  const pts = points.filter((_, i) => ok[i]) as number[][]
+  if (pts.length < 3) return points.map((_, i) => (ok[i] ? 0 : -1))
+  const d = pts[0].length
+  const mu = Array.from({ length: d }, (_, j) => pts.reduce((a, p) => a + p[j], 0) / pts.length)
+  const sd = Array.from({ length: d }, (_, j) => Math.sqrt(pts.reduce((a, p) => a + (p[j] - mu[j]) ** 2, 0) / pts.length) || 1)
+  const z = pts.map((p) => p.map((v, j) => (v - mu[j]) / sd[j]))
+  let best = k ? Math.max(1, Math.min(k, z.length)) : 2
+  if (!k) {
+    const sample = z.length > 2000 ? z.filter((_, i) => i % Math.ceil(z.length / 2000) === 0) : z
+    let score = -Infinity
+    for (let kk = 2; kk <= Math.min(8, sample.length - 1); kk++) {
+      const r = kmeans(sample, kk)
+      const ch = calinskiHarabasz(sample, r.labels, r.centers)
+      if (ch > score) (score = ch), (best = kk)
+    }
+  }
+  const labels = kmeans(z, best).labels
+  let at = 0
+  return points.map((_, i) => (ok[i] ? labels[at++] : -1))
+}

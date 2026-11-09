@@ -99,6 +99,8 @@ export interface ChartOptions {
   /** Histogram bin count. */
   bins?: number
   refLines?: ReferenceLine[]
+  /** Scatter plots: color the marks by k-means cluster of their values (k chosen when absent). */
+  clusters?: { k?: number }
   /** Reference lines, bands and trends over every mark of a pane (default), or one per color series. */
   refScope?: 'pane' | 'series'
   /** Gauge: scale (default 0 to a round number above the value). */

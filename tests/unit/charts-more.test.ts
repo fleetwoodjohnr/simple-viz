@@ -203,3 +203,21 @@ describe('background map tiles', () => {
     expect(validTileTemplate('file:///etc/{z}/{x}/{y}')).toBe(false)
   })
 })
+
+import { clusterMarks } from '@/core/stats/analyses'
+
+describe('clusters on a chart', () => {
+  it('finds the obvious groups (k chosen by Calinski–Harabasz) and colors a scatter by them', () => {
+    const blob = (cx: number, cy: number, n: number) => Array.from({ length: n }, (_, i) => [cx + Math.cos(i) * 0.3, cy + Math.sin(i * 1.7) * 0.3])
+    const pts = [...blob(0, 0, 20), ...blob(10, 0, 20), ...blob(5, 9, 20), [null, 1]]
+    const labels = clusterMarks(pts)
+    expect(new Set(labels.slice(0, 60)).size).toBe(3)
+    for (const g of [0, 20, 40]) expect(new Set(labels.slice(g, g + 20)).size).toBe(1)
+    expect(labels[60]).toBe(-1)
+    expect(new Set(clusterMarks(pts, 2).slice(0, 60)).size).toBe(2)
+    const xf = f('m0', 'x', 'measure', 'x')
+    const yf = f('m1', 'y', 'measure', 'y')
+    const o = opt('scatter', data([xf, yf], pts.slice(0, 60) as Value[][], { clusters: {} }))
+    expect(o.series.map((s: O) => [s.name, s.data.length])).toEqual([['Cluster 1', 20], ['Cluster 2', 20], ['Cluster 3', 20]])
+  })
+})

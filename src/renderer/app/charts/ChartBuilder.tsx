@@ -814,6 +814,13 @@ function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fie
                 )}
               </label>
             )}
+            {chart.type === 'scatter' && (
+              <label className="mt-2 flex items-center gap-2 text-[12px] text-text-2" title="Color the marks by k-means cluster of their values (Calinski–Harabasz picks k when empty)">
+                <input type="checkbox" className="size-3.5 accent-[var(--accent)]" checked={!!o.clusters} onChange={(e) => setO({ clusters: e.target.checked ? {} : undefined })} data-testid="clusters-toggle" />
+                Clusters
+                {o.clusters && <input type="number" min={2} max={20} placeholder="auto" aria-label="Number of clusters" className={cx(inputCls, 'h-6 w-16 px-1.5 text-[12px]')} value={o.clusters.k ?? ''} onChange={(e) => setO({ clusters: e.target.value ? { k: Math.max(2, Math.min(20, Number(e.target.value))) } : {} })} data-testid="clusters-k" />}
+              </label>
+            )}
             {cartesian && chart.enc.color && lines.length > 0 && (
               <label className="mt-2 flex items-center gap-2 text-[12px] text-text-2">
                 <input type="checkbox" className="size-3.5 accent-[var(--accent)]" checked={o.refScope === 'series'} onChange={(e) => setO({ refScope: e.target.checked ? 'series' : undefined })} data-testid="ref-per-color" />

@@ -8,7 +8,7 @@ import type { Role } from '../query/compile'
 import { type ChartData, type Theme, type Value, col, dims, measures, fmt, esc, pivot, dimmed } from './data'
 import { type Option, isDateT, base, axisStyle, legend, grid, rowTooltip, axisTooltip, catLabels } from './option'
 import * as More from './more'
-import { etsAuto, addPeriods, SEASON, type Grain } from '../stats/analyses'
+import { etsAuto, addPeriods, clusterMarks, SEASON, type Grain } from '../stats/analyses'
 import { solve, tQuantile } from '../stats/math'
 
 
@@ -346,10 +346,17 @@ const scatter: ChartPlugin['option'] = (d, t) => {
   const size = d.fields.find((f) => f.role === 'size')
   const colorDim = dims(d, 'color')[0]
   const groups = new Map<string, Value[][]>()
-  for (const r of d.rows) {
-    const k = colorDim ? fmt(r[col(d, colorDim.key)], colorDim) : ''
+  // Clusters (when asked): k-means on the marks' x and y (and size) values, which then color the marks.
+  const cl = d.options.clusters ? clusterMarks(d.rows.map((r) => [mx, my, size].filter((f): f is NonNullable<typeof f> => !!f).map((f) => (r[col(d, f.key)] === null ? null : Number(r[col(d, f.key)])))), d.options.clusters.k) : null
+  d.rows.forEach((r, i) => {
+    const k = cl ? (cl[i] < 0 ? 'No cluster (missing values)' : `Cluster ${cl[i] + 1}`) : colorDim ? fmt(r[col(d, colorDim.key)], colorDim) : ''
     if (!groups.has(k)) groups.set(k, [])
     groups.get(k)!.push(r)
+  })
+  if (cl) for (const k of [...groups.keys()].sort()) {
+    const rows = groups.get(k)!
+    groups.delete(k)
+    groups.set(k, rows)
   }
   const sizes = size ? d.rows.map((r) => Number(r[col(d, size.key)]) || 0) : []
   const smax = Math.max(1, ...sizes.map(Math.abs))

@@ -4,6 +4,7 @@
 
 - **Forecasting.** Damped and multiplicative trends in exponential smoothing; seasonal ARIMA in Analytics, with the orders chosen
   stepwise by AICc and estimated by exact maximum likelihood (checked against statsmodels and R's airline model).
+- **Groups and clusters.** Pick marks on a chart and group them; color a scatter plot by k-means cluster.
 - **Sets.** Sets computed from a condition or the top N by a measure (after context filters, as in Tableau), and
   combined sets.
 - **Models.** Level of detail expressions, table calculations, quick calculations and computed sets work on related

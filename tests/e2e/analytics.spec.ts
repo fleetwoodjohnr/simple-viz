@@ -104,5 +104,21 @@ test('statistics, forecast and clusters in the Analytics workspace; forecast ove
   expect(s.categories).toHaveLength(18)
   expect(s.series['Sum of revenue forecast'].slice(12).every((v) => typeof v === 'number')).toBe(true)
 
+  // Clusters on a scatter of every row (revenue against cost): three colors, every row in one.
+  await page.getByTestId('new-chart').click()
+  await page.getByTestId('chart-dataset').selectOption('sales_enriched')
+  await page.getByTestId('type-scatter').click()
+  for (const [field, shelf] of [['revenue', 'x'], ['cost', 'y']]) {
+    await page.getByTestId(`field-${field}`).hover()
+    await page.getByTestId(`field-menu-${field}`).click()
+    await page.getByTestId(`add-to-${shelf}`).click()
+  }
+  await page.getByTestId('clusters-toggle').check()
+  await page.getByTestId('clusters-k').fill('3')
+  const scatter = () => page.locator('[data-testid=chart-canvas] [data-testid=echart]').first().evaluate((el) => (el as any).__echart.getOption().series.map((x: any) => [x.name, x.data.length]))
+  await expect.poll(async () => (await scatter()).map((x: any) => x[0])).toEqual(['Cluster 1', 'Cluster 2', 'Cluster 3'])
+  const [{ n }] = await sql(page, 'SELECT count(*) AS n FROM sales_enriched WHERE revenue IS NOT NULL AND cost IS NOT NULL')
+  expect((await scatter()).reduce((a: number, x: any) => a + x[1], 0)).toBe(Number(n))
+
   await quit(app)
 })
