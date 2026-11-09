@@ -554,18 +554,26 @@ export class Engine {
     for (const s of targets) this.setStatus(s.id, { state: 'checking' })
     this.onStatus(this.statuses())
     let anyChanged = false
+    // A source with new data is reported as still checking until the views over it are rebuilt (after every source):
+    // the page describes the relations when a source turns ok, and must not do so before they include it.
+    const held = new Set<string>()
+    const emit = () => this.onStatus(this.statuses().map((x) => (held.has(x.id) ? { ...x, state: 'checking' as const } : x)))
     // At most two sources extract at a time, so a slow database doesn't hold up local files.
     const queue = [...targets]
     const worker = async () => {
       for (let s = queue.shift(); s && gen === this.gen; s = queue.shift()) {
         const changed = await this.refreshSource(s, force, gen)
+        if (changed) held.add(s.id)
         anyChanged ||= changed
-        this.onStatus(this.statuses())
+        emit()
       }
     }
     await Promise.all([worker(), worker()])
     if (gen !== this.gen) return this.statuses()
-    if (anyChanged) await this.syncViews()
+    if (anyChanged) {
+      await this.syncViews()
+      this.onStatus(this.statuses())
+    }
     return this.statuses()
   }
 

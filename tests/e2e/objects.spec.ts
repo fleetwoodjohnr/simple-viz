@@ -69,6 +69,9 @@ test('text, shape, image, reset button, row layout; fit to window', async () => 
     await page.getByLabel('Layout container').selectOption({ index: 1 })
   }
   await expect.poll(async () => (await items(page)).filter((i) => i.parent).length).toBe(2)
+  // The layout shows a frame after the change (before it, a new object may sit exactly on a shape).
+  const box = (kind: string) => page.locator(`[data-testid=item-${kind}]`).boundingBox().then((b) => b!)
+  await expect.poll(async () => Math.abs((await box('shape')).x - (await box('image')).x)).toBeGreaterThan(20)
   const row = (await page.locator('[data-testid=item-container]').boundingBox())!
   const shape = (await page.locator('[data-testid=item-shape]').boundingBox())!
   const image = (await page.locator('[data-testid=item-image]').boundingBox())!
@@ -92,8 +95,7 @@ test('text, shape, image, reset button, row layout; fit to window', async () => 
     ;(globalThis as any).__opened = []
     shell.openExternal = async (u: string) => void (globalThis as any).__opened.push(u)
   })
-  await page.getByTestId('mode-edit').click()
-  await page.locator('[data-testid=dashboard-canvas]').click({ position: { x: 4, y: 4 } })
+  await page.getByTestId('mode-edit').click() // clears the selection: the dashboard's own properties show
   await page.getByRole('button', { name: 'Add action' }).click()
   await page.getByLabel('Action kind').last().selectOption('url')
   await page.getByLabel('Web address').fill('https://example.com/search?q={region}')
