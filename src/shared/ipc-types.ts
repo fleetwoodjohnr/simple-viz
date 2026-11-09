@@ -132,7 +132,7 @@ export interface SimpleVizApi {
   credentialSet(sourceId: string, password: string | null): Promise<void>
   credentialStatus(): Promise<{ backend: string; secure: boolean }>
   /** Sheets, tables and named ranges in a spreadsheet file (granted path). */
-  sheetTables(path: string): Promise<{ ref: string; kind: 'sheet' | 'table' | 'name'; rows: number; columns: number }[]>
+  sheetTables(path: string): Promise<{ ref: string; kind: 'sheet' | 'table' | 'name' | 'detected'; rows: number; columns: number; sheet?: string }[]>
 
   exportPdf(options: { landscape?: boolean }): Promise<Uint8Array>
   print(): Promise<boolean>

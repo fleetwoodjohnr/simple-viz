@@ -17,7 +17,7 @@ _Checked against Tableau's documentation on 8 November 2026._
 | Live connections | PostgreSQL and MySQL, read-only | ◐ SQL Server is extract only |
 | [Relationships and the data model](https://help.tableau.com/current/pro/desktop/en-us/datasource_datamodel.htm), [relating tables](https://help.tableau.com/current/pro/desktop/en-us/relate_tables.htm) | Models: tables related by fields, measures aggregated at their own grain (no double counting), unmatched rows kept; one table in several roles (order and ship dates); LOD expressions, table calculations and computed sets on models | ✅ |
 | [Joins and unions](https://help.tableau.com/current/pro/desktop/en-us/datasource_multitable_normalized.htm) | SQL datasets, or visual Join/Append steps | ✅ |
-| [Data Interpreter](https://help.tableau.com/current/pro/desktop/en-us/data_interpreter.htm) | Pick a sheet, Excel table, named range or cell range; column profiles; type corrections (incl. currency text, day-first dates) | ◐ No automatic detection of headers and sub-tables in messy sheets |
+| [Data Interpreter](https://help.tableau.com/current/pro/desktop/en-us/data_interpreter.htm) | Tables inside messy sheets found and picked (titles and notes above or below left out, several tables in one sheet, headers found, an empty row inside a table kept); or pick a sheet, Excel table, named range or cell range; column profiles; type corrections (incl. currency text, day-first dates) | ◐ Tables side by side (separated only by empty columns) aren't split; merged header rows aren't combined |
 | Data preparation | Visual transform steps (filter, calculate, split, pivot, unpivot, group, join, append…) ⇄ SQL | ✅ |
 
 ## Calculations

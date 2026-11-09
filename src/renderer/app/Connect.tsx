@@ -1,7 +1,7 @@
 // Adding data: the sheet picker for spreadsheets, the PostgreSQL connection dialog, and relinking moved files.
 
 import { useEffect, useState } from 'react'
-import { FileSpreadsheet, Globe2, Loader2, Server, Table2, Tag } from 'lucide-react'
+import { FileSpreadsheet, Globe2, Loader2, Server, Table2, Tag, Sparkles } from 'lucide-react'
 import { useApp, get, set as setStore, toast } from '../state/store'
 import * as P from '../state/project'
 import { close } from './Dialogs'
@@ -9,7 +9,7 @@ import { Btn, Field, Modal, Segmented, cx, inputCls } from '../ui'
 import { newId } from '@/core/project/sviz'
 import { DEFAULT_REFRESH, FILE_FORMATS, SERVER, extractOnly, isRemotePath, isSheetFormat, toAlias, type DbSource, type FileFormat, type FileSource, type RemoteOptions, type ServerKind } from '@/shared/project'
 
-type SheetRef = { ref: string; kind: 'sheet' | 'table' | 'name'; rows: number; columns: number }
+type SheetRef = { ref: string; kind: 'sheet' | 'table' | 'name' | 'detected'; rows: number; columns: number; sheet?: string }
 
 export function SheetPicker({ path }: { path: string }) {
   const [tables, setTables] = useState<SheetRef[] | null>(null)
@@ -21,9 +21,11 @@ export function SheetPicker({ path }: { path: string }) {
     window.simpleViz.sheetTables(path).then(
       (t) => {
         setTables(t)
-        // Excel tables are the cleanest data when present; otherwise every sheet.
+        // Excel tables are the cleanest data when present; otherwise every sheet, or the tables found inside a sheet that
+        // has titles, notes or several tables (Tableau's Data Interpreter).
         const tbls = t.filter((x) => x.kind === 'table')
-        setPicked(new Set((tbls.length ? tbls : t.filter((x) => x.kind === 'sheet')).map((x) => x.ref)))
+        const found = (sheet: string) => t.filter((x) => x.kind === 'detected' && x.sheet === sheet)
+        setPicked(new Set((tbls.length ? tbls : t.filter((x) => x.kind === 'sheet').flatMap((x) => (found(x.ref).length ? found(x.ref) : [x]))).map((x) => x.ref)))
       },
       (e: Error) => setError(e.message)
     )
@@ -35,7 +37,7 @@ export function SheetPicker({ path }: { path: string }) {
     P.addSource(P.fileSource(path, FILE_FORMATS[ext], refs))
     close()
   }
-  const icon = { sheet: <FileSpreadsheet className="size-4 text-text-3" />, table: <Table2 className="size-4 text-text-3" />, name: <Tag className="size-4 text-text-3" /> }
+  const icon = { sheet: <FileSpreadsheet className="size-4 text-text-3" />, table: <Table2 className="size-4 text-text-3" />, name: <Tag className="size-4 text-text-3" />, detected: <Sparkles className="size-4 text-text-3" /> }
   return (
     <Modal open onOpenChange={(o) => !o && close()} title={`Add data from ${name}`} description="Choose the sheets, Excel tables or named ranges to use. Each becomes a table you can query with SQL." width={520} footer={<><Btn onClick={close}>Cancel</Btn><Btn variant="primary" disabled={!refs.length} onClick={add} data-testid="sheet-add">Add {refs.length || ''}</Btn></>}>
       {error ? (
@@ -52,7 +54,7 @@ export function SheetPicker({ path }: { path: string }) {
                   {icon[t.kind]}
                   <span className="flex-1 text-[13px] font-medium">{t.ref}</span>
                   <span className="text-[11.5px] text-text-3">
-                    {t.kind === 'sheet' ? 'Sheet' : t.kind === 'table' ? 'Table' : 'Named range'} · {t.rows.toLocaleString()} rows × {t.columns} cols
+                    {t.kind === 'sheet' ? 'Sheet' : t.kind === 'table' ? 'Table' : t.kind === 'detected' ? 'Table found in the sheet' : 'Named range'} · {t.rows.toLocaleString()} rows × {t.columns} cols
                   </span>
                 </label>
               </li>

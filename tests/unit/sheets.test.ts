@@ -43,6 +43,37 @@ describe('spreadsheet tables', () => {
     expect(t.rowCount).toBe(3) // the empty row is skipped
     expect(t.columns[1].type).toBe('VARCHAR') // 1, 'n/a', 3.5 → text
     expect(t.columns[1].values).toEqual(['1', 'n/a', '3.5'])
+    // The table under the title is found (an empty row inside it doesn't end it).
+    expect(listTables(back).filter((x) => x.kind === 'detected').map((x) => x.ref)).toEqual(['Data!A3:C7'])
+  })
+
+  it('finds the tables in a messy sheet: titles and notes left out, two tables apart, headers found', () => {
+    const wb = new Workbook()
+    const s = wb.addSheet('Report 2025')
+    const rowsIn: (string | number | null)[][] = [
+      ['Quarterly sales report', null, null, null],
+      ['Prepared by Finance', null, null, null],
+      [null, null, null, null],
+      [null, 'Region', 'Q1', 'Q2'],
+      [null, 'East', 10, 12],
+      [null, 'West', 7, 9],
+      ['Source: ledger', null, null, null],
+      [null, null, null, null],
+      [null, null, null, null],
+      ['Product', 'Units', null, null],
+      ['A', 5, null, null],
+      ['B', 6, null, null]
+    ]
+    rowsIn.forEach((r, i) => r.forEach((v, j) => v !== null && s.set(i, j, { v })))
+    const found = listTables(wb).filter((x) => x.kind === 'detected')
+    expect(found.map((x) => [x.ref, x.rows, x.columns, x.sheet])).toEqual([["'Report 2025'!B4:D6", 2, 3, 'Report 2025'], ["'Report 2025'!A10:B12", 2, 2, 'Report 2025']])
+    const t = tableRows(wb, found[0].ref)
+    expect(t.columns.map((c) => [c.name, c.type])).toEqual([['Region', 'VARCHAR'], ['Q1', 'BIGINT'], ['Q2', 'BIGINT']])
+    // A tidy sheet offers nothing extra.
+    const tidy = new Workbook()
+    const ts = tidy.addSheet('T')
+    ;[['a', 'b'], [1, 2], [3, 4]].forEach((r, i) => r.forEach((v, j) => ts.set(i, j, { v })))
+    expect(listTables(tidy).map((x) => x.kind)).toEqual(['sheet'])
   })
 
   it('exports query results that read back the same', () => {

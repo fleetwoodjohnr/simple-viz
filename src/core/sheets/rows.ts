@@ -5,7 +5,7 @@ import { Workbook, type Sheet } from './model/workbook'
 import { CellError, type Area, type Scalar } from './engine/values'
 import { isDateFormat, formatValue } from './numfmt/format'
 import { serialToDate, timeParts } from './numfmt/dates'
-import { parseArea } from './refs'
+import { colName, parseArea } from './refs'
 import { readXlsx } from './formats/xlsx/read'
 import { readOds } from './formats/ods/read'
 import { importXml2003 } from './formats/xml2003'
@@ -31,9 +31,12 @@ export interface SheetTable {
 
 export interface SheetTableRef {
   ref: string
-  kind: 'sheet' | 'table' | 'name'
+  /** detected: a table found inside a sheet that has titles, notes or several tables (Tableau's Data Interpreter). */
+  kind: 'sheet' | 'table' | 'name' | 'detected'
   rows: number
   columns: number
+  /** detected: the sheet it was found in. */
+  sheet?: string
 }
 
 export function readWorkbook(bytes: Uint8Array, format: SheetFormat): Workbook {
@@ -49,7 +52,12 @@ export function listTables(wb: Workbook): SheetTableRef[] {
   const out: SheetTableRef[] = []
   for (const s of wb.sheets) {
     const a = usedArea(s)
-    if (a) out.push({ ref: s.name, kind: 'sheet', rows: a.r1 - a.r0, columns: a.c1 - a.c0 + 1 })
+    if (!a) continue
+    out.push({ ref: s.name, kind: 'sheet', rows: a.r1 - a.r0, columns: a.c1 - a.c0 + 1 })
+    // Tables inside a messy sheet (a title above, notes below, several tables): offered as cell ranges.
+    const blocks = findTables(s)
+    const whole = blocks.length === 1 && blocks[0].r0 === a.r0 && blocks[0].c0 === a.c0 && blocks[0].r1 === a.r1 && blocks[0].c1 === a.c1
+    if (!whole) for (const b of blocks) out.push({ ref: `${/^[A-Za-z_]\w*$/.test(s.name) ? s.name : `'${s.name.replace(/'/g, "''")}'`}!${colName(b.c0)}${b.r0 + 1}:${colName(b.c1)}${b.r1 + 1}`, kind: 'detected', rows: b.r1 - b.r0, columns: b.c1 - b.c0 + 1, sheet: s.name })
   }
   for (const t of wb.tables) out.push({ ref: t.displayName || t.name, kind: 'table', rows: t.area.r1 - t.area.r0 - (t.totalsRow ? 1 : 0), columns: t.area.c1 - t.area.c0 + 1 })
   for (const n of wb.names) {
@@ -57,6 +65,55 @@ export function listTables(wb: Workbook): SheetTableRef[] {
     const r = resolveRange(wb, n.text)
     if (r) out.push({ ref: n.name, kind: 'name', rows: r.area.r1 - r.area.r0, columns: r.area.c1 - r.area.c0 + 1 })
   }
+  return out
+}
+
+/**
+ * The tables in a sheet, as Tableau's Data Interpreter finds them: runs of rows separated by blank rows; in each,
+ * leading rows with a single cell (titles) and trailing ones (notes, sources) are left out, and the header is the
+ * first row with text in most of the table's columns. Runs of fewer than two columns or two rows aren't tables.
+ * Sheets over a million cells aren't searched.
+ */
+export function findTables(s: Sheet): Area[] {
+  const u = s.used()
+  if (u.r < 0 || (u.r + 1) * (u.c + 1) > 1_000_000) return []
+  const rows = new Map<number, { cols: number[]; text: number }>()
+  s.forEachIn({ sheet: s.id, r0: 0, c0: 0, r1: u.r, c1: u.c }, (r, c, cell) => {
+    if (cell.v === null || cell.v === '') return
+    const row = rows.get(r) ?? { cols: [], text: 0 }
+    row.cols.push(c)
+    if (typeof cell.v === 'string') row.text++
+    rows.set(r, row)
+  })
+  const out: Area[] = []
+  const flush = (run: number[]) => {
+    let lo = 0
+    let hi = run.length - 1
+    while (lo <= hi && rows.get(run[lo])!.cols.length < 2) lo++
+    while (hi >= lo && rows.get(run[hi])!.cols.length < 2) hi--
+    if (hi < lo) return
+    const body = run.slice(lo, hi + 1)
+    const c0 = Math.min(...body.flatMap((r) => rows.get(r)!.cols))
+    const c1 = Math.max(...body.flatMap((r) => rows.get(r)!.cols))
+    // The header: the first row whose cells are text across most of the width.
+    const width = c1 - c0 + 1
+    const head = body.findIndex((r) => rows.get(r)!.text >= Math.max(2, Math.ceil(width * 0.6)))
+    // Rows after an empty row, with no header of their own and within the previous table's columns, continue it.
+    const prev = out[out.length - 1]
+    if (prev && head < 0 && c0 >= prev.c0 && c1 <= prev.c1 && body[0] - prev.r1 <= 3) {
+      prev.r1 = body[body.length - 1]
+      return
+    }
+    const start = head >= 0 ? body[head] : body[0]
+    if (c1 - c0 < 1 || body[body.length - 1] - start < 1) return
+    out.push({ sheet: s.id, r0: start, c0, r1: body[body.length - 1], c1 })
+  }
+  let run: number[] = []
+  for (let r = 0; r <= u.r; r++) {
+    if (rows.has(r)) run.push(r)
+    else if (run.length) (flush(run), (run = []))
+  }
+  if (run.length) flush(run)
   return out
 }
 

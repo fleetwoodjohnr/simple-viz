@@ -122,3 +122,28 @@ console.log(`Wrote fixtures to ${path.relative(process.cwd(), out)}`)
   }
   writeFileSync(path.join(out, 'series.csv'), series.join('\n') + '\n')
 }
+
+// A messy sheet for the table finder: a title and a note around one table, and a second table further down.
+{
+  const { Workbook } = await import('../src/core/sheets/model/workbook')
+  const { writeXlsx } = await import('../src/core/sheets/formats/xlsx/write')
+  const wb = new Workbook()
+  const s = wb.addSheet('Report')
+  const cells: (string | number | null)[][] = [
+    ['Quarterly sales report', null, null, null],
+    ['Prepared by Finance', null, null, null],
+    [null, null, null, null],
+    [null, 'Region', 'Q1', 'Q2'],
+    [null, 'East', 10, 12],
+    [null, 'West', 7, 9],
+    ['Source: ledger', null, null, null],
+    [null, null, null, null],
+    [null, null, null, null],
+    ['Product', 'Units', null, null],
+    ['A', 5, null, null],
+    ['B', 6, null, null],
+    ['C', 7, null, null]
+  ]
+  cells.forEach((r, i) => r.forEach((v, j) => v !== null && s.set(i, j, { v })))
+  writeFileSync(path.join(out, 'messy.xlsx'), writeXlsx(wb).data)
+}
