@@ -77,30 +77,34 @@ export function listTables(wb: Workbook): SheetTableRef[] {
 export function findTables(s: Sheet): Area[] {
   const u = s.used()
   if (u.r < 0 || (u.r + 1) * (u.c + 1) > 1_000_000) return []
-  const rows = new Map<number, { cols: number[]; text: number }>()
+  // Each row's filled cells: column → whether it holds text.
+  const cells = new Map<number, Map<number, boolean>>()
   s.forEachIn({ sheet: s.id, r0: 0, c0: 0, r1: u.r, c1: u.c }, (r, c, cell) => {
     if (cell.v === null || cell.v === '') return
-    const row = rows.get(r) ?? { cols: [], text: 0 }
-    row.cols.push(c)
-    if (typeof cell.v === 'string') row.text++
-    rows.set(r, row)
+    const row = cells.get(r) ?? new Map<number, boolean>()
+    row.set(c, typeof cell.v === 'string')
+    cells.set(r, row)
   })
   const out: Area[] = []
-  const flush = (run: number[]) => {
+  // A run of rows within columns [a, b]: titles and notes trimmed, the header found, or more rows of the table above.
+  const flush = (runAll: number[], a: number, b: number, prevOf: (c0: number, c1: number) => Area | undefined) => {
+    const inCols = (r: number) => [...(cells.get(r) ?? new Map()).entries()].filter(([c]) => c >= a && c <= b)
+    const run = runAll.filter((r) => inCols(r).length > 0)
     let lo = 0
     let hi = run.length - 1
-    while (lo <= hi && rows.get(run[lo])!.cols.length < 2) lo++
-    while (hi >= lo && rows.get(run[hi])!.cols.length < 2) hi--
+    while (lo <= hi && inCols(run[lo]).length < 2) lo++
+    while (hi >= lo && inCols(run[hi]).length < 2) hi--
     if (hi < lo) return
     const body = run.slice(lo, hi + 1)
-    const c0 = Math.min(...body.flatMap((r) => rows.get(r)!.cols))
-    const c1 = Math.max(...body.flatMap((r) => rows.get(r)!.cols))
+    const cols = body.flatMap((r) => inCols(r).map(([c]) => c))
+    const c0 = Math.min(...cols)
+    const c1 = Math.max(...cols)
     // The header: the first row whose cells are text across most of the width.
     const width = c1 - c0 + 1
-    const head = body.findIndex((r) => rows.get(r)!.text >= Math.max(2, Math.ceil(width * 0.6)))
+    const head = body.findIndex((r) => inCols(r).filter(([, t]) => t).length >= Math.max(2, Math.ceil(width * 0.6)))
     // Rows after an empty row, with no header of their own and within the previous table's columns, continue it.
-    const prev = out[out.length - 1]
-    if (prev && head < 0 && c0 >= prev.c0 && c1 <= prev.c1 && body[0] - prev.r1 <= 3) {
+    const prev = prevOf(c0, c1)
+    if (prev && head < 0 && body[0] - prev.r1 <= 3) {
       prev.r1 = body[body.length - 1]
       return
     }
@@ -108,13 +112,26 @@ export function findTables(s: Sheet): Area[] {
     if (c1 - c0 < 1 || body[body.length - 1] - start < 1) return
     out.push({ sheet: s.id, r0: start, c0, r1: body[body.length - 1], c1 })
   }
+  // Runs of rows separated by empty rows; within a run, tables side by side separated by empty columns.
+  const split = (run: number[]) => {
+    const used = [...new Set(run.flatMap((r) => [...cells.get(r)!.keys()]))].sort((x, y) => x - y)
+    const groups: [number, number][] = []
+    for (const c of used) {
+      const g = groups[groups.length - 1]
+      if (g && c === g[1] + 1) g[1] = c
+      else groups.push([c, c])
+    }
+    // Single columns beside a table (labels, notes) aren't tables of their own: only split when every part is wide.
+    const parts = groups.length > 1 && groups.every(([x, y]) => y > x) ? groups : [[used[0], used[used.length - 1]] as [number, number]]
+    for (const [a, b] of parts) flush(run, a, b, (c0, c1) => [...out].reverse().find((p) => c0 >= p.c0 && c1 <= p.c1))
+  }
   let run: number[] = []
   for (let r = 0; r <= u.r; r++) {
-    if (rows.has(r)) run.push(r)
-    else if (run.length) (flush(run), (run = []))
+    if (cells.has(r)) run.push(r)
+    else if (run.length) (split(run), (run = []))
   }
-  if (run.length) flush(run)
-  return out
+  if (run.length) split(run)
+  return out.sort((x, y) => x.r0 - y.r0 || x.c0 - y.c0)
 }
 
 function usedArea(s: Sheet): Area | null {

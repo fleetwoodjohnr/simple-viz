@@ -254,7 +254,7 @@ Also done: viz in tooltip.
 
 Also done: password-protected workbooks (Excel 2010+ Agile Encryption; the password asked for in the sheet list, kept in the keychain, checked against the file's verifier, decrypted in memory) — unit `decrypt` (decrypts msoffcrypto-tool's encryption to the original bytes), integration `formats`, e2e `arrow`.
 
-Also done: tables found inside messy sheets (Data Interpreter): titles and notes left out, several tables per sheet, headers found, offered and picked in the sheet list as cell ranges — unit `sheets`, e2e `arrow` (`messy.xlsx`).
+Also done: tables found inside messy sheets (Data Interpreter): titles and notes left out, several tables per sheet (one above another or side by side), headers found, offered and picked in the sheet list as cell ranges — unit `sheets`, e2e `arrow` (`messy.xlsx`).
 
 Also done: groups from marks picked on the chart (they take the field's place) — e2e `charts`; clusters on scatter plots (k-means on the marks' values, k by Calinski–Harabasz or chosen) — unit `charts-more`, e2e `analytics`; multiplicative trends in forecasts (rows above).
 

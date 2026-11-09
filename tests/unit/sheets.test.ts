@@ -69,6 +69,18 @@ describe('spreadsheet tables', () => {
     expect(found.map((x) => [x.ref, x.rows, x.columns, x.sheet])).toEqual([["'Report 2025'!B4:D6", 2, 3, 'Report 2025'], ["'Report 2025'!A10:B12", 2, 2, 'Report 2025']])
     const t = tableRows(wb, found[0].ref)
     expect(t.columns.map((c) => [c.name, c.type])).toEqual([['Region', 'VARCHAR'], ['Q1', 'BIGINT'], ['Q2', 'BIGINT']])
+    // Two tables side by side (an empty column between), each with a title above.
+    const side = new Workbook()
+    const ss = side.addSheet('Side')
+    const sideRows: (string | number | null)[][] = [
+      ['Sales', null, null, null, 'Costs', null],
+      ['Region', 'Q1', null, null, 'Item', 'Amount'],
+      ['East', 10, null, null, 'Rent', 5],
+      ['West', 7, null, null, 'Staff', 9],
+      [null, null, null, null, 'Power', 2]
+    ]
+    sideRows.forEach((r, i) => r.forEach((v, j) => v !== null && ss.set(i, j, { v })))
+    expect(listTables(side).filter((x) => x.kind === 'detected').map((x) => x.ref)).toEqual(['Side!A2:B4', 'Side!E2:F5'])
     // A tidy sheet offers nothing extra.
     const tidy = new Workbook()
     const ts = tidy.addSheet('T')
