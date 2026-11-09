@@ -19,7 +19,7 @@ import { MACROS } from '../core/calc/macros'
 import { extractName, ident, isSafeType, lit, trimStatement } from './sql'
 import { extractSelect, sourceStat, readBytes, fileTables, type Memo, type Stat } from './ingest'
 import { sqlServerTables } from './sqlserver'
-import { clickhouseTables, trinoTables } from './warehouses'
+import { bigqueryTables, clickhouseTables, trinoTables } from './warehouses'
 
 type Value = string | number | boolean | null
 
@@ -668,6 +668,8 @@ export class Engine {
         return { tables: await clickhouseTables(s) }
       } else if (s.kind === 'trino') {
         return { tables: await trinoTables(s) }
+      } else if (s.kind === 'bigquery') {
+        return { tables: await bigqueryTables(s) }
       } else if (isServer(s.kind)) {
         const ext = s.kind === 'mysql' ? 'mysql_scanner' : 'postgres_scanner'
         if (!extensionsDir) throw new Error(`The ${SERVER[s.kind].label} extension is not bundled with this build.`)

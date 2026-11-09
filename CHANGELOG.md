@@ -16,7 +16,7 @@
   Table calculations computed along several dimensions, restarting every one of them.
 - **Protected workbooks.** Password-protected Excel workbooks open with their password (kept in the keychain).
 - **Messy sheets.** The tables inside a sheet with titles, notes or several tables are found and picked.
-- **More sources.** ClickHouse and Trino/Presto (extract).
+- **More sources.** ClickHouse, Trino/Presto and Google BigQuery (extract).
 - **Maps.** Point maps place cities and US ZIP codes by name. Custom maps from shapefiles and KML/KMZ files.
   Background map tiles from a tile server you choose (off by default).
 - **Chart analytics.** Logarithmic, exponential, power and polynomial trend lines; percentile lines, confidence

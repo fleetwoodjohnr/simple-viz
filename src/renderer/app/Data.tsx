@@ -86,6 +86,9 @@ export function DataView() {
                 <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-trino')} data-testid="add-trino">
                   Trino or Presto
                 </MenuItem>
+                <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-bigquery')} data-testid="add-bigquery">
+                  Google BigQuery
+                </MenuItem>
                 <MenuSep />
                 <MenuItem icon={<SquareTerminal />} onSelect={() => openInSql('', { asDataset: true })}>
                   Dataset from SQL

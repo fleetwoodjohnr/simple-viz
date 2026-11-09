@@ -225,11 +225,12 @@ Details per source, and what isn't supported (with reasons): [docs/CONNECTORS.md
 
 ### Known limitations
 
-- Excel 95 `.xls`, password-protected .xls and Excel 2007 workbooks, Redshift, Snowflake, BigQuery, Databricks, Athena, Oracle, Google
+- Excel 95 `.xls`, password-protected .xls and Excel 2007 workbooks, Redshift, Snowflake, Databricks, Athena, Oracle, Google
   Sheets, ODBC/JDBC: not supported (reasons in docs/CONNECTORS.md).
-- SQL Server, ClickHouse and Trino are extract only. S3-compatible services other than the S3 emulator (MinIO, R2, GCS) use the same code but
+- SQL Server, ClickHouse, Trino and BigQuery are extract only. BigQuery is tested against its emulator, not Google's
+  service. S3-compatible services other than the S3 emulator (MinIO, R2, GCS) use the same code but
   weren't tested against the services themselves.
-- SQL Server, MySQL, ClickHouse, Trino, S3 and Azure tests run where podman is available (Linux CI); they are skipped on Windows and macOS
+- SQL Server, MySQL, ClickHouse, Trino, BigQuery (emulator), S3 and Azure tests run where podman is available (Linux CI); they are skipped on Windows and macOS
   CI and say so.
 - The bundled extensions add about 114 MB (uncompressed, Linux x64) for MySQL, web/S3 and Azure.
 
@@ -260,6 +261,8 @@ Also done: reference lines, bands and trends over every mark of a pane (they use
 Also done: "compute using" several dimensions in a chosen order, restarting every one of them (datasets and models) — integration `charts`, e2e `charts`.
 
 Also done: `+` joins text next to calculated fields that return text — unit `calc`; filters bound to parameters (a value, a range's ends, top N; on datasets and models, where parameter filters had been ignored) and number parameters with a range (clamped, stepped, a slider on dashboards) — unit `charts`, integration `charts`, `model`, e2e `objects`.
+
+Also done: Google BigQuery (REST API, service-account key or access token, read-only scope), extract only — integration `warehouses` (the BigQuery emulator: types, paging, a join with Excel, table lists; JWT sign-in against a local token server).
 
 Also done: ClickHouse (HTTP interface, `readonly=1`) and Trino/Presto (REST protocol) sources, extract only, in the connection dialog — integration `warehouses` (real ClickHouse 24.8 and Trino 470 containers: types, a join with Excel, refresh, table lists, a wrong password).
 

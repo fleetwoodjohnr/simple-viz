@@ -92,7 +92,7 @@ export function SheetPicker({ path }: { path: string }) {
 export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
   const settings = useApp((s) => s.settings)
   const info = SERVER[kind]
-  const [f, setF] = useState({ name: '', host: 'localhost', port: info.port, database: info.database, user: '', password: '', sslmode: 'prefer' as DbSource['sslmode'], mode: 'extract' as DbSource['mode'], timeoutSec: settings.refreshTimeoutSec })
+  const [f, setF] = useState({ name: '', host: kind === 'bigquery' ? 'bigquery.googleapis.com' : 'localhost', port: info.port, database: info.database, user: '', password: '', sslmode: 'prefer' as DbSource['sslmode'], mode: 'extract' as DbSource['mode'], timeoutSec: settings.refreshTimeoutSec })
   const [tables, setTables] = useState<string[] | null>(null)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
@@ -149,7 +149,7 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
               Add {picked.size} table{picked.size === 1 ? '' : 's'}
             </Btn>
           ) : (
-            <Btn variant="primary" disabled={busy || !f.host || (kind === 'postgres' && !f.database)} onClick={test} data-testid="pg-test">
+            <Btn variant="primary" disabled={busy || !f.host || ((kind === 'postgres' || kind === 'trino' || kind === 'bigquery') && !f.database)} onClick={test} data-testid="pg-test">
               {busy && <Loader2 className="size-4 animate-spin" />} Connect
             </Btn>
           )}
@@ -166,7 +166,7 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
         <Field label="Port">
           <input className={inputCls} type="number" value={f.port} onChange={(e) => upd({ port: Number(e.target.value) })} aria-label="Port" data-testid="pg-port" />
         </Field>
-        <Field label={kind === 'mysql' ? 'Database (empty: all)' : kind === 'trino' ? 'Catalog (or catalog.schema)' : 'Database'}>
+        <Field label={kind === 'mysql' ? 'Database (empty: all)' : kind === 'trino' ? 'Catalog (or catalog.schema)' : kind === 'bigquery' ? 'Project (or project.dataset)' : 'Database'}>
           <input className={inputCls} value={f.database} onChange={(e) => upd({ database: e.target.value })} aria-label="Database" data-testid="pg-database" />
         </Field>
         <Field label="SSL">
@@ -177,6 +177,14 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
             <option value="verify-full">Verify</option>
           </select>
         </Field>
+        {kind === 'bigquery' ? (
+          <div className="col-span-2">
+            <Field label="Service account key (JSON) or access token" hint="Read-only access is asked for. Kept in your system keychain, never in the project file.">
+              <textarea className={cx(inputCls, 'h-20 py-1.5 font-mono text-[11.5px]')} value={f.password} onChange={(e) => upd({ password: e.target.value })} aria-label="Service account key" autoComplete="off" spellCheck={false} data-testid="pg-password" />
+            </Field>
+          </div>
+        ) : (
+          <>
         <Field label="User">
           <input className={inputCls} value={f.user} onChange={(e) => upd({ user: e.target.value })} aria-label="User" autoComplete="off" data-testid="pg-user" />
         </Field>
@@ -184,6 +192,8 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
         <Field label="Password" hint={keychain && !keychain.secure ? 'No system keychain was found: the password is kept until you quit.' : undefined}>
           <input className={inputCls} type="password" value={f.password} onChange={(e) => upd({ password: e.target.value })} aria-label="Password" autoComplete="off" data-testid="pg-password" />
         </Field>
+          </>
+        )}
       </div>
       {!extractOnly(kind) && (
       <div className="mt-4 flex items-center justify-between gap-4 rounded-lg bg-panel-2 px-3 py-2.5 shadow-[0_0_0_1px_var(--border)]">

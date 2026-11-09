@@ -51,6 +51,7 @@ unchanged data is detected by its content and kept as is.
 | MySQL / MariaDB | Extract or live | DuckDB's mysql extension, attached read-only | integration `mysql`, e2e `mysql` (MariaDB 11) |
 | Microsoft SQL Server / Azure SQL | Extract | tedious (the standard Node driver), read-only intent; tables are copied into the cache | integration `sqlserver` (SQL Server 2022) |
 | ClickHouse (and ClickHouse Cloud) | Extract | Its HTTP interface (8443 with TLS, 8123 without), every request with `readonly=1`; rows streamed into the cache with their types (64-bit unsigned and wider integers as doubles) | integration `warehouses` (ClickHouse 24.8) |
+| Google BigQuery | Extract | Its REST API: a query job per table, result pages followed; signed in with a service-account key (exchanged for a read-only token with a signed JWT) or an access token; the *Database* field is the project (or project.dataset) | integration `warehouses` (the BigQuery emulator, paging included; sign-in against a local token server). Not tested against Google's service itself |
 | Trino / Presto (and Starburst) | Extract | Its REST protocol, following result pages on the same server only; the *Database* field is `catalog` or `catalog.schema`; passwords sent only over TLS | integration `warehouses` (Trino 470, TPC-H catalog) |
 
 *Extract* copies tables into the fast local cache (works offline; refreshed on open and on demand). *Live* queries the
@@ -64,7 +65,7 @@ the password again.
 | Excel 95 and older (.xls BIFF5) | Old 8-bit format | Save as .xlsx |
 | Password-protected .xls (Excel 97–2003) and Excel 2007 workbooks | Older encryption schemes (RC4, Standard) | Open in Excel and save as .xlsx (Excel 2010 and later encryption is read) |
 | Amazon Redshift | The postgres extension relies on server features Redshift lacks; untested | Unload to S3 (Parquet) and read from S3 |
-| Snowflake, BigQuery, Databricks, Athena, Oracle | Each needs its own driver or API and authentication (often OAuth), none bundled yet | Export to Parquet/CSV in cloud storage and read it from there; Athena and Starburst Galaxy users can connect through Trino |
+| Snowflake, Databricks, Athena, Oracle | Each needs its own driver or API and authentication (often OAuth), none bundled yet | Export to Parquet/CSV in cloud storage and read it from there; Athena and Starburst Galaxy users can connect through Trino |
 | Google Sheets | Needs OAuth sign-in | Publish to the web as CSV and add its address |
 | ODBC / JDBC | Would need native drivers outside the sandbox | — |
 | Writing back to a source | Simple Viz is read-only by design | — |

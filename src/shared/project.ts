@@ -8,9 +8,9 @@ import type { FeatureCollection } from '../core/charts/geo'
 export const PROJECT_SCHEMA_VERSION = 1
 
 export type FileFormat = 'csv' | 'tsv' | 'json' | 'jsonl' | 'parquet' | 'arrow' | 'xlsx' | 'xls' | 'xlsb' | 'ods' | 'xml2003'
-export type DbKind = 'postgres' | 'mysql' | 'sqlserver' | 'clickhouse' | 'trino' | 'sqlite' | 'duckdb'
+export type DbKind = 'postgres' | 'mysql' | 'sqlserver' | 'clickhouse' | 'trino' | 'bigquery' | 'sqlite' | 'duckdb'
 /** Database servers (host, port, user, password), as opposed to database files. */
-export type ServerKind = 'postgres' | 'mysql' | 'sqlserver' | 'clickhouse' | 'trino'
+export type ServerKind = 'postgres' | 'mysql' | 'sqlserver' | 'clickhouse' | 'trino' | 'bigquery'
 export const isServer = (k: string): k is ServerKind => Object.hasOwn(SERVER, k)
 export const SERVER: Record<ServerKind, { label: string; port: number; database: string }> = {
   postgres: { label: 'PostgreSQL', port: 5432, database: 'postgres' },
@@ -20,10 +20,13 @@ export const SERVER: Record<ServerKind, { label: string; port: number; database:
   /** Extract only, over ClickHouse's HTTP interface (8443 with TLS, 8123 without). */
   clickhouse: { label: 'ClickHouse', port: 8443, database: 'default' },
   /** Extract only, over Trino's REST protocol (Presto too); the database is catalog or catalog.schema. */
-  trino: { label: 'Trino / Presto', port: 8443, database: '' }
+  trino: { label: 'Trino / Presto', port: 8443, database: '' },
+  /** Extract only, over the BigQuery REST API; the database is the Google Cloud project (or project.dataset), the
+   *  password a service-account key (JSON) or an access token. */
+  bigquery: { label: 'BigQuery', port: 443, database: '' }
 }
 /** Servers read by their own drivers and copied into the cache (DuckDB can't attach them): no live mode. */
-export const extractOnly = (k: string) => k === 'sqlserver' || k === 'clickhouse' || k === 'trino'
+export const extractOnly = (k: string) => k === 'sqlserver' || k === 'clickhouse' || k === 'trino' || k === 'bigquery'
 
 /** One relation a source exposes to SQL under `alias` (a sheet, named table, cell range, or database table). */
 export interface SourceTable {

@@ -1,5 +1,5 @@
 // Shared setup for integration tests: a real engine on temp folders, and PostgreSQL (CI service or a podman container).
-import { mkdtempSync, existsSync, readFileSync } from 'node:fs'
+import { mkdtempSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
@@ -288,4 +288,49 @@ export async function startTrino(): Promise<Wh | null> {
   return tr
 }
 
-export const whSource = (w: Wh, kind: 'clickhouse' | 'trino', tables: ResolvedSource['tables'], password = w.password): ResolvedSource => ({ id: `${kind}1`, kind, host: w.host, port: w.port, user: w.user, password, database: w.database, sslmode: 'disable', mode: 'extract', timeoutSec: 30, tables })
+export const whSource = (w: Wh, kind: 'clickhouse' | 'trino' | 'bigquery', tables: ResolvedSource['tables'], password = w.password): ResolvedSource => ({ id: `${kind}1`, kind, host: w.host, port: w.port, user: w.user, password, database: w.database, sslmode: 'disable', mode: 'extract', timeoutSec: 30, tables })
+
+/**
+ * The BigQuery emulator (goccy/bigquery-emulator, which serves the BigQuery REST API) in podman: project "sv",
+ * dataset "shop" with customers, and 2,500 numbers (several result pages at the tests' page size). Null without podman.
+ */
+export async function startBigQuery(): Promise<Wh | null> {
+  if (!hasPodman() || process.env.SV_NO_PODMAN) return null
+  const dir = tmp('sv-bq-')
+  const rows = readFileSync(fixture('customers.csv'), 'utf8').trim().split('\n').slice(1).map((l) => l.split(','))
+  const yaml = [
+    'projects:',
+    '- id: sv',
+    '  datasets:',
+    '  - id: shop',
+    '    tables:',
+    '    - id: customers',
+    '      columns:',
+    ...[['customer_id', 'INTEGER'], ['customer_name', 'STRING'], ['region', 'STRING'], ['segment', 'STRING'], ['since', 'DATE'], ['score', 'FLOAT'], ['vip', 'BOOLEAN'], ['seen', 'TIMESTAMP']].flatMap(([n, t]) => [`      - name: ${n}`, `        type: ${t}`]),
+    '      data:',
+    ...rows.flatMap((r, i) => [`      - customer_id: ${r[0]}`, `        customer_name: "${r[1]}"`, `        region: "${r[2]}"`, `        segment: "${r[3]}"`, `        since: ${i % 5 ? `"${new Date(Date.UTC(2024, 0, 1 + i)).toISOString().slice(0, 10)}"` : 'null'}`, `        score: ${i % 7 ? i * 1.25 : 'null'}`, `        vip: ${i % 3 === 0}`, `        seen: "2024-03-0${(i % 9) + 1}T10:20:30Z"`]),
+    '    - id: numbers',
+    '      columns:',
+    '      - name: n',
+    '        type: INTEGER',
+    '      data:',
+    ...Array.from({ length: 2_500 }, (_, i) => `      - n: ${i + 1}`)
+  ].join('\n')
+  writeFileSync(path.join(dir, 'data.yaml'), yaml + '\n')
+  const name = `sv-bq-${process.pid}-${Date.now()}`
+  const port = 20000 + Math.floor(Math.random() * 20000)
+  execFileSync('podman', ['run', '-d', '--name', name, '-p', `127.0.0.1:${port}:9050`, '-v', `${dir}:/work:Z`, 'ghcr.io/goccy/bigquery-emulator:0.6.6', '--project=sv', '--data-from-yaml=/work/data.yaml'], { stdio: 'ignore' })
+  const bq: Wh = { name, host: '127.0.0.1', port, user: '', password: '', database: 'sv', stop: () => void execFileSync('podman', ['rm', '-f', name], { stdio: 'ignore' }) }
+  const t0 = Date.now()
+  for (;;) {
+    try {
+      const res = await fetch(`http://${bq.host}:${port}/bigquery/v2/projects/sv/datasets`)
+      if (res.ok) break
+    } catch {
+      // not yet listening
+    }
+    if (Date.now() - t0 > 120_000) throw new Error('The BigQuery emulator did not start')
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  return bq
+}

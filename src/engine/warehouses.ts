@@ -1,5 +1,5 @@
-// ClickHouse (its HTTP interface) and Trino / Presto (its REST protocol): tables are copied into the cache (extract
-// only; DuckDB can't attach them). Only the catalog query and SELECT * of a chosen table are ever sent, with names
+// ClickHouse (its HTTP interface), Trino / Presto (its REST protocol) and BigQuery (its REST API): tables are copied
+// into the cache (extract only; DuckDB can't attach them). Only the catalog query and SELECT * of a chosen table are ever sent, with names
 // quoted; user SQL runs in DuckDB over the copy. ClickHouse requests also carry readonly=1, so the server refuses
 // anything else.
 import { dateValue, timestampValue, type DuckDBConnection } from '@duckdb/node-api'
@@ -111,6 +111,107 @@ export async function trinoTables(s: ResolvedSource): Promise<string[]> {
   return out
 }
 
+// ---------------------------------------------------------------- BigQuery
+
+export function bigqueryType(t: string): Duck {
+  const u = t.toUpperCase()
+  if (u === 'BOOLEAN' || u === 'BOOL') return 'BOOLEAN'
+  if (u === 'INTEGER' || u === 'INT64') return 'BIGINT'
+  if (['FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC', 'DECIMAL', 'BIGDECIMAL'].includes(u)) return 'DOUBLE'
+  if (u === 'DATE') return 'DATE'
+  if (u === 'TIMESTAMP' || u === 'DATETIME') return 'TIMESTAMP'
+  return 'VARCHAR'
+}
+
+const tokens = new Map<string, { token: string; until: number }>()
+/**
+ * The Authorization header: a service-account key (JSON) is exchanged for a read-only access token (a JWT signed with
+ * its key, sent to its https token address); any other password is used as an access token; none: no header (a local
+ * emulator).
+ */
+async function bigqueryAuth(s: ResolvedSource): Promise<Record<string, string>> {
+  const secret = (s.password ?? '').trim()
+  if (!secret) return {}
+  if (!secret.startsWith('{')) return { Authorization: `Bearer ${secret}` }
+  const hit = tokens.get(secret)
+  if (hit && hit.until > Date.now()) return { Authorization: `Bearer ${hit.token}` }
+  let key: { client_email?: string; private_key?: string; token_uri?: string }
+  try {
+    key = JSON.parse(secret)
+  } catch {
+    throw new Error('BigQuery: the key isn’t valid JSON. Paste the service account’s key file (or an access token).')
+  }
+  const aud = key.token_uri ?? 'https://oauth2.googleapis.com/token'
+  if (!key.client_email || !key.private_key || !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(aud)) throw new Error('BigQuery: the key needs client_email, private_key and an https token_uri.')
+  const { createSign } = await import('node:crypto')
+  const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url')
+  const now = Math.floor(Date.now() / 1000)
+  const unsigned = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({ iss: key.client_email, scope: 'https://www.googleapis.com/auth/bigquery.readonly', aud, iat: now, exp: now + 3600 })}`
+  const jwt = `${unsigned}.${createSign('RSA-SHA256').update(unsigned).sign(key.private_key).toString('base64url')}`
+  const res = await fetch(aud, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: jwt }), signal: timeout(s) })
+  const body = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error_description?: string }
+  if (!res.ok || !body.access_token) throw new Error(`BigQuery: authentication failed (${body.error_description ?? res.status}).`)
+  tokens.set(secret, { token: body.access_token, until: Date.now() + Math.max(60, (body.expires_in ?? 3600) - 120) * 1000 })
+  return { Authorization: `Bearer ${body.access_token}` }
+}
+
+async function bigquery<T>(s: ResolvedSource, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${base(s, 443)}/bigquery/v2/${path}`, { method: body ? 'POST' : 'GET', headers: { ...(await bigqueryAuth(s)), 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: timeout(s) })
+  const json = (await res.json().catch(() => ({}))) as T & { error?: { message: string } }
+  if (!res.ok || json.error) throw new Error(`BigQuery: ${json.error?.message ?? `HTTP ${res.status}`}`)
+  return json
+}
+
+const bqProject = (s: ResolvedSource) => {
+  const [project, dataset] = (s.database ?? '').split('.')
+  if (!project) throw new Error('Enter the Google Cloud project (or project.dataset).')
+  return { project: encodeURIComponent(project), dataset }
+}
+
+export async function bigqueryTables(s: ResolvedSource): Promise<string[]> {
+  const { project, dataset } = bqProject(s)
+  const pages = async <T>(path: string, key: string): Promise<T[]> => {
+    const out: T[] = []
+    let token = ''
+    do {
+      const r = await bigquery<Record<string, unknown> & { nextPageToken?: string }>(s, `${path}${token ? `${path.includes('?') ? '&' : '?'}pageToken=${encodeURIComponent(token)}` : ''}`)
+      out.push(...((r[key] as T[]) ?? []))
+      token = r.nextPageToken ?? ''
+    } while (token)
+    return out
+  }
+  const datasets = dataset ? [dataset] : (await pages<{ datasetReference: { datasetId: string } }>(`projects/${project}/datasets`, 'datasets')).map((d) => d.datasetReference.datasetId)
+  const out: string[] = []
+  for (const d of datasets) for (const t of await pages<{ tableReference: { tableId: string } }>(`projects/${project}/datasets/${encodeURIComponent(d)}/tables`, 'tables')) out.push(`${d}.${t.tableReference.tableId}`)
+  return out.sort()
+}
+
+type BqPage = { jobComplete?: boolean; schema?: { fields: { name: string; type: string; mode?: string }[] }; rows?: { f: { v: unknown }[] }[]; pageToken?: string; jobReference?: { jobId: string; location?: string } }
+
+/** Rows per result page (smaller in tests, to exercise paging). */
+const bqPage = () => Number(process.env.SV_BQ_PAGE) || 20_000
+
+/** A table's rows: a query job, then its result pages. */
+async function* bigqueryRows(s: ResolvedSource, table: string): AsyncGenerator<BqPage> {
+  const { project } = bqProject(s)
+  let page = await bigquery<BqPage>(s, `projects/${project}/queries`, { query: `SELECT * FROM \`${table.replace(/`/g, '')}\``, useLegacySql: false, maxResults: bqPage(), timeoutMs: 60_000 })
+  const job = page.jobReference
+  for (;;) {
+    while (!page.jobComplete && job) page = await bigquery<BqPage>(s, `projects/${project}/queries/${encodeURIComponent(job.jobId)}?maxResults=${bqPage()}${job.location ? `&location=${encodeURIComponent(job.location)}` : ''}`)
+    yield page
+    if (!page.pageToken || !job) return
+    page = await bigquery<BqPage>(s, `projects/${project}/queries/${encodeURIComponent(job.jobId)}?maxResults=${bqPage()}&pageToken=${encodeURIComponent(page.pageToken)}${job.location ? `&location=${encodeURIComponent(job.location)}` : ''}`)
+  }
+}
+
+/** BigQuery cell values as the staging appender reads them (TIMESTAMP comes as seconds since 1970). */
+function bigqueryValue(v: unknown, type: string, mode?: string): unknown {
+  if (v === null || v === undefined) return null
+  if (mode === 'REPEATED' || type === 'RECORD' || type === 'STRUCT') return JSON.stringify(v)
+  if (type === 'TIMESTAMP') return new Date(Number(v) * 1000).toISOString().replace('T', ' ').replace('Z', '')
+  return v
+}
+
 // ---------------------------------------------------------------- staging
 
 let seq = 0
@@ -136,6 +237,14 @@ export async function stageWarehouse(duck: DuckDBConnection, s: ResolvedSource, 
         if (!names) names = row as string[]
         else if (!app) await start(names, (row as string[]).map(clickhouseType))
         else append(row)
+      }
+    } else if (s.kind === 'bigquery') {
+      const { project, dataset } = bqProject(s)
+      const full = [decodeURIComponent(project), dot > 0 ? schema : dataset || schema, table].filter(Boolean).join('.')
+      for await (const p of bigqueryRows(s, full)) {
+        const fields = p.schema?.fields ?? []
+        if (!app && fields.length) await start(fields.map((f) => f.name), fields.map((f) => (f.mode === 'REPEATED' ? 'VARCHAR' : bigqueryType(f.type))))
+        for (const r of p.rows ?? []) append(r.f.map((c, i) => bigqueryValue(c.v, fields[i]?.type ?? '', fields[i]?.mode)))
       }
     } else {
       const [catalog] = (s.database ?? '').split('.')
