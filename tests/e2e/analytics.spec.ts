@@ -60,6 +60,14 @@ test('statistics, forecast and clusters in the Analytics workspace; forecast ove
   await expect(page.getByTestId('analysis-summary')).toContainText('The next month is forecast at')
   await expect(page.getByTestId('analysis-table').first().locator('tbody tr')).toHaveCount(12)
   expect(await cell(page, 0, 'Period')).toBe('2026-01-01')
+  // The same with ARIMA: orders chosen stepwise.
+  await page.getByRole('radio', { name: 'ARIMA' }).click()
+  await page.getByTestId('analysis-run').click()
+  await expect(page.getByTestId('analysis-summary')).toContainText(/ARIMA\(\d,\d,\d\).* fits best/)
+  await expect(page.getByTestId('analysis-table').first().locator('tbody tr')).toHaveCount(12)
+  await page.getByRole('radio', { name: 'Exponential smoothing' }).click()
+  await page.getByTestId('analysis-run').click()
+  await expect(page.getByTestId('analysis-summary')).not.toContainText('ARIMA')
 
   // Export the results as CSV.
   const csv = path.join(dir, 'forecast.csv')

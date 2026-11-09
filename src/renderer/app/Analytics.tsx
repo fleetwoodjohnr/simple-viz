@@ -157,6 +157,7 @@ export function Analytics() {
               </label>
             </div>
             <Segmented value={spec.agg ?? 'sum'} onChange={(v) => set({ agg: v })} label="Aggregation" options={[{ value: 'sum', label: 'Sum' }, { value: 'avg', label: 'Average' }]} />
+            <Segmented value={spec.forecastMethod ?? 'ets'} onChange={(v) => set({ forecastMethod: v })} label="Forecast method" options={[{ value: 'ets', label: 'Exponential smoothing', title: 'Level, trend (plain or damped) and season; the best by AICc' }, { value: 'arima', label: 'ARIMA', title: 'Seasonal ARIMA, orders chosen stepwise by AICc' }]} />
           </>
         )}
         {kind === 'kmeans' && (

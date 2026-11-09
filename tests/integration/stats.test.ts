@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { bootEngine, fileSource, fixture } from './helpers'
 import { runAnalysis, etsFilter, etsForecast, etsFit, type AnalysisResult, type Run } from '../../src/core/stats/analyses'
+import { arimaLoglik, arimaFit, arimaForecast, arimaAuto, arimaName, expand, difference, kpss, type ArimaFit } from '../../src/core/stats/arima'
 import type { Engine } from '../../src/engine/engine'
 
 const ref = JSON.parse(readFileSync(fixture('stats-ref.json'), 'utf8'))
@@ -122,10 +123,64 @@ describe('statistics vs SciPy / statsmodels', () => {
     etsForecast(y, p, 12, 6, 0.95, 16).forecast.forEach((v, i) => close(v.mean, h.forecast[i], 1e-9))
     expect(etsFit(y, 'AA', 12).sse).toBeLessThan(ref.hw_opt_sse * 1.05)
     const r = await runAnalysis({ kind: 'forecast', dataset: 'series', date: 'month', y: 'sales', grain: 'month', horizon: 12 }, run)
-    // A trend-and-season model wins (additive or multiplicative, whichever has the lower AICc).
-    expect(String(r.tables[1].rows[0][0])).toMatch(/^Holt–Winters (additive|multiplicative)/)
+    // A trend-and-season model wins (additive or multiplicative, damped or not: whichever has the lower AICc).
+    expect(String(r.tables[1].rows[0][0])).toMatch(/^(Holt–Winters (additive|multiplicative)|Damped trend \+ (additive|multiplicative) season)/)
     expect(r.tables[1].rows.map((row) => row[0])).toContain('Holt–Winters multiplicative (trend + season)')
     expect(r.tables[0].rows.length).toBe(12)
+  })
+
+  it('Damped trend: same recursion and forecasts as statsmodels (damped_trend=True)', async () => {
+    const y = (await run('SELECT sales FROM series ORDER BY month')).map((r) => Number(r.sales))
+    const h = ref.hw_damped_fixed
+    const p = { alpha: h.params.alpha, beta: h.params.beta, gamma: h.params.gamma, phi: h.params.phi, l0: h.init.initial_level, b0: h.init.initial_trend, s0: h.init.initial_seasonal }
+    etsFilter(y, p, 12).fitted.forEach((v, i) => close(v, h.fitted[i], 1e-9))
+    etsForecast(y, p, 12, 6, 0.95, 17).forecast.forEach((v, i) => close(v.mean, h.forecast[i], 1e-9))
+    const f = etsFit(y, 'DA', 12)
+    expect(f.params.phi).toBeGreaterThanOrEqual(0.8)
+    expect(f.params.phi).toBeLessThanOrEqual(0.98)
+  })
+
+  it('Seasonal ARIMA: exact likelihood, forecasts and intervals as statsmodels SARIMAX; a maximum-likelihood fit as good', async () => {
+    const y = (await run('SELECT sales FROM series ORDER BY month')).map((r) => Number(r.sales))
+    const s = ref.sarima_fixed
+    const w = difference(y, 1, 1, 12)
+    const e = expand(s.ar, s.ma, [], s.sma, 12)
+    close(arimaLoglik(w, e.phi, e.theta, 0, s.sigma2).llf, s.llf, 1e-9)
+    const order = { p: 1, d: 1, q: 1, P: 0, D: 1, Q: 1, m: 12, mean: false }
+    const fixed: ArimaFit = { order, ar: s.ar, ma: s.ma, sar: [], sma: s.sma, mu: 0, sigma2: s.sigma2, llf: s.llf, aicc: 0, k: 4 }
+    const fc = arimaForecast(y, fixed, 6, 0.95).forecast
+    // statsmodels starts the differenced part with an approximately diffuse prior: agreement to about 1e-7.
+    fc.forEach((v, i) => close(v.mean, s.forecast[i], 1e-6))
+    // Intervals from ψ weights; statsmodels' exact state covariance differs only by the state's leftover uncertainty.
+    fc.forEach((v, i) => (close(v.lo, s.ci[i][0], 1e-3), close(v.hi, s.ci[i][1], 1e-3)))
+    const fit = arimaFit(y, order)!
+    expect(fit.llf).toBeGreaterThan(ref.sarima_fit.llf - 1e-3)
+    // An AR(1) with a mean: SARIMAX's intercept c is μ(1 − φ).
+    const a = ref.ar1_mean
+    close(arimaLoglik(y, [a.ar], [], a.c / (1 - a.ar), a.sigma2).llf, a.llf, 1e-9)
+    expect(arimaFit(y, { p: 1, d: 0, q: 0, P: 0, D: 0, Q: 0, m: 1, mean: true })!.llf).toBeGreaterThan(a.fit_llf - 1e-3)
+    close(kpss(y, ref.kpss_series.lags), ref.kpss_series.stat, 1e-9)
+  })
+
+  it('ARIMA order search: the logged airline series gets the airline model, with statsmodels’ estimates', () => {
+    const air = readFileSync(fixture('airline.csv'), 'utf8').trim().split('\n').slice(1).map((l) => Math.log(Number(l.split(',')[1])))
+    const { best } = arimaAuto(air, 12)!
+    expect(arimaName(best.order)).toBe('ARIMA(0,1,1)(0,1,1)[12]')
+    const [ma, sma, sigma2] = ref.airline_fit.params
+    close(best.ma[0], ma, 1e-3)
+    close(best.sma[0], sma, 1e-3)
+    close(best.sigma2, sigma2, 1e-3)
+    expect(best.llf).toBeGreaterThan(ref.airline_fit.llf - 1e-4)
+  })
+
+  it('Forecast analysis with ARIMA: orders chosen stepwise, forecasts with intervals', async () => {
+    const t = performance.now()
+    const r = await runAnalysis({ kind: 'forecast', dataset: 'series', date: 'month', y: 'sales', grain: 'month', horizon: 12, forecastMethod: 'arima' }, run)
+    expect(performance.now() - t).toBeLessThan(15_000)
+    expect(String(r.tables[1].rows[0][0])).toMatch(/^ARIMA\(\d,\d,\d\)/)
+    expect(r.tables[0].rows.length).toBe(12)
+    for (const row of r.tables[0].rows) expect(Number(row[2])).toBeLessThan(Number(row[1]))
+    expect(r.summary).toMatch(/ARIMA/)
   })
 
   it('Holt–Winters with a multiplicative season: same recursion and forecasts as statsmodels', async () => {

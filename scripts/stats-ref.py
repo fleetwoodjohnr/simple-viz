@@ -10,6 +10,8 @@ import numpy as np
 from scipy import stats
 import statsmodels.api as sm
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from statsmodels.tsa.stattools import kpss
 
 root = pathlib.Path(__file__).resolve().parent.parent / 'tests' / 'fixtures'
 rows = list(csv.DictReader(open(root / 'stats.csv')))
@@ -56,6 +58,26 @@ ref['hw_opt_sse'] = float(hw_opt.sse)
 mi = dict(initial_level=float(np.mean(s[:12])), initial_trend=float((np.mean(s[12:24]) - np.mean(s[:12])) / 12), initial_seasonal=(s[:12] / np.mean(s[:12])).tolist())
 hwm = ExponentialSmoothing(s, trend='add', seasonal='mul', seasonal_periods=12, initialization_method='known', **mi).fit(smoothing_level=0.4, smoothing_trend=0.1, smoothing_seasonal=0.2, optimized=False)
 ref['hw_mul_fixed'] = dict(params=dict(alpha=0.4, beta=0.1, gamma=0.2), init=mi, fitted=hwm.fittedvalues.tolist(), forecast=hwm.forecast(6).tolist())
+
+# Damped trend (statsmodels damped_trend=True), known start, fixed smoothing.
+hwd = ExponentialSmoothing(s, trend='add', damped_trend=True, seasonal='add', seasonal_periods=12, initialization_method='known', **init).fit(smoothing_level=0.4, smoothing_trend=0.1, smoothing_seasonal=0.2, damping_trend=0.9, optimized=False)
+ref['hw_damped_fixed'] = dict(params=dict(alpha=0.4, beta=0.1, gamma=0.2, phi=0.9), init=init, fitted=hwd.fittedvalues.tolist(), forecast=hwd.forecast(6).tolist())
+
+# Seasonal ARIMA (SARIMAX, exact likelihood): fixed parameters, then the maximum-likelihood fit.
+# simple_differencing=True: the likelihood of the differenced series, which is what Simple Viz maximizes.
+sa = SARIMAX(s, order=(1, 1, 1), seasonal_order=(0, 1, 1, 12), simple_differencing=True)
+sfx = sa.filter([0.5, -0.3, -0.4, 20.0])
+sfc = SARIMAX(s, order=(1, 1, 1), seasonal_order=(0, 1, 1, 12)).filter([0.5, -0.3, -0.4, 20.0]).get_forecast(6)
+sfit = sa.fit(disp=0)
+ref['sarima_fixed'] = dict(ar=[0.5], ma=[-0.3], sma=[-0.4], sigma2=20.0, llf=float(sfx.llf), forecast=sfc.predicted_mean.tolist(), ci=sfc.conf_int(alpha=0.05).tolist())
+ref['sarima_fit'] = dict(params=sfit.params.tolist(), llf=float(sfit.llf))
+am = SARIMAX(s, order=(1, 0, 0), trend='c')
+ref['ar1_mean'] = dict(c=40.0, ar=0.6, sigma2=300.0, llf=float(am.filter([40.0, 0.6, 300.0]).llf), fit_llf=float(am.fit(disp=0).llf))
+# The airline series (Box & Jenkins, series G), logged: auto.arima's choice is ARIMA(0,1,1)(0,1,1)[12].
+air = np.log(np.array([float(r['passengers']) for r in csv.DictReader(open(root / 'airline.csv'))]))
+af = SARIMAX(air, order=(0, 1, 1), seasonal_order=(0, 1, 1, 12), simple_differencing=True).fit(disp=0)
+ref['airline_fit'] = dict(params=af.params.tolist(), llf=float(af.llf))
+ref['kpss_series'] = dict(lags=3, stat=float(kpss(s, regression='c', nlags=3)[0]))
 
 json.dump(ref, open(root / 'stats-ref.json', 'w'), indent=1)
 print('wrote', root / 'stats-ref.json')

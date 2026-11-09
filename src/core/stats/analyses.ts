@@ -4,6 +4,7 @@
 // rows were used and left out. `run` executes SQL in the engine (so everything also passes the SQL gate).
 
 import { pT, pF, pChi, pZ, tQuantile, normInv, solve, inverse, eigenSymmetric, nelderMead, rng, sigmoid } from './math'
+import { arimaAuto, arimaForecast, arimaName } from './arima'
 
 type Value = string | number | boolean | null
 export type Row = Record<string, Value>
@@ -35,6 +36,8 @@ export interface AnalysisSpec {
   grain?: Grain
   horizon?: number
   model?: 'auto' | EtsModel
+  /** Forecast: exponential smoothing (default) or seasonal ARIMA with orders chosen stepwise. */
+  forecastMethod?: 'ets' | 'arima'
   k?: number
   method?: 'z' | 'iqr'
   threshold?: number
@@ -540,6 +543,8 @@ export interface EtsParams {
   s0?: number[]
   /** Multiplicative season: s are factors around 1 instead of amounts around 0. */
   mult?: boolean
+  /** Damped trend: each period carries on φ of the last period's trend (statsmodels damped_trend). */
+  phi?: number
 }
 
 /**
@@ -550,6 +555,7 @@ export interface EtsParams {
  *   s_t = γ(y_t − l_{t−1} − b_{t−1}) + (1 − γ)s_{t−m}
  * and its multiplicative season (statsmodels seasonal='mul'):
  *   ŷ_t = (l_{t−1} + b_{t−1})·s_{t−m},  l_t = α·y_t/s_{t−m} + (1 − α)(l_{t−1} + b_{t−1}),  s_t = γ·y_t/(l_{t−1} + b_{t−1}) + (1 − γ)s_{t−m}
+ * A damped trend replaces b_{t−1} by φ·b_{t−1} throughout (and b_t = β(l_t − l_{t−1}) + (1 − β)φ·b_{t−1}).
  */
 export function etsFilter(y: number[], p: EtsParams, m: number) {
   const trend = p.beta !== undefined
@@ -557,13 +563,14 @@ export function etsFilter(y: number[], p: EtsParams, m: number) {
   let l = p.l0
   let b = trend ? (p.b0 ?? 0) : 0
   const s = seas ? [...p.s0!] : []
+  const phi = p.phi ?? 1
   const fitted: number[] = []
   for (let t = 0; t < y.length; t++) {
     const mult = seas && !!p.mult
     const st = seas ? s[t % m] : mult ? 1 : 0
-    fitted.push(mult ? (l + b) * st : l + b + st)
     const lPrev = l
-    const bPrev = b
+    const bPrev = phi * b
+    fitted.push(mult ? (l + bPrev) * st : l + bPrev + st)
     l = p.alpha * (mult ? y[t] / st : y[t] - st) + (1 - p.alpha) * (lPrev + bPrev)
     if (trend) b = p.beta! * (l - lPrev) + (1 - p.beta!) * bPrev
     if (seas) s[t % m] = p.gamma! * (mult ? y[t] / (lPrev + bPrev) : y[t] - lPrev - bPrev) + (1 - p.gamma!) * st
@@ -601,16 +608,18 @@ export function etsInit(y: number[], m: number, seas: boolean, mult = false) {
 
 /** Fits ETS by minimizing the squared one-step errors over its smoothing parameters and initial level and trend. */
 export function etsFit(y: number[], model: EtsModel, m: number) {
-  const trend = model === 'A' || model === 'AA' || model === 'AM'
+  const trend = model[0] !== 'N'
+  const damped = model[0] === 'D'
   const seas = model.length === 2
-  const mult = model.endsWith('M')
+  const mult = model[1] === 'M'
   const init = etsInit(y, m, seas, mult)
   const logit = (p: number) => Math.log(p / (1 - p))
   const unl = (x: number) => 1 / (1 + Math.exp(-x))
-  const nSmooth = 1 + (trend ? 1 : 0) + (seas ? 1 : 0)
-  const params = (v: number[]): EtsParams => ({ alpha: unl(v[0]), beta: trend ? unl(v[1]) : undefined, gamma: seas ? unl(v[trend ? 2 : 1]) : undefined, l0: v[nSmooth], b0: trend ? v[nSmooth + 1] : undefined, s0: init.s0, ...(mult ? { mult } : {}) })
+  const nSmooth = 1 + (trend ? 1 : 0) + (seas ? 1 : 0) + (damped ? 1 : 0)
+  // φ in [0.8, 0.98], the usual range (Hyndman & Athanasopoulos): lower damps too fast, higher is a plain trend.
+  const params = (v: number[]): EtsParams => ({ alpha: unl(v[0]), beta: trend ? unl(v[1]) : undefined, gamma: seas ? unl(v[trend ? 2 : 1]) : undefined, l0: v[nSmooth], b0: trend ? v[nSmooth + 1] : undefined, s0: init.s0, ...(mult ? { mult } : {}), ...(damped ? { phi: 0.8 + 0.18 * unl(v[nSmooth - 1]) } : {}) })
   const sse = (v: number[]) => etsFilter(y, params(v), m).fitted.reduce((a, f, t) => a + (y[t] - f) ** 2, 0)
-  const start = [logit(0.3), ...(trend ? [logit(0.1)] : []), ...(seas ? [logit(0.1)] : []), trend ? init.l0 : y[0], ...(trend ? [init.b0] : [])]
+  const start = [logit(0.3), ...(trend ? [logit(0.1)] : []), ...(seas ? [logit(0.1)] : []), ...(damped ? [0] : []), trend ? init.l0 : y[0], ...(trend ? [init.b0] : [])]
   // Two passes: Nelder–Mead restarted from its own answer escapes the occasional early stop.
   let best = nelderMead(sse, start, { maxEvals: 4000 })
   best = nelderMead(sse, best.x, { maxEvals: 4000 })
@@ -622,13 +631,17 @@ export function etsFit(y: number[], model: EtsModel, m: number) {
 }
 
 /**
- * h-step forecasts with prediction intervals. Additive season: Var = σ²(1 + Σ c_j²), c_j = α(1 + βj) + γ[j ≡ 0 mod m].
+ * h-step forecasts with prediction intervals. Additive season: Var = σ²(1 + Σ c_j²), c_j = α(1 + βφ_j) + γ[j ≡ 0 mod m],
+ * φ_j = φ + φ² + … + φ^j (= j without damping).
  * Multiplicative season: no closed form, so the interval comes from 2,000 simulated futures (seeded, so repeatable).
  */
 export function etsForecast(y: number[], p: EtsParams, m: number, h: number, level: number, k: number) {
   const st = etsFilter(y, p, m)
   const trend = p.beta !== undefined
   const seas = p.gamma !== undefined
+  const phi = p.phi ?? 1
+  /** φ + φ² + … + φ^j: how much of today's trend is in the forecast j periods on. */
+  const cum = (j: number) => (phi === 1 ? j : (phi * (1 - phi ** j)) / (1 - phi))
   const sse = st.fitted.reduce((a, f, t) => a + (y[t] - f) ** 2, 0)
   const sigma2 = sse / Math.max(1, y.length - k)
   const z = normInv(1 - (1 - level) / 2)
@@ -644,10 +657,10 @@ export function etsForecast(y: number[], p: EtsParams, m: number, h: number, lev
       const s = [...st.s]
       for (let j = 0; j < h; j++) {
         const i = (y.length + j) % m
-        const yj = (l + b) * s[i] + sigma * normInv(rnd())
+        const yj = (l + phi * b) * s[i] + sigma * normInv(rnd())
         paths[j].push(yj)
         const lPrev = l
-        const bPrev = b
+        const bPrev = phi * b
         l = p.alpha * (yj / s[i]) + (1 - p.alpha) * (lPrev + bPrev)
         if (trend) b = p.beta! * (l - lPrev) + (1 - p.beta!) * bPrev
         s[i] = p.gamma! * (yj / (lPrev + bPrev)) + (1 - p.gamma!) * s[i]
@@ -656,24 +669,25 @@ export function etsForecast(y: number[], p: EtsParams, m: number, h: number, lev
     const qt = (xs: number[], q: number) => xs[Math.min(xs.length - 1, Math.max(0, Math.round(q * (xs.length - 1))))]
     for (let j = 1; j <= h; j++) {
       const sorted = paths[j - 1].sort((a, b) => a - b)
-      out.push({ mean: (st.l + (trend ? j * st.b : 0)) * st.s[(y.length + j - 1) % m], lo: qt(sorted, (1 - level) / 2), hi: qt(sorted, 1 - (1 - level) / 2) })
+      out.push({ mean: (st.l + (trend ? cum(j) * st.b : 0)) * st.s[(y.length + j - 1) % m], lo: qt(sorted, (1 - level) / 2), hi: qt(sorted, 1 - (1 - level) / 2) })
     }
     return { forecast: out, fitted: st.fitted, sigma: Math.sqrt(sigma2) }
   }
   let acc = 0
   for (let j = 1; j <= h; j++) {
-    const mean = st.l + (trend ? j * st.b : 0) + (seas ? st.s[(y.length + j - 1) % m] : 0)
+    const mean = st.l + (trend ? cum(j) * st.b : 0) + (seas ? st.s[(y.length + j - 1) % m] : 0)
     const sd = Math.sqrt(sigma2 * (1 + acc))
     out.push({ mean, lo: mean - z * sd, hi: mean + z * sd })
-    const c = p.alpha * (1 + (trend ? j * p.beta! : 0)) + (seas && j % m === 0 ? p.gamma! : 0)
+    const c = p.alpha * (1 + (trend ? cum(j) * p.beta! : 0)) + (seas && j % m === 0 ? p.gamma! : 0)
     acc += c * c
   }
   return { forecast: out, fitted: st.fitted, sigma: Math.sqrt(sigma2) }
 }
 
 export type Grain = 'day' | 'week' | 'month' | 'quarter' | 'year'
-/** N/A: no or additive trend; a second letter: additive (A) or multiplicative (M) season. */
-export type EtsModel = 'N' | 'A' | 'NA' | 'AA' | 'NM' | 'AM'
+/** N/A/D: no, additive or damped trend; a second letter: additive (A) or multiplicative (M) season. */
+export type EtsModel = 'N' | 'A' | 'D' | 'NA' | 'AA' | 'DA' | 'NM' | 'AM' | 'DM'
+export const ETS_NAMES: Record<EtsModel, string> = { N: 'Simple exponential smoothing', A: 'Holt’s linear trend', D: 'Damped trend', NA: 'Seasonal (no trend)', AA: 'Holt–Winters additive (trend + season)', DA: 'Damped trend + additive season', NM: 'Multiplicative season (no trend)', AM: 'Holt–Winters multiplicative (trend + season)', DM: 'Damped trend + multiplicative season' }
 /** Season length per grain (weekly data: a yearly season of 52 weeks). */
 export const SEASON: Record<Grain, number> = { day: 7, week: 52, month: 12, quarter: 4, year: 1 }
 
@@ -682,7 +696,7 @@ export function etsAuto(y: number[], m: number, h: number, level: number, model:
   const canSeason = m > 1 && y.length >= 2 * m
   // Multiplicative seasons need positive values (the season is a factor of the level).
   const positive = y.every((v) => v > 0)
-  const candidates: EtsModel[] = model !== 'auto' ? [model] : ['N', 'A', ...(canSeason ? (['NA', 'AA'] as const) : []), ...(canSeason && positive ? (['NM', 'AM'] as const) : [])]
+  const candidates: EtsModel[] = model !== 'auto' ? [model] : ['N', 'A', 'D', ...(canSeason ? (['NA', 'AA', 'DA'] as const) : []), ...(canSeason && positive ? (['NM', 'AM', 'DM'] as const) : [])]
   const fits = candidates.map((c) => ({ c, ...etsFit(y, c, m) })).sort((a, b) => a.aicc - b.aicc)
   return { fits, best: fits[0], canSeason, ...etsForecast(y, fits[0].params, m, h, level, fits[0].k) }
 }
@@ -712,22 +726,49 @@ async function forecast(s: AnalysisSpec, run: Run): Promise<AnalysisResult> {
   need(!(s.model && s.model.length === 2) || (m > 1 && y.length >= 2 * m), `A seasonal model needs at least two full seasons (${2 * m} ${grain}s).`)
   need(!s.model?.endsWith('M') || y.every((v) => v > 0), 'A multiplicative season needs every period above zero.')
   const level = s.level ?? 0.95
-  const { fits, best, canSeason, ...fc } = etsAuto(y, m, h, level, s.model)
   const last = String(series[series.length - 1].p)
   const labels = [...series.map((r) => String(r.p)), ...Array.from({ length: h }, (_, j) => addPeriods(last, grain, j + 1))]
-  const name = { N: 'Simple exponential smoothing', A: 'Holt’s linear trend', NA: 'Seasonal (no trend)', AA: 'Holt–Winters additive (trend + season)', NM: 'Multiplicative season (no trend)', AM: 'Holt–Winters multiplicative (trend + season)' }
+  if (s.forecastMethod === 'arima') return arimaAnalysis(s, run, y, labels, m, h, level, grain)
+  const { fits, best, canSeason, ...fc } = etsAuto(y, m, h, level, s.model)
+  const name = ETS_NAMES
   const mape = y.reduce((a, v, t) => a + (v ? Math.abs((v - fc.fitted[t]) / v) : 0), 0) / y.filter((v) => v).length
   const total = await counts(run, s.dataset, [s.date, s.y])
   return {
     title: 'Forecast',
     tables: [
       { title: 'Forecast', columns: ['Period', 'Forecast', `${Math.round(level * 100)}% low`, 'High'], rows: fc.forecast.map((f, j) => [labels[y.length + j], r4(f.mean), r4(f.lo), r4(f.hi)]) },
-      { title: 'Models compared (lowest AICc chosen)', columns: ['Model', 'AICc', 'α (level)', 'β (trend)', 'γ (season)', 'RMSE'], rows: fits.map((f) => [name[f.c], r4(f.aicc), r4(f.params.alpha), f.params.beta === undefined ? null : r4(f.params.beta), f.params.gamma === undefined ? null : r4(f.params.gamma), r4(Math.sqrt(f.sse / y.length))]) },
+      { title: 'Models compared (lowest AICc chosen)', columns: ['Model', 'AICc', 'α (level)', 'β (trend)', 'γ (season)', 'φ (damping)', 'RMSE'], rows: fits.map((f) => [name[f.c], r4(f.aicc), r4(f.params.alpha), f.params.beta === undefined ? null : r4(f.params.beta), f.params.gamma === undefined ? null : r4(f.params.gamma), f.params.phi === undefined ? null : r4(f.params.phi), r4(Math.sqrt(f.sse / y.length))]) },
       { title: 'Accuracy of one-step fits', columns: ['RMSE', 'MAPE (%)', 'Periods'], rows: [[r4(Math.sqrt(best.sse / y.length)), r4(mape * 100), y.length]] }
     ],
     chart: { kind: 'forecast', title: `${s.y} forecast (${name[best.c]})`, labels, actual: [...y, ...new Array(h).fill(null)], fitted: [...fc.fitted, ...new Array(h).fill(null)], forecast: [...new Array(y.length - 1).fill(null), y[y.length - 1], ...fc.forecast.map((f) => f.mean)], lo: [...new Array(y.length).fill(null), ...fc.forecast.map((f) => f.lo)], hi: [...new Array(y.length).fill(null), ...fc.forecast.map((f) => f.hi)] },
     summary: `${name[best.c]} fits best. The next ${grain} is forecast at ${r4(fc.forecast[0].mean)} (${Math.round(level * 100)}% interval ${r4(fc.forecast[0].lo)} to ${r4(fc.forecast[0].hi)}); the one-step fits are off by ${r4(mape * 100)}% on average (MAPE).`,
     assumptions: ['Exponential smoothing assumes the recent pattern (level, trend, season) continues.', `Missing ${grain}s count as 0 (sums) so periods are regular.`, 'Intervals assume roughly normal, uncorrelated errors; they widen with the horizon.', `Seasonal models need at least two full seasons (${2 * m} ${grain}s)${canSeason ? '' : '; there were too few here, so they were not considered'}.`],
+    n: { used: total.used, excluded: total.total - total.used, note: `${y.length} periods.` }
+  }
+}
+
+async function arimaAnalysis(s: AnalysisSpec, run: Run, y: number[], labels: string[], m: number, h: number, level: number, grain: Grain): Promise<AnalysisResult> {
+  need(y.length >= 8, 'ARIMA needs at least 8 periods of data.')
+  const auto = arimaAuto(y, m)
+  need(auto, 'No ARIMA model could be fitted to this series (too short for its differencing).')
+  const { best, tried } = auto!
+  const fc = arimaForecast(y, best, h, level)
+  const name = arimaName(best.order)
+  const coef = [...best.ar.map((v, i) => [`AR ${i + 1}`, v]), ...best.ma.map((v, i) => [`MA ${i + 1}`, v]), ...best.sar.map((v, i) => [`Seasonal AR ${i + 1}`, v]), ...best.sma.map((v, i) => [`Seasonal MA ${i + 1}`, v]), ...(best.order.mean ? [[best.order.d + best.order.D === 1 ? 'Drift' : 'Mean', best.mu]] : []), ['σ² (innovations)', best.sigma2]] as [string, number][]
+  const fitted = fc.fitted
+  const errs = y.map((v, t) => (fitted[t] === null || !v ? null : Math.abs((v - fitted[t]!) / v))).filter((v): v is number => v !== null)
+  const mape = errs.reduce((a, b) => a + b, 0) / Math.max(1, errs.length)
+  const total = await counts(run, s.dataset, [s.date!, s.y!])
+  return {
+    title: 'Forecast',
+    tables: [
+      { title: 'Forecast', columns: ['Period', 'Forecast', `${Math.round(level * 100)}% low`, 'High'], rows: fc.forecast.map((f, j) => [labels[y.length + j], r4(f.mean), r4(f.lo), r4(f.hi)]) },
+      { title: 'Models compared (lowest AICc chosen)', columns: ['Model', 'AICc', 'Log-likelihood', 'Parameters'], rows: tried.slice(0, 12).map((f) => [arimaName(f.order), r4(f.aicc), r4(f.llf), f.k]) },
+      { title: `${name}: coefficients`, columns: ['Term', 'Estimate'], rows: coef.map(([k, v]) => [k, r4(v)]) }
+    ],
+    chart: { kind: 'forecast', title: `${s.y} forecast (${name})`, labels, actual: [...y, ...new Array(h).fill(null)], fitted: [...fitted, ...new Array(h).fill(null)], forecast: [...new Array(y.length - 1).fill(null), y[y.length - 1], ...fc.forecast.map((f) => f.mean)], lo: [...new Array(y.length).fill(null), ...fc.forecast.map((f) => f.lo)], hi: [...new Array(y.length).fill(null), ...fc.forecast.map((f) => f.hi)] },
+    summary: `${name} fits best. The next ${grain} is forecast at ${r4(fc.forecast[0].mean)} (${Math.round(level * 100)}% interval ${r4(fc.forecast[0].lo)} to ${r4(fc.forecast[0].hi)}); the one-step fits are off by ${r4(mape * 100)}% on average (MAPE).`,
+    assumptions: [`Differencing: ${best.order.d} regular and ${best.order.D} seasonal, chosen by KPSS tests and seasonal strength; orders then chosen stepwise by AICc (p, q ≤ 3; P, Q ≤ 1).`, 'Orders searched with conditional sums of squares; the three best refitted by exact maximum likelihood. AR and MA parts kept stationary and invertible.', 'Intervals assume normal, uncorrelated errors; they widen with the horizon.', `Missing ${grain}s count as 0 (sums) so periods are regular.`],
     n: { used: total.used, excluded: total.total - total.used, note: `${y.length} periods.` }
   }
 }
@@ -888,7 +929,7 @@ export const ANALYSES: { kind: AnalysisKind; label: string; group: string; descr
   { kind: 'chisq', label: 'Chi-square', group: 'Compare', describe: 'Are two categories related?' },
   { kind: 'regression', label: 'Linear regression', group: 'Model', describe: 'Simple, multiple or polynomial' },
   { kind: 'logistic', label: 'Logistic regression', group: 'Model', describe: 'Predict a yes/no outcome' },
-  { kind: 'forecast', label: 'Forecast', group: 'Model', describe: 'Exponential smoothing with trend and seasonality' },
+  { kind: 'forecast', label: 'Forecast', group: 'Model', describe: 'Exponential smoothing or ARIMA, with trend and seasonality' },
   { kind: 'kmeans', label: 'Clustering (k-means)', group: 'Model', describe: 'Find groups of similar rows' },
   { kind: 'pca', label: 'Principal components', group: 'Model', describe: 'Summarize many numbers in a few components' }
 ]

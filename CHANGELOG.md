@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Forecasting.** Damped trends in exponential smoothing; seasonal ARIMA in Analytics, with the orders chosen
+  stepwise by AICc and estimated by exact maximum likelihood (checked against statsmodels and R's airline model).
+
 ## 0.1.0 — 2026-11-09
 
 - **Data.** Excel (xlsx, xlsm), OpenDocument, XML 2003, CSV, TSV, JSON, JSON Lines, Parquet, SQLite and DuckDB files;
