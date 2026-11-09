@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { plugin, recommend } from '@/core/charts/plugins'
+import { plugin, recommend, fitTrend, quantile } from '@/core/charts/plugins'
 import { LIGHT, pivot, fmt, esc, type ChartData } from '@/core/charts/data'
 import type { OutField } from '@/core/query/compile'
 import { addPeriods } from '@/core/stats/analyses'
@@ -143,6 +143,37 @@ describe('chart analytics overlays', () => {
     const sd = Math.sqrt(5 / 3)
     expect(area[0].yAxis).toBeCloseTo(2.5 - sd, 10)
     expect(area[1].yAxis).toBeCloseTo(2.5 + sd, 10)
+  })
+
+  it('trend models fit as numpy.polyfit does (exponential and power on ln y, as Tableau)', () => {
+    const y = [2.1, 3.9, 6.2, 8.1, 9.8, 12.5, 13.9, 16.2]
+    const pts = y.map((v, i) => [i + 1, v] as const)
+    const ref = { linear: [9.087499999999999, 0.9980187601477608], log: [10.287301980000446, 0.915299452833642], exp: [Math.exp(2.030542295494273), 0.9236062665133502], power: [Math.exp(2.2071302615927193), 0.9985224931137221], poly: [9.078125, 0.99802743341377] } as const
+    for (const [model, [at, r2]] of Object.entries(ref)) {
+      const fit = fitTrend(pts, model as keyof typeof ref, 3)!
+      expect(fit.predict(4.5)).toBeCloseTo(at, 9)
+      expect(fit.r2).toBeCloseTo(r2, 9)
+    }
+    // Points a model can't take are left out (log of x ≤ 0); too few points: no line.
+    expect(fitTrend([[0, 1], [1, 2], [2, 3]], 'log')).not.toBeNull()
+    expect(fitTrend([[1, 2]], 'linear')).toBeNull()
+  })
+
+  it('percentile line, 95% CI band and quartile box (numpy percentiles, scipy t interval)', () => {
+    const vals = [3, 1, 4, 1, 5, 9, 2, 6]
+    const sorted = [...vals].sort((a, b) => a - b)
+    expect([0.25, 0.5, 0.75, 0.9].map((q) => quantile(sorted, q))).toEqual([1.75, 3.5, 5.25, expect.closeTo(6.9, 12)])
+    const d: ChartData = { ...series(8), rows: vals.map((v, i) => [`2024-0${i + 1}-01`, v]), options: { refLines: [{ id: 'p', kind: 'percentile', value: 90 }, { id: 'c', kind: 'ci' }, { id: 'b', kind: 'box' }, { id: 't', kind: 'trend', model: 'poly', degree: 2 }] } }
+    const o = plugin('line').option!(d, LIGHT) as O & { series: { markLine?: { data: { yAxis: number }[] } }[] }
+    const s0 = o.series[0]
+    const lines = s0.markLine!.data.map((l) => l.yAxis)
+    expect(lines[0]).toBeCloseTo(6.9, 10) // 90th percentile
+    expect(lines.slice(1)).toEqual([3.5, 1, 9]) // box: median and whiskers (no values beyond 1.5 IQR)
+    const [ci, box] = s0.markArea!.data
+    expect(ci[0].yAxis).toBeCloseTo(1.5773000431592457, 9)
+    expect(ci[1].yAxis).toBeCloseTo(6.172699956840754, 9)
+    expect([box[0].yAxis, box[1].yAxis]).toEqual([1.75, 5.25])
+    expect(o.series.find((s) => s.id === 'trend-0')!.data).toHaveLength(8)
   })
 })
 

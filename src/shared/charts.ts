@@ -60,11 +60,20 @@ export interface ChartFilter {
   param?: string
 }
 
+export type TrendModel = 'linear' | 'log' | 'exp' | 'power' | 'poly'
+
 export interface ReferenceLine {
   id: string
-  /** band: shaded mean ± value standard deviations (default 1), Tableau's distribution band. */
-  kind: 'constant' | 'average' | 'median' | 'min' | 'max' | 'trend' | 'param' | 'band'
+  /**
+   * band: shaded mean ± value standard deviations (default 1), Tableau's distribution band. percentile: a line at the
+   * value-th percentile. ci: the 95% confidence interval of the mean. box: a reference box (quartiles, median,
+   * whiskers at the furthest values within 1.5 IQR).
+   */
+  kind: 'constant' | 'average' | 'median' | 'min' | 'max' | 'trend' | 'param' | 'band' | 'percentile' | 'ci' | 'box'
   value?: number
+  /** Trend lines: the model (Tableau's linear, logarithmic, exponential, power, polynomial) and polynomial degree. */
+  model?: TrendModel
+  degree?: number
   param?: string
   label?: string
 }

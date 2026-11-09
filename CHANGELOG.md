@@ -4,6 +4,8 @@
 
 - **Forecasting.** Damped trends in exponential smoothing; seasonal ARIMA in Analytics, with the orders chosen
   stepwise by AICc and estimated by exact maximum likelihood (checked against statsmodels and R's airline model).
+- **Chart analytics.** Logarithmic, exponential, power and polynomial trend lines; percentile lines, confidence
+  intervals of the mean and quartile reference boxes.
 
 ## 0.1.0 — 2026-11-09
 

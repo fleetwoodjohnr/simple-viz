@@ -2,13 +2,14 @@
 // its data is queried, and how a result becomes an ECharts option (or a React view: table, crosstab, KPI).
 // Every data value shown in HTML (tooltips) is escaped: data is untrusted.
 
-import type { Encodings } from '../../shared/charts'
+import type { Encodings, TrendModel } from '../../shared/charts'
 import type { OutField } from '../query/compile'
 import type { Role } from '../query/compile'
 import { type ChartData, type Theme, type Value, col, dims, measures, fmt, esc, pivot, dimmed } from './data'
 import { type Option, isDateT, base, axisStyle, legend, grid, rowTooltip, axisTooltip, catLabels } from './option'
 import * as More from './more'
 import { etsAuto, addPeriods, SEASON, type Grain } from '../stats/analyses'
+import { solve, tQuantile } from '../stats/math'
 
 
 export interface FieldSummary {
@@ -145,23 +146,35 @@ function cartesianPanel(kind: 'bar' | 'line' | 'area' | 'combo'): NonNullable<Ch
           markLine: si === 0 ? refLines(d, t, s.values) : undefined,
           markArea: si === 0 ? refBands(d, t, s.values) : undefined
         }
-      }).concat(fc?.series ?? [])
+      }).concat(fc?.series ?? [], series[0] ? (trendSeries(d, t, series[0].values, fc?.cats.length ?? 0) ?? []) : [])
     }
   }
 }
 
-/** Shaded mean ± k standard deviations (sample) of the plotted values. */
+/**
+ * Shaded bands over the plotted values: mean ± k sample standard deviations, the 95% confidence interval of the mean
+ * (t distribution), or a reference box from the first to the third quartile.
+ */
 function refBands(d: ChartData, t: Theme, values: (number | null)[]): Option | undefined {
-  const bands = (d.options.refLines ?? []).filter((l) => l.kind === 'band')
+  const bands = (d.options.refLines ?? []).filter((l) => l.kind === 'band' || l.kind === 'ci' || l.kind === 'box')
   const nums = values.filter((v): v is number => v !== null)
   if (!bands.length || nums.length < 2) return undefined
-  const mean = nums.reduce((a, b) => a + b, 0) / nums.length
-  const sd = Math.sqrt(nums.reduce((a, b) => a + (b - mean) ** 2, 0) / (nums.length - 1))
+  const n = nums.length
+  const mean = nums.reduce((a, b) => a + b, 0) / n
+  const sd = Math.sqrt(nums.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1))
+  const sorted = [...nums].sort((a, b) => a - b)
+  const half = tQuantile(0.975, n - 1) * (sd / Math.sqrt(n))
   return {
     silent: true,
     itemStyle: { color: t.accent, opacity: 0.1 },
     label: { color: t.text2, position: 'insideTopRight' },
-    data: bands.map((b) => [{ yAxis: mean - (b.value ?? 1) * sd, name: b.label ?? `±${b.value ?? 1} SD` }, { yAxis: mean + (b.value ?? 1) * sd }])
+    data: bands.map((b) =>
+      b.kind === 'ci'
+        ? [{ yAxis: mean - half, name: b.label ?? '95% CI of the mean' }, { yAxis: mean + half }]
+        : b.kind === 'box'
+          ? [{ yAxis: quantile(sorted, 0.25), name: b.label ?? 'Quartiles' }, { yAxis: quantile(sorted, 0.75) }]
+          : [{ yAxis: mean - (b.value ?? 1) * sd, name: b.label ?? `±${b.value ?? 1} SD` }, { yAxis: mean + (b.value ?? 1) * sd }]
+    )
   }
 }
 
@@ -200,7 +213,62 @@ function forecastSeries(d: ChartData, t: Theme, catDim: ChartData['fields'][numb
   return { cats: Array.from({ length: h }, (_, j) => addPeriods(iso[n - 1], grain, j + 1)), series: out }
 }
 
-/** Reference lines: constant, average, median, min, max, or a least-squares trend line. */
+/** The q-quantile of sorted values, interpolating between neighbours (Excel's PERCENTILE.INC, R type 7). */
+export function quantile(sorted: number[], q: number): number {
+  if (!sorted.length) return NaN
+  const h = (sorted.length - 1) * Math.min(1, Math.max(0, q))
+  const lo = Math.floor(h)
+  return sorted[lo] + (h - lo) * ((sorted[Math.min(lo + 1, sorted.length - 1)] ?? sorted[lo]) - sorted[lo])
+}
+
+/**
+ * Least-squares trend models as Tableau defines them: linear y = a + bx, logarithmic y = a + b·ln x, exponential
+ * ln y = a + bx, power ln y = a + b·ln x, polynomial y = Σ b_k x^k. Exponential and power are fitted (and their R²
+ * computed) on ln y, as Tableau does; points that the model can't take (x ≤ 0 for log/power, y ≤ 0 for exp/power)
+ * are left out.
+ */
+export function fitTrend(pts: (readonly [number, number])[], model: TrendModel = 'linear', degree = 2): { predict: (x: number) => number; r2: number } | null {
+  const lx = model === 'log' || model === 'power'
+  const ly = model === 'exp' || model === 'power'
+  const use = pts.filter(([x, y]) => (!lx || x > 0) && (!ly || y > 0))
+  const xs = use.map(([x]) => (lx ? Math.log(x) : x))
+  const ys = use.map(([, y]) => (ly ? Math.log(y) : y))
+  const k = model === 'poly' ? Math.max(2, Math.min(8, degree)) : 1
+  if (use.length < k + 1) return null
+  // Scaled x keeps the polynomial normal equations well conditioned.
+  const mx = xs.reduce((a, b) => a + b, 0) / xs.length
+  const sx = Math.sqrt(xs.reduce((a, b) => a + (b - mx) ** 2, 0) / xs.length) || 1
+  const row = (x: number) => Array.from({ length: k + 1 }, (_, j) => ((x - mx) / sx) ** j)
+  const X = xs.map(row)
+  const XtX = Array.from({ length: k + 1 }, (_, i) => Array.from({ length: k + 1 }, (_, j) => X.reduce((a, r) => a + r[i] * r[j], 0)))
+  const Xty = Array.from({ length: k + 1 }, (_, i) => X.reduce((a, r, t) => a + r[i] * ys[t], 0))
+  let b: number[]
+  try {
+    b = solve(XtX, Xty)
+  } catch {
+    return null
+  }
+  if (!b.every(Number.isFinite)) return null
+  const lin = (x: number) => row(x).reduce((a, v, j) => a + v * b[j], 0)
+  const my = ys.reduce((a, v) => a + v, 0) / ys.length
+  const sst = ys.reduce((a, v) => a + (v - my) ** 2, 0)
+  const ssr = ys.reduce((a, v, t) => a + (v - lin(xs[t])) ** 2, 0)
+  return { predict: (x: number) => (lx && x <= 0 ? NaN : ((v) => (ly ? Math.exp(v) : v))(lin(lx ? Math.log(x) : x))), r2: sst ? 1 - ssr / sst : 0 }
+}
+
+const TREND_NAMES: Record<TrendModel, string> = { linear: 'Linear', log: 'Logarithmic', exp: 'Exponential', power: 'Power', poly: 'Polynomial' }
+
+/** A trend line over category positions 1…n (one value per category; gaps stay gaps), as a dashed series. */
+function trendSeries(d: ChartData, t: Theme, values: (number | null)[], pad: number): Option | null {
+  const l = (d.options.refLines ?? []).find((x) => x.kind === 'trend')
+  if (!l || !l.model || l.model === 'linear') return null
+  const pts = values.map((v, i) => [i + 1, v] as const).filter((p): p is readonly [number, number] => p[1] !== null)
+  const fit = fitTrend(pts, l.model, l.degree)
+  if (!fit) return null
+  return { id: 'trend-0', name: `${TREND_NAMES[l.model]} trend`, type: 'line', smooth: true, silent: true, showSymbol: false, lineStyle: { color: t.text2, type: 'dashed', width: 1.5 }, data: [...values.map((_, i) => ((v) => (Number.isFinite(v) ? v : null))(fit.predict(i + 1))), ...new Array<null>(pad).fill(null)], endLabel: { show: true, formatter: `R² = ${fit.r2.toFixed(3)}`, color: t.text2 } }
+}
+
+/** Reference lines: constant, average, median, min, max, percentile, a least-squares trend line, a box's lines. */
 function refLines(d: ChartData, t: Theme, values: (number | null)[]): Option | undefined {
   const lines = d.options.refLines ?? []
   if (!lines.length) return undefined
@@ -211,6 +279,7 @@ function refLines(d: ChartData, t: Theme, values: (number | null)[]): Option | u
     // Inside the plot, above the line's end: past the end it is cut off by the chart's edge.
     const label = { formatter: l.label ?? l.kind, color: t.text2, position: 'insideEndTop' as const }
     if (l.kind === 'trend') {
+      if (l.model && l.model !== 'linear') continue // drawn as its own series (trendSeries)
       const pts = values.map((v, i) => [i, v] as const).filter((p): p is readonly [number, number] => p[1] !== null)
       if (pts.length < 2) continue
       const n = pts.length
@@ -221,10 +290,26 @@ function refLines(d: ChartData, t: Theme, values: (number | null)[]): Option | u
       data.push([{ coord: [0, a0], label }, { coord: [values.length - 1, a0 + b * (values.length - 1)] }])
       continue
     }
-    const v = l.kind === 'constant' || l.kind === 'param' ? l.value : l.kind === 'average' ? nums.reduce((a, b) => a + b, 0) / (nums.length || 1) : l.kind === 'median' ? sorted[Math.floor((sorted.length - 1) / 2)] : l.kind === 'min' ? sorted[0] : sorted[sorted.length - 1]
-    if (v !== undefined) data.push({ yAxis: v, label: { ...label, formatter: `${l.label ?? l.kind} ${fmt(v, undefined, 'axis')}` } })
+    if (l.kind === 'band' || l.kind === 'ci') continue
+    if (l.kind === 'box') {
+      if (sorted.length < 2) continue
+      const q1 = quantile(sorted, 0.25)
+      const q3 = quantile(sorted, 0.75)
+      const iqr = q3 - q1
+      const lo = sorted.find((v) => v >= q1 - 1.5 * iqr)!
+      const hi = [...sorted].reverse().find((v) => v <= q3 + 1.5 * iqr)!
+      data.push({ yAxis: quantile(sorted, 0.5), lineStyle: { type: 'solid' }, label: { ...label, formatter: `median ${fmt(quantile(sorted, 0.5), undefined, 'axis')}` } }, { yAxis: lo, lineStyle: { type: 'dotted' }, label: { ...label, formatter: 'whisker' } }, { yAxis: hi, lineStyle: { type: 'dotted' }, label: { ...label, formatter: 'whisker' } })
+      continue
+    }
+    if (l.kind === 'percentile') {
+      const p = Math.max(0, Math.min(100, l.value ?? 90))
+      if (sorted.length) data.push({ yAxis: quantile(sorted, p / 100), label: { ...label, formatter: `${l.label ?? `${p}th percentile`} ${fmt(quantile(sorted, p / 100), undefined, 'axis')}` } })
+      continue
+    }
+    const v = l.kind === 'constant' || l.kind === 'param' ? l.value : l.kind === 'average' ? nums.reduce((a, b) => a + b, 0) / (nums.length || 1) : l.kind === 'median' ? quantile(sorted, 0.5) : l.kind === 'min' ? sorted[0] : sorted[sorted.length - 1]
+    if (v !== undefined && Number.isFinite(v)) data.push({ yAxis: v, label: { ...label, formatter: `${l.label ?? l.kind} ${fmt(v, undefined, 'axis')}` } })
   }
-  return { symbol: 'none', lineStyle: { color: t.text2, type: 'dashed' }, data }
+  return data.length ? { symbol: 'none', lineStyle: { color: t.text2, type: 'dashed' }, data } : undefined
 }
 
 // ---------------------------------------------------------------- pie, scatter, heatmap, treemap, histogram, box
@@ -287,6 +372,21 @@ function scatterTrend(d: ChartData, xk: string, yk: string | undefined, t: Theme
   if (!yk) return undefined
   const pts = d.rows.map((r) => [Number(r[col(d, xk)]), Number(r[col(d, yk)])]).filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b))
   if (pts.length < 2) return undefined
+  const l = (d.options.refLines ?? []).find((x) => x.kind === 'trend')
+  if (l?.model && l.model !== 'linear') {
+    // A curve: the model sampled at 60 points across the data's x range, as a markLine polyline per segment.
+    const fit = fitTrend(pts as [number, number][], l.model, l.degree)
+    if (!fit) return undefined
+    const xs = pts.map((p) => p[0])
+    const lo = Math.min(...xs)
+    const hi = Math.max(...xs)
+    const curve = Array.from({ length: 61 }, (_, i) => lo + ((hi - lo) * i) / 60)
+      .map((x) => [x, fit.predict(x)] as const)
+      .filter((p) => Number.isFinite(p[1]))
+    const segs = curve.slice(1).map((p, i) => [{ coord: [...curve[i]] }, { coord: [...p] }])
+    if (segs.length) (segs[segs.length - 1][1] as Record<string, unknown>).label = { formatter: `R² = ${fit.r2.toFixed(3)}`, color: t.text2 }
+    return { symbol: 'none', silent: true, lineStyle: { color: t.accent, width: 2 }, label: { show: false }, data: segs }
+  }
   const n = pts.length
   const mx = pts.reduce((a, p) => a + p[0], 0) / n
   const my = pts.reduce((a, p) => a + p[1], 0) / n

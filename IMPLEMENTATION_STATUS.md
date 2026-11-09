@@ -164,6 +164,7 @@ committed), on a 500-row fixture with known structure and a 60-month seasonal se
 | Principal components (correlation matrix, eigenvalues, loadings, Kaiser's rule) | integration `stats` vs NumPy |
 | Anomalies by z-score or IQR, with the most extreme rows | integration `stats` |
 | Chart overlays: forecast on line/area charts over a date axis (dashed, with its interval); ±1 SD band; existing average/median/min/max/trend lines | unit `charts`, e2e `analytics` |
+| Trend models on charts (linear, logarithmic, exponential, power, polynomial of degree 2–8, with R²; exponential and power fitted on ln y as Tableau does); percentile lines, the 95% confidence interval of the mean, quartile reference boxes with whiskers; medians interpolated | unit `charts` (fits equal numpy.polyfit to 1e-9, percentiles equal numpy, the interval equals SciPy's t interval), e2e `maps` |
 | 10 million rows: describe 2.7 s, regression 1.7 s, logistic 1.8 s; extract 1.1 s (AMD Ryzen 3 3200U × 4, 13.6 GB, Fedora 44; 484 MB RSS) | `npm run bench` (asserts the known coefficients are recovered) |
 
 ### Known limitations

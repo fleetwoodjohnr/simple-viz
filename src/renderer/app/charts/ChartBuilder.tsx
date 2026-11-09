@@ -21,7 +21,7 @@ import { fieldDefs, defaultRef, AGGS, GRAINS, type FieldDef } from './fields'
 import { PLUGINS, plugin, recommend } from '@/core/charts/plugins'
 import { AGG_LABEL, compileQuery, fieldTitle, isDate, isNumeric, type Role } from '@/core/query/compile'
 import { newId } from '@/core/project/sviz'
-import { emptyEncodings, type CalcField, type Chart, type ChartFilter, type ChartOptions, type FieldRef, type QuickCalc, type Parameter, type ReferenceLine } from '@/shared/charts'
+import { emptyEncodings, type CalcField, type Chart, type ChartFilter, type ChartOptions, type FieldRef, type QuickCalc, type Parameter, type ReferenceLine, type TrendModel } from '@/shared/charts'
 
 // ---------------------------------------------------------------- state
 
@@ -639,7 +639,7 @@ function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fie
   const type = plugin(chart.type)
   const cartesian = ['bar', 'line', 'area', 'combo'].includes(chart.type)
   const lines = o.refLines ?? []
-  const toggleLine = (kind: 'average' | 'median' | 'trend' | 'max' | 'min' | 'band') => setO({ refLines: lines.some((l) => l.kind === kind) ? lines.filter((l) => l.kind !== kind) : [...lines, { id: kind, kind }] })
+  const toggleLine = (kind: 'average' | 'median' | 'trend' | 'max' | 'min' | 'band' | 'ci' | 'box') => setO({ refLines: lines.some((l) => l.kind === kind) ? lines.filter((l) => l.kind !== kind) : [...lines, { id: kind, kind }] })
   return (
     <aside className="w-[236px] shrink-0 overflow-y-auto border-l border-border bg-panel p-3" aria-label="Chart type and format">
       <div className="mb-1.5 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-text-3">
@@ -738,12 +738,33 @@ function FormatPanel({ chart, fields, ranked, onType, upd }: { chart: Chart; fie
           <div>
             <span className="mb-1 block text-[12px] font-medium text-text-2">Analytics</span>
             <div className="flex flex-wrap gap-1">
-              {(chart.type === 'scatter' ? (['trend'] as const) : (['average', 'median', 'max', 'min', 'trend', 'band'] as const)).map((k) => (
-                <button key={k} onClick={() => toggleLine(k)} aria-pressed={lines.some((l) => l.kind === k)} className={cx('h-6 rounded-md border px-2 text-[11.5px] capitalize', lines.some((l) => l.kind === k) ? 'border-accent bg-accent-soft text-accent-ink' : 'border-border text-text-2 hover:bg-hover')} data-testid={`refline-${k}`}>
-                  {k === 'trend' ? 'Trend line' : k === 'band' ? '±1 SD band' : `${k} line`}
+              {(chart.type === 'scatter' ? (['trend'] as const) : (['average', 'median', 'max', 'min', 'trend', 'band', 'ci', 'box'] as const)).map((k) => (
+                <button key={k} onClick={() => toggleLine(k)} aria-pressed={lines.some((l) => l.kind === k)} className={cx('h-6 rounded-md border px-2 text-[11.5px]', k !== 'ci' && 'capitalize', lines.some((l) => l.kind === k) ? 'border-accent bg-accent-soft text-accent-ink' : 'border-border text-text-2 hover:bg-hover')} data-testid={`refline-${k}`}>
+                  {k === 'trend' ? 'Trend line' : k === 'band' ? '±1 SD band' : k === 'ci' ? '95% CI band' : k === 'box' ? 'Quartile box' : `${k} line`}
                 </button>
               ))}
             </div>
+            {lines.some((l) => l.kind === 'trend') && (
+              <label className="mt-2 flex items-center gap-2 text-[12px] text-text-2">
+                Trend model
+                <select className={cx(inputCls, 'h-6 flex-1 px-1 text-[12px]')} aria-label="Trend model" value={lines.find((l) => l.kind === 'trend')?.model ?? 'linear'} onChange={(e) => setO({ refLines: lines.map((l) => (l.kind === 'trend' ? { ...l, model: e.target.value as TrendModel } : l)) })} data-testid="trend-model">
+                  <option value="linear">Linear</option>
+                  <option value="log">Logarithmic</option>
+                  <option value="exp">Exponential</option>
+                  <option value="power">Power</option>
+                  <option value="poly">Polynomial</option>
+                </select>
+                {lines.find((l) => l.kind === 'trend')?.model === 'poly' && (
+                  <input type="number" min={2} max={8} aria-label="Polynomial degree" className={cx(inputCls, 'h-6 w-12 px-1.5 text-[12px]')} value={lines.find((l) => l.kind === 'trend')?.degree ?? 2} onChange={(e) => setO({ refLines: lines.map((l) => (l.kind === 'trend' ? { ...l, degree: Math.max(2, Math.min(8, Number(e.target.value) || 2)) } : l)) })} data-testid="trend-degree" />
+                )}
+              </label>
+            )}
+            {cartesian && (
+              <label className="mt-2 flex items-center gap-2 text-[12px] text-text-2">
+                Percentile line
+                <input type="number" min={0} max={100} placeholder="none" aria-label="Percentile line" className={cx(inputCls, 'h-6 w-16 px-1.5 text-[12px]')} value={lines.find((l) => l.kind === 'percentile')?.value ?? ''} onChange={(e) => setO({ refLines: [...lines.filter((l) => l.kind !== 'percentile'), ...(e.target.value === '' ? [] : [{ id: 'percentile', kind: 'percentile' as const, value: Math.max(0, Math.min(100, Number(e.target.value))) }])] })} data-testid="refline-percentile" />
+              </label>
+            )}
             {cartesian && <ParamLine lines={lines} setLines={(refLines) => setO({ refLines })} />}
             <TooltipChartPicker chart={chart} setO={setO} />
             {cartesian && chart.enc.x.length === 1 && chart.enc.x[0].grain && chart.enc.x[0].grain !== 'exact' && (
