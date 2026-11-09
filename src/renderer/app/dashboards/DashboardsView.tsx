@@ -14,9 +14,9 @@ import { askText } from '../Dialogs'
 import { exportDashboardPdf, exportDashboardPng } from './export'
 import { align, distribute, clampItem, snap, layoutContainer, findSlot, TEMPLATES, type Align } from '@/core/dashboard'
 import { newId } from '@/core/project/sviz'
-import { GRID, SIZES, type DashAction, type DashItem, type Dashboard } from '@/shared/dashboards'
+import { GRID, SIZES, type DashAction, type DashItem, type Dashboard, type Selections } from '@/shared/dashboards'
 
-const { LayoutDashboard, Plus, Copy, Star, Trash2, MoreHorizontal, Type, Filter, MousePointerClick, Image, Square, Columns3, Rows3, Lock, Unlock, Group, Ungroup, Eye, Pencil, Maximize, Download, RotateCcw, AlignLeft, AlignCenterHorizontal, AlignRight, AlignStartHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignHorizontalSpaceAround, AlignVerticalSpaceAround, X, FileText } = Icons
+const { LayoutDashboard, Bookmark, Plus, Copy, Star, Trash2, MoreHorizontal, Type, Filter, MousePointerClick, Image, Square, Columns3, Rows3, Lock, Unlock, Group, Ungroup, Eye, Pencil, Maximize, Download, RotateCcw, AlignLeft, AlignCenterHorizontal, AlignRight, AlignStartHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignHorizontalSpaceAround, AlignVerticalSpaceAround, X, FileText } = Icons
 
 export function newDashboard(name: string, items: DashItem[] = []): Dashboard {
   return { id: newId(), name, size: { mode: 'fit', w: 1366, h: 768 }, items, actions: [{ id: newId(), kind: 'filter', source: '*', target: '*' }], updatedAt: Date.now() }
@@ -233,6 +233,7 @@ function Workspace({ d }: { d: Dashboard }) {
               <RotateCcw className="size-3.5" /> Reset filters
             </Btn>
           )}
+          <SavedViews d={d} />
           <Tip label="Present full screen (Esc to leave)">
             <IconBtn label="Present" onClick={() => setDash({ presenting: true, selected: [] })} data-testid="present">
               <Maximize className="size-4" />
@@ -258,6 +259,44 @@ function Workspace({ d }: { d: Dashboard }) {
       </div>
       {mode === 'edit' && <Properties d={d} sel={sel} />}
     </div>
+  )
+}
+
+/** Saved views: the filter controls' current choices kept under a name, applied with one click (kept in the project). */
+function SavedViews({ d }: { d: Dashboard }) {
+  const current = useDash((s) => s.selections[d.id] ?? NO_SELECTIONS)
+  const views = d.views ?? []
+  const save = async () => {
+    const name = await askText('Save a view', 'Name (the filter choices are saved; clicked marks are not)', `View ${views.length + 1}`)
+    if (!name?.trim()) return
+    updateDash(d.id, (x) => ({ ...x, views: [...(x.views ?? []).filter((v) => v.name !== name.trim()), { id: newId(), name: name.trim(), selections: structuredClone(current) }] }))
+    toast(`Saved the view “${name.trim()}”`, 'success')
+  }
+  const apply = (v: { selections: Selections }) => setDash((s) => ({ selections: { ...s.selections, [d.id]: structuredClone(v.selections) }, marks: { ...s.marks, [d.id]: [] } }))
+  return (
+    <Menu>
+      <MenuTrigger asChild>
+        <Btn size="sm" variant="ghost" data-testid="views-menu">
+          <Bookmark className="size-3.5" /> Views{views.length ? ` (${views.length})` : ''}
+        </Btn>
+      </MenuTrigger>
+      <MenuContent align="end">
+        {views.map((v) => (
+          <MenuItem key={v.id} icon={<Eye />} onSelect={() => apply(v)} data-testid={`view-${v.name}`}>
+            {v.name}
+          </MenuItem>
+        ))}
+        {views.length > 0 && <MenuSep />}
+        <MenuItem icon={<Plus />} disabled={!Object.keys(current).length} onSelect={() => void save()} data-testid="save-view">
+          Save the current filters as a view…
+        </MenuItem>
+        {views.map((v) => (
+          <MenuItem key={`del-${v.id}`} icon={<Trash2 />} onSelect={() => updateDash(d.id, (x) => ({ ...x, views: (x.views ?? []).filter((y) => y.id !== v.id) }))}>
+            Delete “{v.name}”
+          </MenuItem>
+        ))}
+      </MenuContent>
+    </Menu>
   )
 }
 

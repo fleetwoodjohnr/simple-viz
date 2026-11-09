@@ -8,7 +8,7 @@ import { test, expect, launch, quit, salesProject, tempDir, stubDialogs } from '
 // A 2 × 2 red PNG.
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR4nGP8z8DAwMDAxMDAwMAAAA4EAgFZu6v8AAAAAElFTkSuQmCC', 'base64')
 
-const items = (page: Page) => page.evaluate(() => (window as any).__sv.get().project.dashboards[0].items.map((i: any) => ({ id: i.id, kind: i.kind, parent: i.parent ?? null })))
+const items = (page: Page) => page.evaluate(() => (window as any).__sv.get().project.dashboards[0].items.map((i: any) => ({ id: i.id, kind: i.kind, parent: i.parent ?? null }))) as Promise<{ id: string; kind: string; parent: string | null }[]>
 
 async function clickBar(page: Page, tile: Locator, category: string) {
   const el = tile.locator('[data-testid=echart]')
@@ -97,5 +97,44 @@ test('text, shape, image, reset button, row layout; fit to window', async () => 
     sv.P.edit((p: any) => ({ ...p, dashboards: p.dashboards.map((d: any) => ({ ...d, size: { ...d.size, mode: 'fixed' } })) }))
   })
   await expect.poll(scale).toBe(1)
+  await quit(app)
+})
+
+test('saved views: filter choices kept under a name and applied again', async () => {
+  test.setTimeout(180_000)
+  const dir = tempDir()
+  const { app, page } = await launch()
+  await salesProject(app, page, dir)
+  await page.getByTestId('nav-charts').click()
+  await page.getByTestId('new-chart-empty').click()
+  await page.getByTestId('chart-dataset').selectOption('sales_enriched')
+  for (const [field, shelf] of [['region', 'x'], ['revenue', 'y']]) {
+    await page.getByTestId(`field-${field}`).hover()
+    await page.getByTestId(`field-menu-${field}`).click()
+    await page.getByTestId(`add-to-${shelf}`).click()
+  }
+  await page.getByTestId('nav-dashboards').click()
+  await page.getByTestId('new-dashboard-empty').click()
+  await page.locator('[data-testid^=palette-chart-]').first().click()
+  await page.getByTestId('add-filter').click()
+  await page.getByRole('dialog').getByRole('textbox').fill('region')
+  await page.getByRole('dialog').getByRole('textbox').press('Enter')
+  const categories = () => page.locator('[data-testid=item-chart] [data-testid=echart]').first().evaluate((el) => (el as any).__echart.getOption().xAxis[0].data as string[])
+
+  // Choose Texas, save it as a view, clear, apply the view again.
+  await page.getByTestId('filter-control-region').getByText('Texas').click()
+  await expect.poll(categories).toEqual(['Texas'])
+  await page.getByTestId('views-menu').click()
+  await page.getByTestId('save-view').click()
+  await page.getByRole('dialog').getByRole('textbox').fill('Texas only')
+  await page.getByRole('dialog').getByRole('textbox').press('Enter')
+  await page.getByTestId('reset-filters').click()
+  await expect.poll(async () => (await categories()).length).toBeGreaterThan(1)
+  await page.getByTestId('views-menu').click()
+  await page.getByTestId('view-Texas only').click()
+  await expect.poll(categories).toEqual(['Texas'])
+  // The view is part of the project.
+  const views = await page.evaluate(() => (window as any).__sv.get().project.dashboards[0].views)
+  expect(views.map((v: any) => [v.name, v.selections.region.values])).toEqual([['Texas only', ['Texas']]])
   await quit(app)
 })
