@@ -1,7 +1,7 @@
 # Implementation status
 
-_Last updated: 2026-11-05 · M0–M7 complete (with the limits listed); M8 in progress; M9 not started ·
-version 0.1.0 (unreleased) · verified with automated tests on Linux (Fedora 44); CI builds, packages and tests on
+_Last updated: 2026-11-09 · M0–M8 complete (with the limits listed); M9 (Tableau parity) largely done, remaining gaps
+listed below and in docs/TABLEAU_PARITY.md · version 0.1.0 (unreleased) · verified with automated tests on Linux (Fedora 44); CI builds, packages and tests on
 Linux, Windows and macOS._
 
 "Done" means implemented **and** covered by a passing automated test. A button existing in the UI does not count.
@@ -11,9 +11,9 @@ Linux, Windows and macOS._
 | Suite | Result |
 |---|---|
 | `npm run typecheck` | ✅ clean |
-| `npm test` (unit) | ✅ 93 tests |
-| `npm run test:integration` (real DuckDB, files; PostgreSQL 17, MariaDB 11, SQL Server 2022, S3Mock, Azurite in podman) | ✅ 97 tests |
-| `npm run e2e:headless` (the real app) | ✅ acceptance (24 steps), analytics, arrow/xls, charts, dashboards, data, maps, model, MySQL, PostgreSQL, remote files, SQL Server, smoke; updater (packaged only) |
+| `npm test` (unit) | ✅ 109 tests |
+| `npm run test:integration` (real DuckDB, files; PostgreSQL 17, MariaDB 11, SQL Server 2022, S3Mock, Azurite in podman) | ✅ 108 tests |
+| `npm run e2e:headless` (the real app) | ✅ 31 tests in 20 specs: acceptance (24 steps), a11y (WCAG 2.2 AA, light and dark), analytics, arrow/xls, charts, dashboards, data, example, layout, maps, model, objects, projects, MySQL, PostgreSQL, remote files, SQL editor, SQL Server, smoke; updater (packaged only) |
 | `npm run bench` (statistics on 10M rows) | ✅ see M5 |
 | Packaged Linux build (`electron-builder --linux dir`) + e2e | ✅ |
 | CI: Linux, Windows, macOS (arm64; Intel under Rosetta) build, test, package, test the packaged app; deb/rpm install on Ubuntu 22.04/24.04, Debian 12, Fedora 44; npm audit; CodeQL | ✅ run 42143235883 (commit 8b8a2c3). The M3, M4 and M5 runs had failed (an engine reboot under running queries, a save/recent-files race on Windows, stuck test workers); fixed in 8b8a2c3. The Intel smoke test under Rosetta passed on retry (first-launch translation); its launch wait no longer times out at 30 s |
@@ -30,7 +30,7 @@ Linux, Windows and macOS._
 | Icon and accent in the Simple suite template | `npm run icons` |
 | CI on Linux, Windows, macOS; deb/rpm install checks; security job | CI run for commit 9741835 |
 
-## M1 — Data and SQL (in progress)
+## M1 — Data and SQL ✅
 
 ### Done
 
@@ -229,6 +229,20 @@ Details per source, and what isn't supported (with reasons): [docs/CONNECTORS.md
   CI and say so.
 - The bundled extensions add about 114 MB (uncompressed, Linux x64) for MySQL, web/S3 and Azure.
 
-## Next
+## M8 — Hardening, documentation, release ✅
 
-M8 — hardening, performance benchmarks, accessibility, documentation and a draft release.
+Performance benchmarks (docs/PERFORMANCE_BENCHMARKS.md), the WCAG 2.2 AA audit, reduced motion, patterns as well as
+colors, charts as tables, the example project, portable copies, and every document listed in the README are in the
+sections above with their tests. CI builds, tests and packages on Linux, Windows and macOS; a `v*` tag drafts a GitHub
+release with the installers, which is published only by hand.
+
+## M9 — Tableau parity
+
+Done (rows in the sections above): `+` joining text, groups, sets and set actions, densification of date axes
+(Show missing dates), compute using a chosen dimension, parameters (controls, reference lines, actions), URL actions,
+saved views, stories, HTML export, calculated fields, top-N filters and role-playing tables on models, text predictors
+in regression, multiplicative seasonality, `.xlsb` files.
+
+Not yet: viz in tooltip; tiled (automatic) dashboard layout beyond row/column containers; LOD expressions and table
+calculations on models; conditional and top-N sets; ARIMA; map tiles, geocoding of cities, Shapefile/KML; cloud
+warehouses (Snowflake, BigQuery, Databricks, Oracle, …).
