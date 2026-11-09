@@ -53,6 +53,24 @@ export function FilterDialog({ chart, field, filterId, measure, fields, onClose 
   const [agg, setAgg] = useState<Agg>(existing?.agg ?? (def?.calcKind && def.calcKind !== 'row' ? 'none' : 'sum'))
   const [context, setContext] = useState(!!existing?.context)
   const [error, setError] = useState('')
+  // Parameters the filter can follow instead of fixed values (Tableau: "Use a parameter").
+  const [param, setParam] = useState(existing?.param ?? '')
+  const [minParam, setMinParam] = useState(existing?.minParam ?? '')
+  const [maxParam, setMaxParam] = useState(existing?.maxParam ?? '')
+  const allParams = useApp((s) => s.project?.params) ?? []
+  const numParams = allParams.filter((p) => p.type === 'number')
+  const rangeParams = allParams.filter((p) => (isDate(type) && !isMeasure ? p.type === 'date' : p.type === 'number'))
+  const pick = (value: string, set: (v: string) => void, list: typeof allParams, testid: string) =>
+    list.length ? (
+      <select aria-label="Or a parameter" className={cx(inputCls, 'mt-1 h-7 text-[12px]')} value={value} onChange={(e) => set(e.target.value)} data-testid={testid}>
+        <option value="">a fixed value</option>
+        {list.map((p) => (
+          <option key={p.id} value={p.name}>
+            parameter: {p.name}
+          </option>
+        ))}
+      </select>
+    ) : null
 
   useEffect(() => {
     if (mode !== 'values' || values) return
@@ -63,12 +81,13 @@ export function FilterDialog({ chart, field, filterId, measure, fields, onClose 
   const save = () => {
     const base: ChartFilter = { id: existing?.id ?? newId(), field, op: 'in', context: context || undefined }
     let f: ChartFilter
-    if (isMeasure) f = { ...base, agg, op: 'between', min: min === '' ? null : Number(min), max: max === '' ? null : Number(max) }
-    else if (mode === 'values') f = { ...base, op: exclude ? 'not_in' : 'in', values: (values ?? []).filter((v) => picked.has(String(v.value))).map((v) => v.value) }
-    else if (mode === 'range') f = { ...base, op: 'between', min: min === '' ? null : isDate(type) ? String(min) : Number(min), max: max === '' ? null : isDate(type) ? String(max) : Number(max) }
+    const ends = { ...(minParam ? { minParam } : {}), ...(maxParam ? { maxParam } : {}) }
+    if (isMeasure) f = { ...base, agg, op: 'between', min: min === '' ? null : Number(min), max: max === '' ? null : Number(max), ...ends }
+    else if (mode === 'values') f = { ...base, op: exclude ? 'not_in' : 'in', values: param ? [] : (values ?? []).filter((v) => picked.has(String(v.value))).map((v) => v.value), ...(param ? { param } : {}) }
+    else if (mode === 'range') f = { ...base, op: 'between', min: min === '' ? null : isDate(type) ? String(min) : Number(min), max: max === '' ? null : isDate(type) ? String(max) : Number(max), ...ends }
     else if (mode === 'relative') f = { ...base, op: 'relative', relative: rel }
-    else if (mode === 'contains') f = { ...base, op: 'contains', values: [contains] }
-    else f = { ...base, op: 'top', top }
+    else if (mode === 'contains') f = { ...base, op: 'contains', values: [contains], ...(param ? { param } : {}) }
+    else f = { ...base, op: 'top', top, ...(param ? { param } : {}) }
     updateChart(chart.id, (c) => ({ ...c, filters: existing ? c.filters.map((x) => (x.id === existing.id ? f : x)) : [...c.filters, f] }))
     onClose()
   }
@@ -92,7 +111,13 @@ export function FilterDialog({ chart, field, filterId, measure, fields, onClose 
           </select>
         </Field>
       )}
-      {mode === 'values' && (
+      {mode === 'values' && allParams.length > 0 && (
+        <label className="mb-2 block text-[12px] text-text-2">
+          Keep the value of
+          {pick(param, setParam, allParams, 'filter-param')}
+        </label>
+      )}
+      {mode === 'values' && !param && (
         <>
           <div className="mb-2 flex items-center gap-2">
             <input aria-label="Search values" placeholder="Search values" className={inputCls} value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -128,10 +153,12 @@ export function FilterDialog({ chart, field, filterId, measure, fields, onClose 
       {(mode === 'range' || isMeasure) && (
         <div className="grid grid-cols-2 gap-3">
           <Field label="At least">
-            <input aria-label="Minimum" type={isDate(type) && !isMeasure ? 'date' : 'number'} className={inputCls} value={String(min ?? '')} onChange={(e) => setMin(e.target.value)} data-testid="filter-min" />
+            {!minParam && <input aria-label="Minimum" type={isDate(type) && !isMeasure ? 'date' : 'number'} className={inputCls} value={String(min ?? '')} onChange={(e) => setMin(e.target.value)} data-testid="filter-min" />}
+            {pick(minParam, setMinParam, rangeParams, 'filter-min-param')}
           </Field>
           <Field label="At most">
-            <input aria-label="Maximum" type={isDate(type) && !isMeasure ? 'date' : 'number'} className={inputCls} value={String(max ?? '')} onChange={(e) => setMax(e.target.value)} data-testid="filter-max" />
+            {!maxParam && <input aria-label="Maximum" type={isDate(type) && !isMeasure ? 'date' : 'number'} className={inputCls} value={String(max ?? '')} onChange={(e) => setMax(e.target.value)} data-testid="filter-max" />}
+            {pick(maxParam, setMaxParam, rangeParams, 'filter-max-param')}
           </Field>
         </div>
       )}
@@ -153,7 +180,8 @@ export function FilterDialog({ chart, field, filterId, measure, fields, onClose 
       )}
       {mode === 'contains' && (
         <Field label="Text contains">
-          <input aria-label="Text" className={inputCls} value={contains} onChange={(e) => setContains(e.target.value)} />
+          {!param && <input aria-label="Text" className={inputCls} value={contains} onChange={(e) => setContains(e.target.value)} />}
+          {pick(param, setParam, allParams.filter((p) => p.type === 'text'), 'filter-param')}
         </Field>
       )}
       {mode === 'top' && (
@@ -162,7 +190,8 @@ export function FilterDialog({ chart, field, filterId, measure, fields, onClose 
             <option value="top">Top</option>
             <option value="bottom">Bottom</option>
           </select>
-          <input aria-label="How many" type="number" min={1} className={cx(inputCls, 'w-20')} value={top.n} onChange={(e) => setTop({ ...top, n: Math.max(1, Number(e.target.value) || 1) })} data-testid="filter-top-n" />
+          {!param && <input aria-label="How many" type="number" min={1} className={cx(inputCls, 'w-20')} value={top.n} onChange={(e) => setTop({ ...top, n: Math.max(1, Number(e.target.value) || 1) })} data-testid="filter-top-n" />}
+          {numParams.length > 0 && <div className="w-44">{pick(param, setParam, numParams, 'filter-top-param')}</div>}
           by
           <select aria-label="Measure" className={cx(inputCls, 'w-36')} value={top.by.field} onChange={(e) => setTop({ ...top, by: { field: e.target.value, agg: fields.find((f) => f.name === e.target.value)?.calcKind === 'aggregate' ? 'none' : 'sum' } })}>
             {measures.map((m) => (

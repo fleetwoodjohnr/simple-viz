@@ -284,6 +284,11 @@ export function ParamTile({ item }: { item: DashItem }) {
       <span className="truncate text-[11.5px] font-semibold text-text-2">{p.name}</span>
       {p.type === 'boolean' ? (
         <input type="checkbox" aria-label={p.name} className="size-4 accent-[var(--accent)]" checked={p.value === true} onChange={(e) => P.setParam(p.name, e.target.checked)} />
+      ) : p.type === 'number' && p.min !== undefined && p.max !== undefined ? (
+        <div className="flex items-center gap-2">
+          <input type="range" aria-label={p.name} min={p.min} max={p.max} step={p.step ?? 'any'} className="min-w-0 flex-1 accent-[var(--accent)]" value={Number(p.value ?? p.min)} onChange={(e) => P.setParam(p.name, e.target.value)} data-testid={`param-slider-${p.name}`} />
+          <span className="w-12 shrink-0 text-right text-[12px] tabular-nums">{value}</span>
+        </div>
       ) : p.choices?.length ? (
         <select aria-label={p.name} className={cx(inputCls, 'h-8')} value={value} onChange={(e) => commit(e.target.value)}>
           {p.choices.map((c) => (

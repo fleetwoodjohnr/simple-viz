@@ -216,6 +216,40 @@ test('parameters: created in the chart builder, a reference line, a dashboard co
   await page.getByTestId('mode-view').click()
   await clickBar(page, tile, 'Texas')
   await expect.poll(() => page.evaluate(() => (window as any).__sv.get().project.params.find((p: any) => p.name === 'Focus').value)).toBe('Texas')
+
+  // A number parameter with a range (a slider on the dashboard) drives a top-N filter.
+  await page.getByTestId('nav-charts').click()
+  await page.getByTestId('new-param').click()
+  await page.getByLabel('Parameter name').fill('Top')
+  await page.getByLabel('Parameter value').fill('9')
+  await page.getByTestId('param-min').fill('1')
+  await page.getByTestId('param-max').fill('6')
+  await page.getByTestId('param-step').fill('1')
+  await page.getByTestId('param-save').click()
+  expect(await page.evaluate(() => (window as any).__sv.get().project.params.find((p: any) => p.name === 'Top'))).toMatchObject({ value: 6, min: 1, max: 6, step: 1 }) // kept within the range
+  await page.getByTestId('field-region').hover()
+  await page.getByTestId('field-menu-region').click()
+  await page.getByTestId('add-to-filters').click()
+  await page.getByRole('radio', { name: 'Top N' }).click()
+  await page.getByTestId('filter-top-param').selectOption('Top')
+  await page.getByTestId('filter-apply').click()
+  const bars = (scope: Page | Locator) => scope.locator('[data-testid=echart]').first().evaluate((el) => (el as any).__echart.getOption().xAxis[0].data.length)
+  await expect.poll(() => bars(page)).toBe(6)
+  await page.getByTestId('nav-dashboards').click()
+  await page.getByTestId('mode-edit').click()
+  await page.locator('[data-testid^=palette-chart-]').first().click() // the chart again: it has the filter now
+  await page.getByTestId('add-param').click()
+  const items = await page.evaluate(() => (window as any).__sv.get().project.dashboards[0].items.filter((i: any) => i.kind === 'param').map((i: any) => i.id))
+  await page.evaluate(([id]) => (window as any).__sv.P.edit((p: any) => ({ ...p, dashboards: p.dashboards.map((d: any) => ({ ...d, items: d.items.map((i: any) => (i.id === id ? { ...i, param: 'Top' } : i)) })) })), [items[items.length - 1]])
+  await page.getByTestId('mode-view').click()
+  await page.getByTestId('reset-filters').click() // the earlier click on Texas filters the other tiles
+  const slider = page.getByTestId('param-slider-Top')
+  await slider.focus()
+  await slider.press('Home') // the minimum, 1
+  await expect.poll(() => page.evaluate(() => (window as any).__sv.get().project.params.find((p: any) => p.name === 'Top').value)).toBe(1)
+  await slider.press('ArrowRight')
+  await expect.poll(() => page.evaluate(() => (window as any).__sv.get().project.params.find((p: any) => p.name === 'Top').value)).toBe(2)
+  await expect.poll(() => bars(page.locator('[data-testid=item-chart]').last())).toBe(2)
   await quit(app)
 })
 

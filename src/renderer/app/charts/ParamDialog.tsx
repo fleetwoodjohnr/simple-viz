@@ -16,6 +16,8 @@ export function ParamDialog({ param, onClose }: { param: Parameter | null; onClo
   const [type, setType] = useState<Parameter['type']>(param?.type ?? 'number')
   const [value, setValue] = useState(param?.value === null || param?.value === undefined ? '' : String(param.value))
   const [choices, setChoices] = useState((param?.choices ?? []).join(', '))
+  const [range, setRange] = useState({ min: param?.min ?? '', max: param?.max ?? '', step: param?.step ?? '' })
+  const num = (v: number | string) => (v === '' || !Number.isFinite(Number(v)) ? undefined : Number(v))
   const nm = name.trim()
   const error = !/^[A-Za-z_][\w ]*$/.test(nm)
     ? 'Use letters, digits, spaces and underscores, starting with a letter.'
@@ -26,7 +28,8 @@ export function ParamDialog({ param, onClose }: { param: Parameter | null; onClo
     if (error) return
     const list = choices.split(',').map((c) => c.trim()).filter(Boolean)
     const allowed = type === 'number' ? list.map(Number).filter(Number.isFinite) : list
-    const next: Parameter = { id: param?.id ?? newId(), name: nm, type, value: coerceParam({ type }, value), ...(allowed.length && type !== 'boolean' ? { choices: allowed } : {}) }
+    const limits = type === 'number' && !allowed.length ? Object.fromEntries(Object.entries({ min: num(range.min), max: num(range.max), step: num(range.step) }).filter(([, v]) => v !== undefined)) : {}
+    const next: Parameter = { id: param?.id ?? newId(), name: nm, type, value: coerceParam({ type, ...limits }, value), ...(allowed.length && type !== 'boolean' ? { choices: allowed } : {}), ...limits }
     P.edit((p) => ({ ...p, params: param ? p.params.map((x) => (x.id === param.id ? next : x)) : [...p.params, next] }))
     toast(param ? `Saved “${nm}”` : `Created “${nm}”: use it in a formula as [Parameters].[${nm}]`, 'success')
     onClose()
@@ -79,6 +82,16 @@ export function ParamDialog({ param, onClose }: { param: Parameter | null; onClo
             <span className="mb-1 block font-medium text-text-2">Allowed values (optional, separated by commas)</span>
             <input className={cx(inputCls, 'h-8')} aria-label="Allowed values" value={choices} onChange={(e) => setChoices(e.target.value)} />
           </label>
+        )}
+        {type === 'number' && !choices.trim() && (
+          <div>
+            <span className="mb-1 block font-medium text-text-2">Range (optional: the control becomes a slider)</span>
+            <div className="grid grid-cols-3 gap-2">
+              {(['min', 'max', 'step'] as const).map((k) => (
+                <input key={k} type="number" className={cx(inputCls, 'h-8')} aria-label={`Range ${k}`} placeholder={{ min: 'Minimum', max: 'Maximum', step: 'Step' }[k]} value={range[k]} onChange={(e) => setRange({ ...range, [k]: e.target.value })} data-testid={`param-${k}`} />
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </Modal>

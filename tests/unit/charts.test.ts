@@ -230,6 +230,10 @@ describe('parameters', () => {
     expect(coerceParam({ type: 'date' }, '2025-03-01T00:00:00')).toBe('2025-03-01')
     expect(coerceParam({ type: 'date' }, 'March')).toBeNull()
     expect(coerceParam({ type: 'number' }, '')).toBeNull()
+    // A range: kept within its limits, on its steps from the minimum.
+    const r = { type: 'number' as const, min: 5, max: 50, step: 5 }
+    expect([coerceParam(r, 1), coerceParam(r, 99), coerceParam(r, 22), coerceParam(r, 23)]).toEqual([5, 50, 20, 25])
+    expect(coerceParam({ type: 'number', min: 0, max: 1, step: 0.1 }, 0.33)).toBe(0.3)
   })
 })
 

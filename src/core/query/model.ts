@@ -17,7 +17,7 @@ import type { CalcField, Chart, Parameter, SetDef } from '../../shared/charts'
 import { compileCalc, setTable, CalcError, type CalcSource, type Lod } from '../calc/compile'
 import type { ColumnInfo } from '../../shared/engine-protocol'
 import { tableSource, type Model } from '../../shared/project'
-import { aggregateCalls, fieldTitle, filterSql, isDate, lit, quickCalc, quotedNames, substituteParams, tableCalcSql, QueryError, type CompiledQuery, type OutField, type Role, type Windows } from './compile'
+import { aggregateCalls, fieldTitle, filterSql, isDate, lit, quickCalc, quotedNames, substituteParams, tableCalcSql, topN, QueryError, type CompiledQuery, type OutField, type Role, type Windows } from './compile'
 
 const q = (s: string) => `"${s.replace(/"/g, '""')}"`
 
@@ -265,16 +265,23 @@ export function compileModelQuery(input: ModelInput): CompiledQuery {
   const measureFilters = allFilters.filter((f) => f.agg && f.op !== 'top')
   const tops = allFilters.filter((f) => f.op === 'top' && f.top)
   const filterTables = [...dimFilters, ...tops].map((f) => colOf(f.field).table)
-  const where = dimFilters.map((f) => filterSql(f, (n) => {
-    const c = colOf(n)
-    return { sql: c.sql, type: c.type }
-  }))
+  const where = dimFilters.map((f) =>
+    filterSql(
+      f,
+      (n) => {
+        const c = colOf(n)
+        return { sql: c.sql, type: c.type }
+      },
+      params
+    )
+  )
   // Top N: the values with the highest (or lowest) measure, computed by the same planner (after the other
   // dimension filters), so the measure is not duplicated by joins either.
   for (const f of tops) {
     const by = f.top!.by
-    const s = sub({ x: [{ field: f.field }], y: [{ field: by.field, agg: by.agg && by.agg !== 'none' ? by.agg : 'sum' }] }, dimFilters, { maxMarks: Math.max(1, Math.floor(f.top!.n)) - 1 })
-    const sorted = s.sql.replace(/ ORDER BY [^\n]*? LIMIT \d+$/, ` ORDER BY m0 ${f.top!.bottom ? 'ASC' : 'DESC'} NULLS LAST LIMIT ${Math.max(1, Math.floor(f.top!.n))}`)
+    const n = topN(f, params)
+    const s = sub({ x: [{ field: f.field }], y: [{ field: by.field, agg: by.agg && by.agg !== 'none' ? by.agg : 'sum' }] }, dimFilters, { maxMarks: n - 1 })
+    const sorted = s.sql.replace(/ ORDER BY [^\n]*? LIMIT \d+$/, ` ORDER BY m0 ${f.top!.bottom ? 'ASC' : 'DESC'} NULLS LAST LIMIT ${n}`)
     where.push(`${colOf(f.field).sql} IN (SELECT d0 FROM (${sorted}))`)
   }
 

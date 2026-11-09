@@ -56,8 +56,11 @@ export interface ChartFilter {
   top?: { n: number; by: FieldRef; bottom?: boolean }
   /** Context filter: applied before FIXED level-of-detail calculations and top-N (Tableau semantics). */
   context?: boolean
-  /** Bind to a parameter instead of a fixed value (op gte/lte/in use the parameter's value). */
+  /** Bind to a parameter instead of a fixed value (in, contains, gte, lte: the value; top: how many). */
   param?: string
+  /** between: either end from a parameter. */
+  minParam?: string
+  maxParam?: string
 }
 
 export type TrendModel = 'linear' | 'log' | 'exp' | 'power' | 'poly'
@@ -174,9 +177,17 @@ export interface Parameter {
 }
 
 /** A value for a parameter, converted to its type (null when it can't be). */
-export function coerceParam(p: Pick<Parameter, 'type'>, v: unknown): Parameter['value'] {
+export function coerceParam(p: Pick<Parameter, 'type'> & Partial<Pick<Parameter, 'min' | 'max' | 'step'>>, v: unknown): Parameter['value'] {
   if (v === null || v === undefined || v === '') return null
-  if (p.type === 'number') return Number.isFinite(Number(v)) ? Number(v) : null
+  if (p.type === 'number') {
+    let n = Number(v)
+    if (!Number.isFinite(n)) return null
+    // A range: within its limits, on its steps (counted from the minimum).
+    if (p.step && p.step > 0) n = (p.min ?? 0) + Math.round((n - (p.min ?? 0)) / p.step) * p.step
+    if (p.min !== undefined) n = Math.max(p.min, n)
+    if (p.max !== undefined) n = Math.min(p.max, n)
+    return Math.round(n * 1e9) / 1e9
+  }
   if (p.type === 'boolean') return v === true || v === 'true' || v === 1
   if (p.type === 'date') return /^\d{4}-\d{2}-\d{2}/.test(String(v)) ? String(v).slice(0, 10) : null
   return String(v)

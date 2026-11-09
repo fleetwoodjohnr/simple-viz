@@ -169,6 +169,13 @@ describe('models', () => {
     expect(await run({ x: [{ field: 'customers.region' }], y: [{ field: 'orders.revenue', agg: 'sum' }] }, [{ id: 'f', field: 'Busy regions', op: 'in', values: ['In'] }], [cond])).toEqual([{ d0: 'East', m0: 35 }])
   })
 
+  it('parameters in model filters: a value and top N', async () => {
+    const columns = Object.fromEntries(engine.describe().relations.map((r) => [r.name.toLowerCase(), r.columns]))
+    const q = (filters: Chart['filters']) => rows(engine, compileModelQuery({ chart: { type: 'bar', options: {}, filters, enc: { x: [{ field: 'customers.region' }], y: [{ field: 'orders.revenue', agg: 'sum' }], detail: [], tooltip: [] } }, model, columns, params: [{ id: 'p', name: 'Where', type: 'text', value: 'West' }, { id: 'n', name: 'N', type: 'number', value: 1 }] }).sql)
+    expect(await q([{ id: 'f', field: 'customers.region', op: 'in', values: [], param: 'Where' }])).toEqual([{ d0: 'West', m0: 7 }])
+    expect(await q([{ id: 't', field: 'customers.region', op: 'top', top: { n: 3, by: { field: 'orders.revenue', agg: 'sum' } }, param: 'N' }])).toEqual([{ d0: 'East', m0: 35 }])
+  })
+
   it('explains missing relationships, loops and suggestions', async () => {
     const lone: Model = { ...model, tables: [...model.tables, { name: 'other', x: 0, y: 0 }] }
     expect(modelProblems(lone)).toEqual(['other isn’t related to any other table yet.'])

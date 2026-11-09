@@ -77,6 +77,15 @@ describe('calculated field syntax', () => {
     expect(t('[Sales] + [Profit] + 1')).toBe('"Sales" + "Profit" + 1')
     expect(t("[Order Date] + '1 day'::INTERVAL")).toBe(`"Order Date" + '1 day'::INTERVAL`)
     expect(t("'a+b' + [Sales]")).toBe(`'a+b' || "Sales"`)
+    // Next to a calculated field that returns text (literals, CASE results, joined text, text functions), and not
+    // next to a numeric one.
+    const calcs = [{ name: 'Short', formula: "IF [Region] = 'Texas' THEN 'TX' ELSE 'Other' END" }, { name: 'Label', formula: "[Region] + '!'" }, { name: 'Up', formula: 'UPPER([Region])' }, { name: 'Double', formula: '[Sales] * 2' }, { name: 'Pick', formula: 'IF [Sales] > 1 THEN [Sales] ELSE 0 END' }]
+    const c = (f: string) => compileCalc(f, cols, calcs, 't', ['Region']).expr
+    expect(c("[Short] + ' region'")).toContain(`) || ' region'`)
+    expect(c("'(' + [Label]")).toContain(`'(' || (`)
+    expect(c('[Up] + [Up]')).toBe('(UPPER("Region")) || (UPPER("Region"))')
+    expect(c('[Double] + 1')).toBe('("Sales" * 2) + 1')
+    expect(c('[Pick] + [Double]')).not.toContain('||')
   })
 })
 

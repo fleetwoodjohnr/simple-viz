@@ -78,6 +78,41 @@ interface Ctx {
   stack: string[]
   /** Text columns (lower case): `+` next to one joins text, as in Tableau. */
   text: Set<string>
+  /** Calculated fields already checked for returning text. */
+  textCalcs?: Map<string, boolean>
+}
+
+/** Whether compiled SQL gives text: a quoted value, text results of a CASE, joined text, or a text function's result. */
+function textExpr(sql: string): boolean {
+  const t = sql.trim()
+  if (/^'(?:[^']|'')*'$/.test(t) || /\b(THEN|ELSE)\s*'/i.test(t) || t.includes('||')) return true
+  const w = /^\(*\s*([A-Za-z_]\w*)\s*\(/.exec(t)
+  return !!w && TEXT_FNS.has(w[1].toLowerCase())
+}
+
+/** Calculated fields being checked (across nested compiles): a field that refers to itself isn't checked again. */
+const probing = new Set<string>()
+
+/** Whether a calculated field returns text (so `+` next to it joins text). */
+function calcIsText(name: string, ctx: Ctx): boolean {
+  const key = name.toLowerCase()
+  ctx.textCalcs ??= new Map()
+  if (!ctx.textCalcs.has(key)) {
+    const c = ctx.calcs.get(key)
+    let text = false
+    if (c && !probing.has(key)) {
+      probing.add(key)
+      try {
+        text = textExpr(compileCalc(c.formula, [...ctx.columns.values()], [...ctx.calcs.values()], `${ctx.prefix}t`, [...ctx.text]).expr)
+      } catch {
+        text = false // errors in that field are reported where it is compiled
+      } finally {
+        probing.delete(key)
+      }
+    }
+    ctx.textCalcs.set(key, text)
+  }
+  return ctx.textCalcs.get(key)!
 }
 
 /** Functions returning text: `+` next to a call of one joins text. */
@@ -111,7 +146,7 @@ function compile(formula: string, ctx: Ctx): Compiled {
     if (s[k] === '[' || s[k] === '"') {
       const j = s[k] === '[' ? closing(s, k, '[', ']') : s.indexOf('"', k + 1)
       const r = j > k ? resolve(s.slice(k + 1, j).replace(/\]\]/g, ']'), ctx) : null
-      return r?.kind === 'column' && ctx.text.has(r.name.toLowerCase())
+      return r?.kind === 'column' ? ctx.text.has(r.name.toLowerCase()) : !!r && calcIsText(r.name, ctx)
     }
     const w = /^([A-Za-z_]\w*)\s*\(/.exec(s.slice(k))
     return !!w && TEXT_FNS.has(w[1].toLowerCase())
@@ -150,7 +185,7 @@ function compile(formula: string, ctx: Ctx): Compiled {
       const inner = s.slice(i + 1, j).replace(/\]\]/g, ']')
       const ref = resolve(inner, ctx)
       if (ref) {
-        prevText = ref.kind === 'column' && ctx.text.has(ref.name.toLowerCase())
+        prevText = ref.kind === 'column' ? ctx.text.has(ref.name.toLowerCase()) : calcIsText(ref.name, ctx)
         if (ref.kind === 'column') {
           expr += q(ref.name)
           addDep(ref.name, ctx, out)

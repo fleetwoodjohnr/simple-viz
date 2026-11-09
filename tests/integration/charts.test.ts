@@ -211,6 +211,18 @@ describe('chart queries', () => {
     for (const s of bySeg) expect(bins.filter((b) => b.g === s.segment).reduce((a, b) => a + Number(b.n), 0)).toBe(Number(s.n))
   })
 
+  it('filters bound to parameters: top N, either end of a range, a value', async () => {
+    const params = [{ id: 'n', name: 'How many', type: 'number' as const, value: 2 }, { id: 'lo', name: 'Floor', type: 'number' as const, value: 1_000_000 }, { id: 'r', name: 'Region', type: 'text' as const, value: 'Texas' }]
+    const top = await run({ enc: { x: [dim('region')], y: [sum('revenue')] }, filters: [{ id: 't', field: 'region', op: 'top', top: { n: 10, by: sum('revenue') }, param: 'How many' }] }, [], { params })
+    const ref = await rows(engine, 'SELECT region FROM sales GROUP BY 1 ORDER BY sum(revenue) DESC LIMIT 2')
+    expect(top.map((r) => r.d0).sort()).toEqual(ref.map((r) => r.region).sort())
+    const floor = await run({ enc: { x: [dim('region')], y: [sum('revenue')] }, filters: [{ id: 'f', field: 'revenue', agg: 'sum', op: 'between', min: null, max: null, minParam: 'Floor' }] }, [], { params })
+    expect(floor.every((r) => Number(r.m0) >= 1_000_000)).toBe(true)
+    expect(floor.length).toBe((await rows(engine, 'SELECT region FROM sales GROUP BY 1 HAVING sum(revenue) >= 1000000')).length)
+    const one = await run({ enc: { x: [dim('region')], y: [sum('revenue')] }, filters: [{ id: 'v', field: 'region', op: 'in', values: [], param: 'Region' }] }, [], { params })
+    expect(one.map((r) => r.d0)).toEqual(['Texas'])
+  })
+
   it('computed sets: top N and conditions, membership after context filters and before dimension filters; combined sets', async () => {
     const top: CalcField = { id: 'top-products', dataset: 'sales', name: 'Top products', formula: computedSetFormula('product_name', 'top-products'), set: { field: 'product_name', values: [], top: { n: 3, by: 'revenue', agg: 'sum' } } }
     const out = await run({ enc: { x: [dim('Top products')], y: [sum('revenue')] } }, [top])

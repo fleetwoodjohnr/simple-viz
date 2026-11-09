@@ -345,7 +345,7 @@ export function compileQuery(input: QueryInput): CompiledQuery {
     const bc = calcOf(by.field)
     const byExpr = bc && bc.kind === 'aggregate' ? bc.expr : AGG_SQL[by.agg ?? 'sum'](rowExpr(by.field).sql)
     const col = rowExpr(f.field).sql
-    return `${col} IN (SELECT ${col} FROM base GROUP BY ${col} ORDER BY ${byExpr} ${f.top!.bottom ? 'ASC' : 'DESC'} NULLS LAST LIMIT ${Math.max(1, Math.floor(f.top!.n))})`
+    return `${col} IN (SELECT ${col} FROM base GROUP BY ${col} ORDER BY ${byExpr} ${f.top!.bottom ? 'ASC' : 'DESC'} NULLS LAST LIMIT ${topN(f, params)})`
   })
   const where = [...dimFilters, ...topWhere]
   sql += `,\nf0 AS (\n  SELECT *${lateCols.length ? `, ${lateCols.join(', ')}` : ''}\n  FROM base${where.length ? `\n  WHERE ${where.join(' AND ')}` : ''}\n),\nf AS (\n  SELECT *${lateCalcCols.length ? `, ${lateCalcCols.join(', ')}` : ''} FROM f0\n)`
@@ -521,14 +521,20 @@ export function substituteParams(formula: string, params: Map<string, Parameter>
   })
 }
 
-function paramValue(f: ChartFilter, params: Map<string, Parameter>) {
-  return f.param ? params.get(f.param.toLowerCase())?.value ?? null : null
+function paramValue(f: ChartFilter, params: Map<string, Parameter>, name = f.param) {
+  return name ? params.get(name.toLowerCase())?.value ?? null : null
+}
+
+/** How many a top-N filter keeps: its number, or its parameter's. */
+export function topN(f: ChartFilter, params: Map<string, Parameter>): number {
+  const v = f.param ? Number(paramValue(f, params)) : NaN
+  return Math.max(1, Math.floor(Number.isFinite(v) ? v : (f.top?.n ?? 10)))
 }
 
 function rangeSql(e: string, f: ChartFilter, params: Map<string, Parameter>): string {
   const pv = paramValue(f, params)
-  const min = f.param && f.op === 'gte' ? pv : f.min
-  const max = f.param && f.op === 'lte' ? pv : f.max
+  const min = f.param && f.op === 'gte' ? pv : f.minParam ? paramValue(f, params, f.minParam) : f.min
+  const max = f.param && f.op === 'lte' ? pv : f.maxParam ? paramValue(f, params, f.maxParam) : f.max
   const parts: string[] = []
   if (min !== undefined && min !== null && min !== '') parts.push(`${e} >= ${lit(min as never)}`)
   if (max !== undefined && max !== null && max !== '') parts.push(`${e} ${f.maxExclusive ? '<' : '<='} ${lit(max as never)}`)
