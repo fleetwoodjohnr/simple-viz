@@ -278,7 +278,7 @@ Also done: ClickHouse (HTTP interface, `readonly=1`) and Trino/Presto (REST prot
 
 Also done: postal codes of 12 more countries on point maps (GeoNames, CC BY 4.0, SHA-256 pinned; UK outward codes and Canadian FSAs by their form, others with their country as a field or after a comma) — unit `charts-more`.
 
-Also done: background map tiles under point maps from a tile server set in Settings (off by default; fetched by the main process with the address, coordinates, type and size checked; Web Mercator; redrawn on pan and zoom; the provider's credit shown) — unit `charts-more` (projection, tiles of a view, addresses), e2e `maps` (a local tile server; an invalid address refused).
+Also done: background map tiles under point and filled maps from a tile server set in Settings (off by default; fetched by the main process with the address, coordinates, type and size checked; Web Mercator; redrawn on pan and zoom; the provider's credit shown) — unit `charts-more` (projection, tiles of a view, addresses), e2e `maps` (a local tile server; an invalid address refused).
 
 Also done: custom maps from shapefiles (polygons with holes and parts, .dbf attributes in UTF-8 or Windows-1252, zipped or picked together; Web Mercator and Transverse Mercator/UTM converted to longitude/latitude, other projections refused), TopoJSON and KML/KMZ (placemark polygons, ExtendedData) — unit `spatial` (files written by pyshp, projected by pyproj — converted back to within 1e-7°; `scripts/spatial-ref.py`), e2e `maps`.
 

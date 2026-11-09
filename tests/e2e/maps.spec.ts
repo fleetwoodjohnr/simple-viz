@@ -204,6 +204,14 @@ test('more chart types draw; maps match areas; custom GeoJSON; small multiples',
     expect(await tileIds()).toContain('credit')
     const credit = (await graphics()).find((e: any) => e.id === 'credit')
     expect([credit.type, credit.style.text]).toEqual(['text', '© Test tiles'])
+    // A filled map draws over the tiles too.
+    await page.getByTestId('new-chart').click()
+    await page.getByTestId('chart-dataset').selectOption('sales_enriched')
+    await addField(page, 'region', 'x')
+    await addField(page, 'revenue', 'y')
+    await page.getByTestId('type-map').click()
+    await expect.poll(async () => (await tileIds()).filter((id: string) => id.startsWith('tile:')).length, { timeout: 15_000 }).toBeGreaterThan(0)
+    expect(await tileIds()).toContain('credit')
     // Off again: no tiles.
     await page.evaluate(() => (window as any).__sv.get().settings && (window as any).simpleViz.settingsSet({ mapTiles: '' }))
     await page.evaluate(() => (window as any).__sv.set((s: any) => ({ settings: { ...s.settings, mapTiles: '' } })))

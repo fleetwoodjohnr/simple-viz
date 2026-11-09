@@ -283,7 +283,7 @@ function EChart({ data, type, onMark, onHover }: { data: ChartData; type: string
   useEffect(() => {
     try {
       // Point maps over background tiles when a tile server is set (Settings → Data).
-      const withTiles = type === 'pointmap' && !!tiles && !!data.geo
+      const withTiles = (type === 'pointmap' || type === 'map') && !!tiles && !!data.geo
       const opt = plugin(type).option?.(withTiles ? { ...data, geo: { ...data.geo!, tiles: { attribution: credit } } } : data, readTheme(dark))
       if (opt) inst.current?.setOption(opt as echarts.EChartsCoreOption, { notMerge: true })
       layer.current?.set(withTiles)

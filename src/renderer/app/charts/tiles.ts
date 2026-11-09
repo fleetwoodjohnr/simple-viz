@@ -18,8 +18,10 @@ export function tileLayer(chart: echarts.ECharts) {
       shown = []
       return
     }
-    const toPx = (lon: number, lat: number) => chart.convertToPixel({ geoIndex: 0 }, [lon, lat]) as unknown as number[] | undefined
-    const fromPx = (x: number, y: number) => chart.convertFromPixel({ geoIndex: 0 }, [x, y]) as unknown as number[] | undefined
+    // Point maps draw on a geo component; filled maps are a map series.
+    const finder = (chart.getOption() as { geo?: unknown[] }).geo?.length ? { geoIndex: 0 } : { seriesIndex: 0 }
+    const toPx = (lon: number, lat: number) => chart.convertToPixel(finder, [lon, lat]) as unknown as number[] | undefined
+    const fromPx = (x: number, y: number) => chart.convertFromPixel(finder, [x, y]) as unknown as number[] | undefined
     const a = fromPx(0, 0)
     const b = fromPx(chart.getWidth(), chart.getHeight())
     const w0 = toPx(-180, 0)
