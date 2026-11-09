@@ -9,7 +9,8 @@ import * as E from '../state/engine'
 import { Btn, IconBtn, cx, inputCls } from '../ui'
 import { modelProblems, suggestRelationships } from '@/core/query/model'
 import { newId } from '@/core/project/sviz'
-import type { Model, Relationship } from '@/shared/project'
+import { tableSource, type Model, type Relationship } from '@/shared/project'
+import { askText } from './Dialogs'
 
 const CARD_W = 200
 
@@ -23,7 +24,9 @@ export function ModelEditor({ model }: { model: Model }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [linking, setLinking] = useState<{ left: string; right: string; leftField: string; rightField: string } | null>(null)
   const host = useRef<HTMLDivElement>(null)
-  const cols = (t: string) => relations.find((r) => r.name.toLowerCase() === t.toLowerCase())?.columns ?? []
+  /** The source of a model table (its role name may differ: a table added twice). */
+  const src = (t: string) => tableSource(model.tables.find((x) => x.name === t) ?? { name: t })
+  const cols = (t: string) => relations.find((r) => r.name.toLowerCase() === src(t).toLowerCase())?.columns ?? []
   const pos = (t: string) => {
     const p = model.tables.find((x) => x.name === t)!
     return drag?.name === t ? { x: p.x + drag.dx, y: p.y + drag.dy } : p
@@ -44,11 +47,19 @@ export function ModelEditor({ model }: { model: Model }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, relations])
 
-  const addTable = (name: string) => {
-    if (!name || model.tables.some((t) => t.name === name)) return
+  const addTable = async (source: string) => {
+    if (!source) return
+    let name = source
+    // Already in the model: the same table in another role (order dates and ship dates from one dates table).
+    if (model.tables.some((t) => t.name.toLowerCase() === source.toLowerCase())) {
+      const role = (await askText(`Add ${source} again`, 'A name for this role (its fields are written name.column)', `${source}_2`))?.trim()
+      if (!role) return
+      if (!/^[A-Za-z_][\w ]*$/.test(role) || model.tables.some((t) => t.name.toLowerCase() === role.toLowerCase())) return toast('Use a new name of letters, digits and underscores.', 'error')
+      name = role
+    }
     const x = 40 + (model.tables.length % 4) * (CARD_W + 80)
     const y = 40 + Math.floor(model.tables.length / 4) * 300
-    updateModel(model.id, (m) => ({ ...m, tables: [...m.tables, { name, x, y }] }))
+    updateModel(model.id, (m) => ({ ...m, tables: [...m.tables, { name, ...(name !== source ? { source } : {}), x, y }] }))
   }
   const addRel = (r: Omit<Relationship, 'id'>) => updateModel(model.id, (m) => ({ ...m, relationships: [...m.relationships, { ...r, id: newId() }] }))
 
@@ -95,7 +106,10 @@ export function ModelEditor({ model }: { model: Model }) {
           return (
             <div key={t.name} className="absolute rounded-xl bg-panel shadow-[0_0_0_1px_var(--border),0_6px_18px_-10px_rgb(0_0_0/0.3)]" style={{ left: p.x, top: p.y, width: CARD_W, height: height(t.name) }} data-testid={`model-table-${t.name}`}>
               <div onPointerDown={(e) => startDrag(e, t.name)} className="flex h-9 cursor-move items-center gap-1.5 rounded-t-xl border-b border-border bg-panel-2 px-2.5">
-                <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] font-semibold">{t.name}</span>
+                <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] font-semibold" title={t.source ? `${t.name}: ${t.source} in another role` : undefined}>
+                  {t.name}
+                  {t.source && <span className="ml-1 font-normal text-text-3">({t.source})</span>}
+                </span>
                 <IconBtn size="sm" label={`Relate ${t.name} to another table`} onPointerDown={(e) => e.stopPropagation()} onClick={() => setLinking({ left: t.name, right: model.tables.find((x) => x.name !== t.name)?.name ?? '', leftField: c[0]?.name ?? '', rightField: '' })} data-testid={`relate-${t.name}`}>
                   <Link2 className="size-3.5" />
                 </IconBtn>
@@ -120,11 +134,12 @@ export function ModelEditor({ model }: { model: Model }) {
       <aside className="w-[300px] shrink-0 space-y-4 overflow-y-auto border-l border-border bg-panel p-3" aria-label="Model">
         <div>
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-3">Tables</div>
-          <select className={cx(inputCls, 'h-8 text-[12px]')} aria-label="Add a table" value="" onChange={(e) => addTable(e.target.value)} data-testid="model-add-table">
+          <select className={cx(inputCls, 'h-8 text-[12px]')} aria-label="Add a table" value="" onChange={(e) => void addTable(e.target.value)} data-testid="model-add-table">
             <option value="">Add a table…</option>
-            {relations.filter((r) => !model.tables.some((t) => t.name === r.name)).map((r) => (
+            {relations.map((r) => (
               <option key={r.name} value={r.name}>
                 {r.name}
+                {model.tables.some((t) => tableSource(t).toLowerCase() === r.name.toLowerCase()) ? ' (again, in another role)' : ''}
               </option>
             ))}
           </select>
@@ -164,7 +179,7 @@ export function ModelEditor({ model }: { model: Model }) {
           <ul className="space-y-1.5">
             {model.relationships.map((r) => (
               <li key={r.id}>
-                <RelationshipRow r={r} selected={selected === r.id} onSelect={() => setSelected(selected === r.id ? null : r.id)} onRemove={() => updateModel(model.id, (m) => ({ ...m, relationships: m.relationships.filter((x) => x.id !== r.id) }))} />
+                <RelationshipRow r={r} src={src} selected={selected === r.id} onSelect={() => setSelected(selected === r.id ? null : r.id)} onRemove={() => updateModel(model.id, (m) => ({ ...m, relationships: m.relationships.filter((x) => x.id !== r.id) }))} />
               </li>
             ))}
           </ul>
@@ -207,7 +222,7 @@ export function ModelEditor({ model }: { model: Model }) {
 }
 
 /** A relationship with how well it matches: rows matched on each side, and whether each side's keys are unique. */
-function RelationshipRow({ r, selected, onSelect, onRemove }: { r: Relationship; selected: boolean; onSelect: () => void; onRemove: () => void }) {
+function RelationshipRow({ r, src, selected, onSelect, onRemove }: { r: Relationship; src: (t: string) => string; selected: boolean; onSelect: () => void; onRemove: () => void }) {
   const dataVersion = useApp((s) => s.dataVersion)
   const [stats, setStats] = useState<{ total: number; matched: number; leftUnique: boolean; rightUnique: boolean } | null>(null)
   useEffect(() => {
@@ -215,7 +230,8 @@ function RelationshipRow({ r, selected, onSelect, onRemove }: { r: Relationship;
     const q = (s: string) => `"${s.replace(/"/g, '""')}"`
     const L = `${q(r.left)}.${q(r.leftField)}`
     const R = `${q(r.right)}.${q(r.rightField)}`
-    E.query(`SELECT (SELECT count(*) FROM ${q(r.left)}) AS total, (SELECT count(*) FROM ${q(r.left)} WHERE ${L} IN (SELECT ${R} FROM ${q(r.right)})) AS matched, (SELECT count(*) = count(DISTINCT ${q(r.leftField)}) FROM ${q(r.left)}) AS lu, (SELECT count(*) = count(DISTINCT ${q(r.rightField)}) FROM ${q(r.right)}) AS ru`).then(
+    const from = (t: string) => (src(t) !== t ? `${q(src(t))} AS ${q(t)}` : q(t))
+    E.query(`SELECT (SELECT count(*) FROM ${from(r.left)}) AS total, (SELECT count(*) FROM ${from(r.left)} WHERE ${L} IN (SELECT ${R} FROM ${from(r.right)})) AS matched, (SELECT count(*) = count(DISTINCT ${q(r.leftField)}) FROM ${from(r.left)}) AS lu, (SELECT count(*) = count(DISTINCT ${q(r.rightField)}) FROM ${from(r.right)}) AS ru`).then(
       (res) => alive && setStats({ total: Number(res.rows[0][0]), matched: Number(res.rows[0][1]), leftUnique: !!res.rows[0][2], rightUnique: !!res.rows[0][3] }),
       (e: Error) => alive && toast(e.message, 'error')
     )

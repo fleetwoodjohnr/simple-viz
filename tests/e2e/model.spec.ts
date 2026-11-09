@@ -29,6 +29,12 @@ test('relate tables in a model and chart across them; transform with steps', asy
   await page.getByTestId('accept-suggestion').click()
   await expect(page.getByTestId('relationship-stats')).toContainText('many-to-one · 1,000 of 1,000 transactions rows match')
   await expect(page.getByTestId('model-problems')).toHaveCount(0)
+  // The same table again, in another role.
+  await page.getByTestId('model-add-table').selectOption('customers')
+  await page.getByRole('dialog').getByRole('textbox').fill('referrers')
+  await page.getByRole('dialog').getByRole('textbox').press('Enter')
+  await expect(page.getByText('(customers)')).toBeVisible()
+  expect(await page.evaluate(() => (window as any).__sv.get().project.models[0].tables.map((t: any) => [t.name, t.source ?? null]))).toEqual([['transactions', null], ['customers', null], ['referrers', 'customers']])
 
   // A chart over the model: revenue (transactions) by region (customers).
   await page.getByTestId('nav-charts').click()

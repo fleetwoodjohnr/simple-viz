@@ -121,6 +121,7 @@ Linux, Windows and macOS._
 | Models: tables related by fields (logical layer); charts over a model use fields of every table | integration `model`, e2e `model` |
 | No duplicated measures: each measure is counted once per combination of dimension values it relates to (fan-out safe); two fact tables sharing dimensions; coarser tables not multiplied; unmatched rows in a Null group | integration `model` (5 cases against known answers) |
 | Calculated fields on models: row-level on one table (dimension, measure or filter); aggregates of several tables, each at its own table, combined per mark | integration `model`, e2e `model` |
+| Role-playing tables: one table added to a model several times under role names (origin and destination regions) | integration `model`, e2e `model` |
 | Top N filters on models: the values with the highest or lowest measure of any related table, after the other filters, without duplication | integration `model` |
 | Relationship canvas: draggable table cards, relationship lines, suggestions (same-named keys, `id` ↔ `table_id`), loop and unrelated-table warnings | integration `model`, e2e `model` |
 | Relationship preview: cardinality (one/many on each side) and matched rows | e2e `model` |

@@ -23,7 +23,7 @@
   Parameters: a number, text, date or yes/no value used in formulas and reference lines, changed with a dashboard
   control or by clicking a mark. Presentation mode. PDF, PNG and web page (HTML) export.
 - **Data modeling.** Relate tables by shared fields and chart across them without double-counting (Tableau-style
-  relationships, several fact tables), with calculated fields and top-N filters. Visual transforms — filter, calculate, join, group, pivot, unpivot and more —
+  relationships, several fact tables, one table in several roles), with calculated fields and top-N filters. Visual transforms — filter, calculate, join, group, pivot, unpivot and more —
   with a live preview and the equivalent SQL. Date tables and hierarchies.
 - **More sources.** MySQL and MariaDB (extract or live), SQL Server (extract), files on the web, in Amazon S3 and
   S3-compatible storage or in Azure Blob storage (keys in the keychain), Excel binary `.xlsb` and Excel 97–2003 `.xls` (read natively, no

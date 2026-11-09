@@ -15,7 +15,7 @@
 import type { Chart, Parameter } from '../../shared/charts'
 import { compileCalc, CalcError, type CalcSource } from '../calc/compile'
 import type { ColumnInfo } from '../../shared/engine-protocol'
-import type { Model } from '../../shared/project'
+import { tableSource, type Model } from '../../shared/project'
 import { aggregateCalls, fieldTitle, filterSql, isDate, lit, substituteParams, QueryError, type CompiledQuery, type OutField, type Role } from './compile'
 
 const q = (s: string) => `"${s.replace(/"/g, '""')}"`
@@ -84,7 +84,12 @@ export function compileModelQuery(input: { chart: Pick<Chart, 'enc' | 'filters' 
   const calcs = input.calcs ?? []
   const params = new Map((input.params ?? []).map((p) => [p.name.toLowerCase(), p]))
   // Every field of the model, as table.column, for calculated fields' [table.column] references.
-  const allCols = model.tables.flatMap((t) => (input.columns[t.name.toLowerCase()] ?? []).map((c) => `${t.name}.${c.name}`))
+  const allCols = model.tables.flatMap((t) => (input.columns[tableSource(t).toLowerCase()] ?? []).map((c) => `${t.name}.${c.name}`))
+  /** FROM item for a model table: the data it reads, named as the model calls it. */
+  const fromItem = (name: string) => {
+    const t = model.tables.find((x) => x.name.toLowerCase() === name.toLowerCase())
+    return t && tableSource(t) !== t.name ? `${q(tableSource(t))} AS ${q(t.name)}` : q(name)
+  }
   const colSet = new Map(allCols.map((c) => [c.toLowerCase(), c]))
   /** "table.column" (as the calc compiler writes a reference) → "table"."column". */
   const toSql = (expr: string) => expr.replace(/"((?:[^"]|"")*)"/g, (m, name: string) => {
@@ -121,7 +126,7 @@ export function compileModelQuery(input: { chart: Pick<Chart, 'enc' | 'filters' 
     const { table, column } = splitField(field)
     const t = model.tables.find((x) => x.name.toLowerCase() === table.toLowerCase())
     if (!t) throw new QueryError(`The model ${model.name} has no table “${table}”.`)
-    const c = input.columns[t.name.toLowerCase()]?.find((x) => x.name.toLowerCase() === column.toLowerCase())
+    const c = input.columns[tableSource(t).toLowerCase()]?.find((x) => x.name.toLowerCase() === column.toLowerCase())
     if (!c) throw new QueryError(`There is no field “${column}” in ${t.name}.`)
     return { table: t.name, column: c.name, type: c.type, sql: `${q(t.name)}.${q(c.name)}` }
   }
@@ -193,10 +198,10 @@ export function compileModelQuery(input: { chart: Pick<Chart, 'enc' | 'filters' 
       order.push(t)
     }
     needed.forEach(need)
-    const startSql = numbered ? `(SELECT *, row_number() OVER () AS __rid FROM ${q(start)}) AS ${q(start)}` : q(start)
+    const startSql = numbered ? `(SELECT *, row_number() OVER () AS __rid FROM ${fromItem(start)}) AS ${q(start)}` : fromItem(start)
     return `${startSql}${order.map((t) => {
       const step = tree.get(t.toLowerCase())!
-      return `\n    LEFT JOIN ${q(t)} ON ${q(step.from)}.${q(step.on[0])} = ${q(t)}.${q(step.on[1])}`
+      return `\n    LEFT JOIN ${fromItem(t)} ON ${q(step.from)}.${q(step.on[0])} = ${q(t)}.${q(step.on[1])}`
     }).join('')}`
   }
 

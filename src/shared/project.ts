@@ -123,9 +123,14 @@ export type TransformStep =
 export interface Model {
   id: string
   name: string
-  tables: { name: string; x: number; y: number }[]
+  /** name: the table as the model calls it (fields are name.column); source: the data it reads, when the same table
+   *  plays several roles (order dates and ship dates from one dates table). */
+  tables: { name: string; source?: string; x: number; y: number }[]
   relationships: Relationship[]
 }
+
+/** The data a model table reads. */
+export const tableSource = (t: { name: string; source?: string }) => t.source ?? t.name
 
 export interface Relationship {
   id: string

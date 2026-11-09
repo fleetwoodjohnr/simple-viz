@@ -30,9 +30,12 @@ beforeAll(async () => {
   await c.run(`CREATE TABLE orders AS SELECT * FROM (VALUES (1, 1, 'A', 10.0), (2, 1, 'B', 20.0), (3, 2, 'A', 5.0), (4, 3, 'A', 7.0), (5, 9, 'B', 1.0)) t(order_id, customer_id, product, revenue)`)
   await c.run(`CREATE TABLE returns AS SELECT * FROM (VALUES (1, 2.0), (1, 1.0), (4, 3.0)) t(order_id, refund)`)
   await c.run(`CREATE TABLE targets AS SELECT * FROM (VALUES ('East', 1000.0), ('West', 500.0)) t(region, target)`)
+  // Role-playing: shipments go from one region to another; one regions table serves both roles.
+  await c.run(`CREATE TABLE regions AS SELECT * FROM (VALUES ('East', 'Ann'), ('West', 'Bo')) t(region, manager)`)
+  await c.run(`CREATE TABLE shipments AS SELECT * FROM (VALUES ('East', 'West', 5.0), ('East', 'East', 1.0), ('West', 'East', 2.0)) t(from_region, to_region, weight)`)
   c.closeSync()
   i.closeSync()
-  ;({ engine } = await bootEngine([{ id: 'db', kind: 'duckdb', path: file, mode: 'extract', timeoutSec: 30, tables: ['customers', 'orders', 'returns', 'targets'].map((t) => ({ alias: t, ref: t })) }]))
+  ;({ engine } = await bootEngine([{ id: 'db', kind: 'duckdb', path: file, mode: 'extract', timeoutSec: 30, tables: ['customers', 'orders', 'returns', 'targets', 'regions', 'shipments'].map((t) => ({ alias: t, ref: t })) }]))
 })
 afterAll(() => engine?.close())
 
@@ -100,6 +103,30 @@ describe('models', () => {
     // A filter on a calculated field.
     expect(await run({ x: [{ field: 'customers.region' }], y: [{ field: 'orders.revenue', agg: 'sum' }] }, [{ id: 'f', field: 'Size', op: 'in', values: ['big'] }], calcs)).toEqual([{ d0: 'East', m0: 30 }])
     await expect(run({ x: [{ field: 'Mixed' }], y: [{ field: 'orders.revenue', agg: 'sum' }] }, [], calcs)).rejects.toThrow(/reads one table/)
+  })
+
+  it('role-playing: one table in two roles (origin and destination regions)', async () => {
+    const roles: Model = {
+      id: 'r',
+      name: 'Shipping',
+      tables: [{ name: 'shipments', x: 0, y: 0 }, { name: 'origin', source: 'regions', x: 0, y: 0 }, { name: 'destination', source: 'regions', x: 0, y: 0 }],
+      relationships: [
+        { id: 'a', left: 'shipments', leftField: 'from_region', right: 'origin', rightField: 'region' },
+        { id: 'b', left: 'shipments', leftField: 'to_region', right: 'destination', rightField: 'region' }
+      ]
+    }
+    const columns = Object.fromEntries(engine.describe().relations.map((r) => [r.name.toLowerCase(), r.columns]))
+    const q = (enc: Partial<Chart['enc']>) => rows(engine, compileModelQuery({ chart: { type: 'bar', options: {}, filters: [], enc: { x: [], y: [], detail: [], tooltip: [], ...enc } }, model: roles, columns }).sql)
+    expect(await q({ x: [{ field: 'origin.manager' }], y: [{ field: 'shipments.weight', agg: 'sum' }] })).toEqual([{ d0: 'Ann', m0: 6 }, { d0: 'Bo', m0: 2 }])
+    expect(await q({ x: [{ field: 'destination.manager' }], y: [{ field: 'shipments.weight', agg: 'sum' }] })).toEqual([{ d0: 'Ann', m0: 3 }, { d0: 'Bo', m0: 5 }])
+    // Both roles at once: from Ann to Bo is the 5.
+    const both = await q({ x: [{ field: 'origin.manager' }, { field: 'destination.manager' }], y: [{ field: 'shipments.weight', agg: 'sum' }] })
+    expect(both.sort((a, b) => `${a.d0}${a.d1}`.localeCompare(`${b.d0}${b.d1}`))).toEqual([
+      { d0: 'Ann', d1: 'Ann', m0: 1 },
+      { d0: 'Ann', d1: 'Bo', m0: 5 },
+      { d0: 'Bo', d1: 'Ann', m0: 2 }
+    ])
+    expect(modelProblems(roles)).toEqual([])
   })
 
   it('explains missing relationships, loops and suggestions', async () => {

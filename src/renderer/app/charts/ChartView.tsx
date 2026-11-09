@@ -14,7 +14,7 @@ import { compileModelQuery } from '@/core/query/model'
 import { plugin } from '@/core/charts/plugins'
 import { LIGHT, fmt, type ChartData, type Theme, type Value } from '@/core/charts/data'
 import type { Chart, ChartFilter } from '@/shared/charts'
-import type { Model, Project } from '@/shared/project'
+import { tableSource, type Model, type Project } from '@/shared/project'
 import type { ColumnInfo, RelationInfo } from '@/shared/engine-protocol'
 import { DataGrid } from '../../ui/DataGrid'
 import { resolveMap } from './maps'
@@ -57,7 +57,7 @@ export function compileChart(chart: Pick<Chart, 'dataset' | 'enc' | 'filters' | 
 }
 
 export function modelColumns(model: Model, relations: RelationInfo[]): ColumnInfo[] {
-  return model.tables.flatMap((t) => (relations.find((r) => r.name.toLowerCase() === t.name.toLowerCase())?.columns ?? []).map((c) => ({ name: `${t.name}.${c.name}`, type: c.type })))
+  return model.tables.flatMap((t) => (relations.find((r) => r.name.toLowerCase() === tableSource(t).toLowerCase())?.columns ?? []).map((c) => ({ name: `${t.name}.${c.name}`, type: c.type })))
 }
 
 export interface ChartResult {
