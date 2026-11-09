@@ -46,7 +46,7 @@ _Checked against Tableau's documentation on 8 November 2026._
 | [Spatial files](https://help.tableau.com/current/pro/desktop/en-us/maps_shapefiles.htm) | GeoJSON areas, kept in the project | ◐ No Shapefile, KML or MapInfo |
 | [Reference lines and bands](https://help.tableau.com/current/pro/desktop/en-us/reference_lines.htm) | Constant, parameter, average, median, min, max; ±1 standard deviation band | ◐ No distributions other than ±SD, no reference boxes |
 | [Trend lines](https://help.tableau.com/current/pro/desktop/en-us/trendlines_add.htm) | Linear with R² on charts; linear, multiple and polynomial regression with full statistics in Analytics | ◐ No logarithmic/exponential/power trend lines on charts |
-| [Forecasting](https://help.tableau.com/current/pro/desktop/en-us/forecasting.htm) | Exponential smoothing (level, trend, additive season) chosen by AICc, prediction intervals, on charts and in Analytics | ◐ No multiplicative seasonality |
+| [Forecasting](https://help.tableau.com/current/pro/desktop/en-us/forecasting.htm) | Exponential smoothing (level, trend, additive or multiplicative season) chosen by AICc, prediction intervals, on charts and in Analytics | ◐ No multiplicative or damped trend; no ARIMA |
 | [Clustering](https://help.tableau.com/current/pro/desktop/en-us/clustering.htm) | k-means (k chosen by Calinski–Harabasz, as Tableau), clusters saved as a dataset | ◐ In Analytics, not dragged onto a chart |
 | Statistics | Descriptives, correlation, t-tests, ANOVA, chi-square, rank tests, regression, logistic regression, PCA, anomalies — validated against SciPy and statsmodels | ✅ (beyond Tableau) |
 | [Viz in tooltip](https://help.tableau.com/current/pro/desktop/en-us/viz_in_tooltip.htm) | — | ✗ |

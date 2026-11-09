@@ -52,6 +52,10 @@ hw = ExponentialSmoothing(s, trend='add', seasonal='add', seasonal_periods=12, i
 ref['hw_fixed'] = dict(params=dict(alpha=0.4, beta=0.1, gamma=0.2), init=init, fitted=hw.fittedvalues.tolist(), forecast=hw.forecast(6).tolist())
 hw_opt = ExponentialSmoothing(s, trend='add', seasonal='add', seasonal_periods=12, initialization_method='known', **init).fit()
 ref['hw_opt_sse'] = float(hw_opt.sse)
+# Multiplicative season (statsmodels seasonal='mul'), known start, fixed smoothing.
+mi = dict(initial_level=float(np.mean(s[:12])), initial_trend=float((np.mean(s[12:24]) - np.mean(s[:12])) / 12), initial_seasonal=(s[:12] / np.mean(s[:12])).tolist())
+hwm = ExponentialSmoothing(s, trend='add', seasonal='mul', seasonal_periods=12, initialization_method='known', **mi).fit(smoothing_level=0.4, smoothing_trend=0.1, smoothing_seasonal=0.2, optimized=False)
+ref['hw_mul_fixed'] = dict(params=dict(alpha=0.4, beta=0.1, gamma=0.2), init=mi, fitted=hwm.fittedvalues.tolist(), forecast=hwm.forecast(6).tolist())
 
 json.dump(ref, open(root / 'stats-ref.json', 'w'), indent=1)
 print('wrote', root / 'stats-ref.json')

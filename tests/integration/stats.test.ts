@@ -122,8 +122,26 @@ describe('statistics vs SciPy / statsmodels', () => {
     etsForecast(y, p, 12, 6, 0.95, 16).forecast.forEach((v, i) => close(v.mean, h.forecast[i], 1e-9))
     expect(etsFit(y, 'AA', 12).sse).toBeLessThan(ref.hw_opt_sse * 1.05)
     const r = await runAnalysis({ kind: 'forecast', dataset: 'series', date: 'month', y: 'sales', grain: 'month', horizon: 12 }, run)
-    expect(r.tables[1].rows[0][0]).toBe('Holt–Winters additive (trend + season)')
+    // A trend-and-season model wins (additive or multiplicative, whichever has the lower AICc).
+    expect(String(r.tables[1].rows[0][0])).toMatch(/^Holt–Winters (additive|multiplicative)/)
+    expect(r.tables[1].rows.map((row) => row[0])).toContain('Holt–Winters multiplicative (trend + season)')
     expect(r.tables[0].rows.length).toBe(12)
+  })
+
+  it('Holt–Winters with a multiplicative season: same recursion and forecasts as statsmodels', async () => {
+    const y = (await run('SELECT sales FROM series ORDER BY month')).map((r) => Number(r.sales))
+    const h = ref.hw_mul_fixed
+    const p = { alpha: h.params.alpha, beta: h.params.beta, gamma: h.params.gamma, l0: h.init.initial_level, b0: h.init.initial_trend, s0: h.init.initial_seasonal, mult: true }
+    etsFilter(y, p, 12).fitted.forEach((v, i) => close(v, h.fitted[i], 1e-9))
+    const fc = etsForecast(y, p, 12, 6, 0.95, 16).forecast
+    fc.forEach((v, i) => close(v.mean, h.forecast[i], 1e-9))
+    // The simulated interval contains the forecast and widens with the horizon.
+    for (const v of fc) {
+      expect(v.lo).toBeLessThan(v.mean)
+      expect(v.hi).toBeGreaterThan(v.mean)
+    }
+    expect(fc[5].hi - fc[5].lo).toBeGreaterThan(fc[0].hi - fc[0].lo)
+    expect(etsFit(y, 'AM', 12).sse).toBeLessThan(etsFilter(y, p, 12).fitted.reduce((a, f, t) => a + (y[t] - f) ** 2, 0) * 1.0001)
   })
 
   it('k-means recovers well-separated groups and deterministic results', async () => {

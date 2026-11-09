@@ -154,7 +154,7 @@ committed), on a 500-row fixture with known structure and a 60-month seasonal se
 | Mann–Whitney U (tie and continuity corrections) and Kruskal–Wallis | integration `stats` vs SciPy |
 | Linear regression — simple, multiple, polynomial; text predictors as indicators (first value the reference) — from sufficient statistics over every row: coefficients, SE, t, p, CI, R², adjusted R², F, residual quantiles and plot; listwise deletion reported | integration `stats` vs statsmodels; e2e `analytics` vs DuckDB `regr_*` |
 | Logistic regression (IRLS on a reproducible sample of up to 100,000 rows): coefficients, SE, odds ratios, McFadden R², likelihood-ratio test, accuracy | integration `stats` vs statsmodels |
-| Forecasting: exponential smoothing (level, trend, additive season) with the model chosen by AICc and prediction intervals; missing periods filled | integration `stats` (recursion and forecasts equal statsmodels to 1e-9 for given parameters; fitted SSE within 5% of statsmodels' optimum); e2e `analytics` |
+| Forecasting: exponential smoothing (level, trend, additive or multiplicative season; intervals simulated for the multiplicative one) with the model chosen by AICc and prediction intervals; missing periods filled | integration `stats` (recursion and forecasts equal statsmodels to 1e-9 for given parameters; fitted SSE within 5% of statsmodels' optimum); e2e `analytics` |
 | K-means (standardized, k-means++ seeded, best of 5; k chosen by Calinski–Harabasz); save clusters as a dataset that labels every row | integration `stats`, e2e `analytics` |
 | Principal components (correlation matrix, eigenvalues, loadings, Kaiser's rule) | integration `stats` vs NumPy |
 | Anomalies by z-score or IQR, with the most extreme rows | integration `stats` |
