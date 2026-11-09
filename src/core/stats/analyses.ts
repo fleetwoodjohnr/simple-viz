@@ -545,6 +545,8 @@ export interface EtsParams {
   mult?: boolean
   /** Damped trend: each period carries on φ of the last period's trend (statsmodels damped_trend). */
   phi?: number
+  /** Multiplicative trend: b is a growth factor per period (statsmodels trend='mul'). */
+  multTrend?: boolean
 }
 
 /**
@@ -556,6 +558,7 @@ export interface EtsParams {
  * and its multiplicative season (statsmodels seasonal='mul'):
  *   ŷ_t = (l_{t−1} + b_{t−1})·s_{t−m},  l_t = α·y_t/s_{t−m} + (1 − α)(l_{t−1} + b_{t−1}),  s_t = γ·y_t/(l_{t−1} + b_{t−1}) + (1 − γ)s_{t−m}
  * A damped trend replaces b_{t−1} by φ·b_{t−1} throughout (and b_t = β(l_t − l_{t−1}) + (1 − β)φ·b_{t−1}).
+ * A multiplicative trend uses l_{t−1}·b_{t−1} where the additive one adds, and b_t = β(l_t / l_{t−1}) + (1 − β)b_{t−1}.
  */
 export function etsFilter(y: number[], p: EtsParams, m: number) {
   const trend = p.beta !== undefined
@@ -564,22 +567,24 @@ export function etsFilter(y: number[], p: EtsParams, m: number) {
   let b = trend ? (p.b0 ?? 0) : 0
   const s = seas ? [...p.s0!] : []
   const phi = p.phi ?? 1
+  const mt = trend && !!p.multTrend
   const fitted: number[] = []
   for (let t = 0; t < y.length; t++) {
     const mult = seas && !!p.mult
     const st = seas ? s[t % m] : mult ? 1 : 0
     const lPrev = l
-    const bPrev = phi * b
-    fitted.push(mult ? (l + bPrev) * st : l + bPrev + st)
-    l = p.alpha * (mult ? y[t] / st : y[t] - st) + (1 - p.alpha) * (lPrev + bPrev)
-    if (trend) b = p.beta! * (l - lPrev) + (1 - p.beta!) * bPrev
-    if (seas) s[t % m] = p.gamma! * (mult ? y[t] / (lPrev + bPrev) : y[t] - lPrev - bPrev) + (1 - p.gamma!) * st
+    const bPrev = mt ? b : phi * b
+    const base = mt ? lPrev * bPrev : lPrev + bPrev
+    fitted.push(mult ? base * st : base + st)
+    l = p.alpha * (mult ? y[t] / st : y[t] - st) + (1 - p.alpha) * base
+    if (trend) b = mt ? p.beta! * (l / lPrev) + (1 - p.beta!) * bPrev : p.beta! * (l - lPrev) + (1 - p.beta!) * bPrev
+    if (seas) s[t % m] = p.gamma! * (mult ? y[t] / base : y[t] - base) + (1 - p.gamma!) * st
   }
   return { fitted, l, b, s, n: y.length }
 }
 
 /** Classical decomposition start: seasonal indices from a centred moving average, level and trend from a line fitted to the deseasonalized start. */
-export function etsInit(y: number[], m: number, seas: boolean, mult = false) {
+export function etsInit(y: number[], m: number, seas: boolean, mult = false, multTrend = false) {
   let s0: number[] | undefined
   if (seas) {
     const half = Math.floor(m / 2)
@@ -603,6 +608,11 @@ export function etsInit(y: number[], m: number, seas: boolean, mult = false) {
   const mz = z.reduce((a, b) => a + b, 0) / span
   const slope = z.reduce((a, v, t) => a + (t - mt) * (v - mz), 0) / Math.max(1e-12, z.reduce((a, _, t) => a + (t - mt) ** 2, 0))
   const intercept = mz - slope * mt
+  // A multiplicative trend: the same line's growth factor per period, around its start.
+  if (multTrend) {
+    const l0 = Math.max(1e-9, intercept - slope)
+    return { l0, b0: Math.max(0.5, Math.min(2, 1 + slope / l0)), s0 }
+  }
   return { l0: intercept - slope, b0: slope, s0 }
 }
 
@@ -610,14 +620,15 @@ export function etsInit(y: number[], m: number, seas: boolean, mult = false) {
 export function etsFit(y: number[], model: EtsModel, m: number) {
   const trend = model[0] !== 'N'
   const damped = model[0] === 'D'
+  const multTrend = model[0] === 'M'
   const seas = model.length === 2
   const mult = model[1] === 'M'
-  const init = etsInit(y, m, seas, mult)
+  const init = etsInit(y, m, seas, mult, multTrend)
   const logit = (p: number) => Math.log(p / (1 - p))
   const unl = (x: number) => 1 / (1 + Math.exp(-x))
   const nSmooth = 1 + (trend ? 1 : 0) + (seas ? 1 : 0) + (damped ? 1 : 0)
   // φ in [0.8, 0.98], the usual range (Hyndman & Athanasopoulos): lower damps too fast, higher is a plain trend.
-  const params = (v: number[]): EtsParams => ({ alpha: unl(v[0]), beta: trend ? unl(v[1]) : undefined, gamma: seas ? unl(v[trend ? 2 : 1]) : undefined, l0: v[nSmooth], b0: trend ? v[nSmooth + 1] : undefined, s0: init.s0, ...(mult ? { mult } : {}), ...(damped ? { phi: 0.8 + 0.18 * unl(v[nSmooth - 1]) } : {}) })
+  const params = (v: number[]): EtsParams => ({ alpha: unl(v[0]), beta: trend ? unl(v[1]) : undefined, gamma: seas ? unl(v[trend ? 2 : 1]) : undefined, l0: v[nSmooth], b0: trend ? v[nSmooth + 1] : undefined, s0: init.s0, ...(mult ? { mult } : {}), ...(multTrend ? { multTrend } : {}), ...(damped ? { phi: 0.8 + 0.18 * unl(v[nSmooth - 1]) } : {}) })
   const sse = (v: number[]) => etsFilter(y, params(v), m).fitted.reduce((a, f, t) => a + (y[t] - f) ** 2, 0)
   const start = [logit(0.3), ...(trend ? [logit(0.1)] : []), ...(seas ? [logit(0.1)] : []), ...(damped ? [0] : []), trend ? init.l0 : y[0], ...(trend ? [init.b0] : [])]
   // Two passes: Nelder–Mead restarted from its own answer escapes the occasional early stop.
@@ -640,13 +651,16 @@ export function etsForecast(y: number[], p: EtsParams, m: number, h: number, lev
   const trend = p.beta !== undefined
   const seas = p.gamma !== undefined
   const phi = p.phi ?? 1
+  const mt = trend && !!p.multTrend
   /** φ + φ² + … + φ^j: how much of today's trend is in the forecast j periods on. */
   const cum = (j: number) => (phi === 1 ? j : (phi * (1 - phi ** j)) / (1 - phi))
+  /** The level and trend j periods on. */
+  const ahead = (l: number, b: number, j: number) => (mt ? l * b ** j : l + (trend ? cum(j) * b : 0))
   const sse = st.fitted.reduce((a, f, t) => a + (y[t] - f) ** 2, 0)
   const sigma2 = sse / Math.max(1, y.length - k)
   const z = normInv(1 - (1 - level) / 2)
   const out: { mean: number; lo: number; hi: number }[] = []
-  if (seas && p.mult) {
+  if ((seas && p.mult) || mt) {
     const paths: number[][] = Array.from({ length: h }, () => [])
     let seed = 42
     const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) + 0.5) / 2147483648
@@ -657,19 +671,23 @@ export function etsForecast(y: number[], p: EtsParams, m: number, h: number, lev
       const s = [...st.s]
       for (let j = 0; j < h; j++) {
         const i = (y.length + j) % m
-        const yj = (l + phi * b) * s[i] + sigma * normInv(rnd())
-        paths[j].push(yj)
+        const ms = seas && !!p.mult
+        const st = seas ? s[i] : ms ? 1 : 0
         const lPrev = l
-        const bPrev = phi * b
-        l = p.alpha * (yj / s[i]) + (1 - p.alpha) * (lPrev + bPrev)
-        if (trend) b = p.beta! * (l - lPrev) + (1 - p.beta!) * bPrev
-        s[i] = p.gamma! * (yj / (lPrev + bPrev)) + (1 - p.gamma!) * s[i]
+        const bPrev = mt ? b : phi * b
+        const base = mt ? lPrev * bPrev : lPrev + bPrev
+        const yj = (ms ? base * st : base + st) + sigma * normInv(rnd())
+        paths[j].push(yj)
+        l = p.alpha * (ms ? yj / st : yj - st) + (1 - p.alpha) * base
+        if (trend) b = mt ? p.beta! * (l / lPrev) + (1 - p.beta!) * bPrev : p.beta! * (l - lPrev) + (1 - p.beta!) * bPrev
+        if (seas) s[i] = p.gamma! * (ms ? yj / base : yj - base) + (1 - p.gamma!) * st
       }
     }
     const qt = (xs: number[], q: number) => xs[Math.min(xs.length - 1, Math.max(0, Math.round(q * (xs.length - 1))))]
     for (let j = 1; j <= h; j++) {
       const sorted = paths[j - 1].sort((a, b) => a - b)
-      out.push({ mean: (st.l + (trend ? cum(j) * st.b : 0)) * st.s[(y.length + j - 1) % m], lo: qt(sorted, (1 - level) / 2), hi: qt(sorted, 1 - (1 - level) / 2) })
+      const sj = seas ? st.s[(y.length + j - 1) % m] : p.mult ? 1 : 0
+      out.push({ mean: seas && p.mult ? ahead(st.l, st.b, j) * sj : ahead(st.l, st.b, j) + sj, lo: qt(sorted, (1 - level) / 2), hi: qt(sorted, 1 - (1 - level) / 2) })
     }
     return { forecast: out, fitted: st.fitted, sigma: Math.sqrt(sigma2) }
   }
@@ -686,8 +704,8 @@ export function etsForecast(y: number[], p: EtsParams, m: number, h: number, lev
 
 export type Grain = 'day' | 'week' | 'month' | 'quarter' | 'year'
 /** N/A/D: no, additive or damped trend; a second letter: additive (A) or multiplicative (M) season. */
-export type EtsModel = 'N' | 'A' | 'D' | 'NA' | 'AA' | 'DA' | 'NM' | 'AM' | 'DM'
-export const ETS_NAMES: Record<EtsModel, string> = { N: 'Simple exponential smoothing', A: 'Holt’s linear trend', D: 'Damped trend', NA: 'Seasonal (no trend)', AA: 'Holt–Winters additive (trend + season)', DA: 'Damped trend + additive season', NM: 'Multiplicative season (no trend)', AM: 'Holt–Winters multiplicative (trend + season)', DM: 'Damped trend + multiplicative season' }
+export type EtsModel = 'N' | 'A' | 'D' | 'M' | 'NA' | 'AA' | 'DA' | 'MA' | 'NM' | 'AM' | 'DM' | 'MM'
+export const ETS_NAMES: Record<EtsModel, string> = { N: 'Simple exponential smoothing', A: 'Holt’s linear trend', D: 'Damped trend', NA: 'Seasonal (no trend)', AA: 'Holt–Winters additive (trend + season)', DA: 'Damped trend + additive season', NM: 'Multiplicative season (no trend)', AM: 'Holt–Winters multiplicative (trend + season)', DM: 'Damped trend + multiplicative season', M: 'Multiplicative trend', MA: 'Multiplicative trend + additive season', MM: 'Multiplicative trend and season' }
 /** Season length per grain (weekly data: a yearly season of 52 weeks). */
 export const SEASON: Record<Grain, number> = { day: 7, week: 52, month: 12, quarter: 4, year: 1 }
 
@@ -696,7 +714,8 @@ export function etsAuto(y: number[], m: number, h: number, level: number, model:
   const canSeason = m > 1 && y.length >= 2 * m
   // Multiplicative seasons need positive values (the season is a factor of the level).
   const positive = y.every((v) => v > 0)
-  const candidates: EtsModel[] = model !== 'auto' ? [model] : ['N', 'A', 'D', ...(canSeason ? (['NA', 'AA', 'DA'] as const) : []), ...(canSeason && positive ? (['NM', 'AM', 'DM'] as const) : [])]
+  // Multiplicative trends and seasons need positive values (they are factors).
+  const candidates: EtsModel[] = model !== 'auto' ? [model] : ['N', 'A', 'D', ...(positive ? (['M'] as const) : []), ...(canSeason ? (['NA', 'AA', 'DA'] as const) : []), ...(canSeason && positive ? (['NM', 'AM', 'DM', 'MA', 'MM'] as const) : [])]
   const fits = candidates.map((c) => ({ c, ...etsFit(y, c, m) })).sort((a, b) => a.aicc - b.aicc)
   return { fits, best: fits[0], canSeason, ...etsForecast(y, fits[0].params, m, h, level, fits[0].k) }
 }
@@ -724,7 +743,7 @@ async function forecast(s: AnalysisSpec, run: Run): Promise<AnalysisResult> {
   need(y.every(Number.isFinite), 'Some periods have no value. Use Sum, or a coarser grain.')
   const m = SEASON[grain]
   need(!(s.model && s.model.length === 2) || (m > 1 && y.length >= 2 * m), `A seasonal model needs at least two full seasons (${2 * m} ${grain}s).`)
-  need(!s.model?.endsWith('M') || y.every((v) => v > 0), 'A multiplicative season needs every period above zero.')
+  need(!(s.model?.endsWith('M') || s.model?.startsWith('M')) || y.every((v) => v > 0), 'A multiplicative trend or season needs every period above zero.')
   const level = s.level ?? 0.95
   const last = String(series[series.length - 1].p)
   const labels = [...series.map((r) => String(r.p)), ...Array.from({ length: h }, (_, j) => addPeriods(last, grain, j + 1))]

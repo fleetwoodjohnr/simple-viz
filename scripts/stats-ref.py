@@ -63,6 +63,12 @@ ref['hw_mul_fixed'] = dict(params=dict(alpha=0.4, beta=0.1, gamma=0.2), init=mi,
 hwd = ExponentialSmoothing(s, trend='add', damped_trend=True, seasonal='add', seasonal_periods=12, initialization_method='known', **init).fit(smoothing_level=0.4, smoothing_trend=0.1, smoothing_seasonal=0.2, damping_trend=0.9, optimized=False)
 ref['hw_damped_fixed'] = dict(params=dict(alpha=0.4, beta=0.1, gamma=0.2, phi=0.9), init=init, fitted=hwd.fittedvalues.tolist(), forecast=hwd.forecast(6).tolist())
 
+# Multiplicative trend (statsmodels trend='mul'), with an additive and with a multiplicative season.
+mt = dict(initial_level=float(np.mean(s[:12])), initial_trend=1.01)
+for key, seasonal, init_s in [('hw_multrend_add', 'add', (s[:12] - np.mean(s[:12])).tolist()), ('hw_multrend_mul', 'mul', (s[:12] / np.mean(s[:12])).tolist())]:
+    m = ExponentialSmoothing(s, trend='mul', seasonal=seasonal, seasonal_periods=12, initialization_method='known', initial_seasonal=init_s, **mt).fit(smoothing_level=0.4, smoothing_trend=0.1, smoothing_seasonal=0.2, optimized=False)
+    ref[key] = dict(params=dict(alpha=0.4, beta=0.1, gamma=0.2), init=dict(mt, initial_seasonal=init_s), fitted=m.fittedvalues.tolist(), forecast=m.forecast(6).tolist())
+
 # Seasonal ARIMA (SARIMAX, exact likelihood): fixed parameters, then the maximum-likelihood fit.
 # simple_differencing=True: the likelihood of the differenced series, which is what Simple Viz maximizes.
 sa = SARIMAX(s, order=(1, 1, 1), seasonal_order=(0, 1, 1, 12), simple_differencing=True)

@@ -140,6 +140,20 @@ describe('statistics vs SciPy / statsmodels', () => {
     expect(f.params.phi).toBeLessThanOrEqual(0.98)
   })
 
+  it('Multiplicative trend (with an additive or a multiplicative season): same recursion and forecasts as statsmodels', async () => {
+    const y = (await run('SELECT sales FROM series ORDER BY month')).map((r) => Number(r.sales))
+    for (const key of ['hw_multrend_add', 'hw_multrend_mul']) {
+      const h = ref[key]
+      const p = { alpha: h.params.alpha, beta: h.params.beta, gamma: h.params.gamma, l0: h.init.initial_level, b0: h.init.initial_trend, s0: h.init.initial_seasonal, multTrend: true, ...(key.endsWith('mul') ? { mult: true } : {}) }
+      etsFilter(y, p, 12).fitted.forEach((v, i) => close(v, h.fitted[i], 1e-9))
+      const fc = etsForecast(y, p, 12, 6, 0.95, 16).forecast
+      fc.forEach((v, i) => close(v.mean, h.forecast[i], 1e-9))
+      for (const v of fc) expect(v.lo < v.mean && v.mean < v.hi).toBe(true)
+    }
+    const r = await runAnalysis({ kind: 'forecast', dataset: 'series', date: 'month', y: 'sales', grain: 'month', horizon: 6 }, run)
+    expect(r.tables[1].rows.map((row) => row[0])).toEqual(expect.arrayContaining(['Multiplicative trend', 'Multiplicative trend and season']))
+  })
+
   it('Seasonal ARIMA: exact likelihood, forecasts and intervals as statsmodels SARIMAX; a maximum-likelihood fit as good', async () => {
     const y = (await run('SELECT sales FROM series ORDER BY month')).map((r) => Number(r.sales))
     const s = ref.sarima_fixed

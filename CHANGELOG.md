@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Forecasting.** Damped trends in exponential smoothing; seasonal ARIMA in Analytics, with the orders chosen
+- **Forecasting.** Damped and multiplicative trends in exponential smoothing; seasonal ARIMA in Analytics, with the orders chosen
   stepwise by AICc and estimated by exact maximum likelihood (checked against statsmodels and R's airline model).
 - **Sets.** Sets computed from a condition or the top N by a measure (after context filters, as in Tableau), and
   combined sets.
