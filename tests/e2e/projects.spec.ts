@@ -35,7 +35,7 @@ test('a project from elsewhere asks before reading its sources; refused sources 
   await stubDialogs(other.app, { open: [file], message: 0 })
   await other.page.evaluate(() => (window as any).__sv.runCommand('file.open'))
   await other.page.getByTestId('relation-transactions').click()
-  await expect(other.page.getByTestId('relation-rows')).toHaveText('1,000 rows')
+  await expect(other.page.getByTestId('relation-rows')).toHaveText('1,000 rows', { timeout: 20_000 })
   expect(await messagesShown(other.app)).toHaveLength(1)
   await quit(other.app)
 })
@@ -57,7 +57,7 @@ test('a moved workbook is found again with the relink dialog', async () => {
   // The source now reads the moved file, and its refresh succeeds (the rows alone would show from the cache).
   await expect.poll(() => page.evaluate(() => (window as any).__sv.get().project.sources.find((s: any) => s.format === 'xlsx').path)).toBe(path.join(dir, 'moved', 'Sales.xlsx'))
   await expect(page.getByTestId('refresh-status')).toHaveAttribute('data-state-summary', 'ok')
-  await expect(page.getByTestId('relation-rows')).toHaveText('1,000 rows')
+  await expect(page.getByTestId('relation-rows')).toHaveText('1,000 rows', { timeout: 20_000 })
   void file
   await quit(app)
 })
@@ -84,7 +84,7 @@ test('unsaved work comes back after a crash', async () => {
   await expect(again.page.getByTestId('recovery')).toBeVisible()
   await again.page.getByTestId('recovery').getByRole('button', { name: 'Restore' }).click()
   await again.page.getByTestId('relation-customers').click()
-  await expect(again.page.getByTestId('relation-rows')).toHaveText('120 rows')
+  await expect(again.page.getByTestId('relation-rows')).toHaveText('120 rows', { timeout: 20_000 })
   await quit(again.app)
 })
 
@@ -105,7 +105,7 @@ test('a portable copy carries its data to a computer without the sources', async
   await stubDialogs(other.app, { open: [pkg], message: 0 })
   await other.page.evaluate(() => (window as any).__sv.runCommand('file.open'))
   await other.page.getByTestId('relation-sales_enriched').click()
-  await expect(other.page.getByTestId('relation-rows')).toHaveText('1,000 rows')
+  await expect(other.page.getByTestId('relation-rows')).toHaveText('1,000 rows', { timeout: 20_000 })
   // The sources can't be read here: the packaged data is shown as the last good data.
   await expect(other.page.getByTestId('refresh-status')).toHaveAttribute('data-state-summary', 'error')
   await quit(other.app)

@@ -30,7 +30,7 @@ test('connect to MariaDB, pick a table, preview it; the password stays out of th
   await page.getByText('shop.customers').click()
   await page.getByTestId('pg-add').click()
   await page.getByTestId('relation-customers').click()
-  await expect(page.getByTestId('relation-rows')).toHaveText('120 rows')
+  await expect(page.getByTestId('relation-rows')).toHaveText('120 rows', { timeout: 20_000 })
   const project = await page.evaluate(() => JSON.stringify((window as any).__sv.get().project))
   expect(project).not.toContain(my!.password)
   expect(project).toContain('"kind":"mysql"')

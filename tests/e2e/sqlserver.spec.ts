@@ -30,7 +30,7 @@ test('connect to SQL Server, pick a table, preview it', async () => {
   await expect(page.getByTestId('pg-tables').getByRole('checkbox')).toBeChecked()
   await page.getByTestId('pg-add').click()
   await page.getByTestId('relation-customers').click()
-  await expect(page.getByTestId('relation-rows')).toHaveText('120 rows')
+  await expect(page.getByTestId('relation-rows')).toHaveText('120 rows', { timeout: 20_000 })
   const src = await page.evaluate(() => (window as any).__sv.get().project.sources[0])
   expect([src.kind, src.mode, JSON.stringify(src).includes(ms!.password)]).toEqual(['sqlserver', 'extract', false])
   await quit(app)

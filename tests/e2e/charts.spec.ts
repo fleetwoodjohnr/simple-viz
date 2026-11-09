@@ -155,12 +155,13 @@ test('quick table calculation computed along a chosen dimension', async () => {
   await addField(page, 'region', 'x')
   await addField(page, 'revenue', 'y')
   await page.getByTestId('field-segment').dragTo(page.getByTestId('shelf-color'))
+  // Submenus by keyboard: in a small window they reposition while opening, so a click may never find them still.
   await page.getByTestId('pill-y-0').click()
-  await page.getByRole('menuitem', { name: 'Quick calculation' }).click()
-  await page.getByRole('menuitemcheckbox', { name: 'Running total' }).click()
+  await page.getByRole('menuitem', { name: 'Quick calculation' }).press('ArrowRight')
+  await page.getByRole('menuitemcheckbox', { name: 'Running total' }).press('Enter')
   await page.getByTestId('pill-y-0').click()
-  await page.getByRole('menuitem', { name: 'Compute using' }).click()
-  await page.getByTestId('compute-using-segment').click()
+  await page.getByRole('menuitem', { name: 'Compute using' }).press('ArrowRight')
+  await page.getByTestId('compute-using-segment').press('Enter')
   // Along segment within each region: the last segment's value is the region's total.
   const totals = await sql(page, 'SELECT region, sum(revenue) AS r FROM sales_enriched GROUP BY 1')
   const last = await sql(page, 'SELECT max(segment) AS s FROM sales_enriched')

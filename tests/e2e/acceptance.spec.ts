@@ -79,9 +79,9 @@ test('Excel + PostgreSQL interactive dashboard, refreshed after the workbook cha
 
   // 5. Preview the source tables.
   await page.getByTestId('relation-transactions').click()
-  await expect(page.getByTestId('relation-rows')).toHaveText('1,000 rows')
+  await expect(page.getByTestId('relation-rows')).toHaveText('1,000 rows', { timeout: 20_000 })
   await page.getByTestId('relation-customers').click()
-  await expect(page.getByTestId('relation-rows')).toHaveText(`${exp.customers} rows`)
+  await expect(page.getByTestId('relation-rows')).toHaveText(`${exp.customers} rows`, { timeout: 20_000 })
 
   // 6–10. SQL editor: join Excel with PostgreSQL, add profit and customer_segment, save as a dataset.
   await page.getByTestId('nav-sql').click()

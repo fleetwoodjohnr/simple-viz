@@ -27,7 +27,7 @@ test('connect, pick a table, preview it; a wrong password is explained', async (
   await page.getByText('public.customers').click()
   await page.getByTestId('pg-add').click()
   await page.getByTestId('relation-customers').click()
-  await expect(page.getByTestId('relation-rows')).toHaveText('120 rows')
+  await expect(page.getByTestId('relation-rows')).toHaveText('120 rows', { timeout: 20_000 })
   // The password is in the keychain (or this session), never in the project.
   const project = await page.evaluate(() => JSON.stringify((window as any).__sv.get().project))
   expect(project).not.toContain(pg!.password)

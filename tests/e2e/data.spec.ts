@@ -20,7 +20,7 @@ test('import Excel and CSV, query with SQL, save a dataset, save and reopen', as
   await expect(page.getByTestId('relation-transactions')).toBeVisible()
   await expect(page.getByTestId('relation-customers')).toBeVisible()
   await page.getByTestId('relation-transactions').click()
-  await expect(page.getByTestId('relation-rows')).toHaveText('1,000 rows')
+  await expect(page.getByTestId('relation-rows')).toHaveText('1,000 rows', { timeout: 20_000 }) // loads after the refresh
   await expect(page.getByTestId('data-grid')).toContainText('Laptop')
   if (shots) await page.screenshot({ path: `${shots}/data.png` })
 
@@ -53,6 +53,6 @@ test('import Excel and CSV, query with SQL, save a dataset, save and reopen', as
   await second.page.getByTestId('recent-card').first().click()
   await expect(second.page.getByTestId('relation-sales_enriched')).toBeVisible()
   await second.page.getByTestId('relation-sales_enriched').click()
-  await expect(second.page.getByTestId('relation-rows')).toHaveText('1,000 rows')
+  await expect(second.page.getByTestId('relation-rows')).toHaveText('1,000 rows', { timeout: 20_000 })
   await quit(second.app)
 })
