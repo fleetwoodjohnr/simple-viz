@@ -76,6 +76,8 @@ export interface FileSource extends SourceBase {
   remote?: RemoteOptions
   /** CSV/TSV: first row holds column names (default true). Spreadsheets: same, per table. */
   header?: boolean
+  /** A password-protected workbook: its password is in the system keychain (never in the project). */
+  encrypted?: boolean
 }
 
 export interface DbSource extends SourceBase {

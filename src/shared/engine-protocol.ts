@@ -104,7 +104,7 @@ export type ControlRequest =
   | { op: 'refresh'; sourceIds?: string[]; force?: boolean }
   | { op: 'export'; sql: string; format: 'csv' | 'parquet'; file: string }
   | { op: 'tables'; source: ResolvedSource }
-  | { op: 'sheets'; path: string; format: FileFormat }
+  | { op: 'sheets'; path: string; format: FileFormat; password?: string }
   /** Each table's cached copy as Parquet (for a portable package); returns the staged files by `sourceId__alias`. */
   | { op: 'package'; tables: { sourceId: string; ref?: string; alias: string }[] }
 

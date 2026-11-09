@@ -139,7 +139,7 @@ export async function enterPassword(sourceId: string) {
   const src = get().project?.sources.find((s) => s.id === sourceId)
   if (!src) return
   const { askText } = await import('../app/Dialogs')
-  const pw = await askText(`Password for ${src.name}`, `Password for ${'user' in src && src.user ? src.user : 'the database user'}`, '', true)
+  const pw = await askText(`Password for ${src.name}`, src.kind === 'file' ? 'Workbook password' : `Password for ${'user' in src && src.user ? src.user : 'the database user'}`, '', true)
   if (pw === null) return
   await api().credentialSet(sourceId, pw)
   await configureEngine()
@@ -399,7 +399,9 @@ export async function addFiles(paths: string[]) {
         if (tables.length === 1 || (sheets.length === 1 && tables.every((t) => t.kind === 'sheet'))) addSource(fileSource(path, format, [tables[0].ref]))
         else set({ dialog: { kind: 'sheet-picker', path } })
       } catch (e) {
-        toast(`${name}: ${(e as Error).message}`, 'error')
+        // A password-protected workbook: the sheet picker asks for the password.
+        if (/protected with a password/i.test((e as Error).message)) set({ dialog: { kind: 'sheet-picker', path } })
+        else toast(`${name}: ${(e as Error).message}`, 'error')
       }
       continue
     }

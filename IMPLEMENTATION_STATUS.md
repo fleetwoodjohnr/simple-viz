@@ -225,7 +225,7 @@ Details per source, and what isn't supported (with reasons): [docs/CONNECTORS.md
 
 ### Known limitations
 
-- Excel 95 `.xls`, password-protected workbooks, Redshift, Snowflake, BigQuery, Databricks, Athena, Oracle, Google
+- Excel 95 `.xls`, password-protected .xls and Excel 2007 workbooks, Redshift, Snowflake, BigQuery, Databricks, Athena, Oracle, Google
   Sheets, ODBC/JDBC: not supported (reasons in docs/CONNECTORS.md).
 - SQL Server, ClickHouse and Trino are extract only. S3-compatible services other than the S3 emulator (MinIO, R2, GCS) use the same code but
   weren't tested against the services themselves.
@@ -248,6 +248,8 @@ saved views, stories, HTML export, calculated fields, top-N filters and role-pla
 in regression, multiplicative seasonality, `.xlsb` files.
 
 Also done: viz in tooltip.
+
+Also done: password-protected workbooks (Excel 2010+ Agile Encryption; the password asked for in the sheet list, kept in the keychain, checked against the file's verifier, decrypted in memory) — unit `decrypt` (decrypts msoffcrypto-tool's encryption to the original bytes), integration `formats`, e2e `arrow`.
 
 Also done: tables found inside messy sheets (Data Interpreter): titles and notes left out, several tables per sheet, headers found, offered and picked in the sheet list as cell ranges — unit `sheets`, e2e `arrow` (`messy.xlsx`).
 

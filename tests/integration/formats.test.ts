@@ -1,7 +1,7 @@
 // Arrow, Feather, ordinary XML and Excel 97–2003 files as sources: extracted into the cache with their types.
 import { it, expect } from 'vitest'
 import path from 'node:path'
-import { bootEngine, fileSource, rows, root } from './helpers'
+import { bootEngine, fileSource, rows, root, expected } from './helpers'
 
 const arrow = (n: string) => path.join(root, 'tests', 'fixtures', 'arrow', n)
 
@@ -83,4 +83,20 @@ it('a portable package: tables are packaged as Parquet and seed a new cache when
   expect(Number((await rows(b, 'SELECT count(*) AS n FROM customers'))[0].n)).toBe(120)
   expect(b.statuses()[0].state).toBe('error') // the source itself is missing: the packaged copy is the last good data
   b.close()
+})
+
+it('reads a password-protected workbook with its password; without it, asks for it', async () => {
+  const file = path.join(root, 'tests', 'fixtures', 'Sales-encrypted.xlsx')
+  const src = (password?: string) => ({ ...fileSource('enc', file, 'xlsx', [{ alias: 'transactions', ref: 'Transactions' }]), password })
+  const { engine } = await bootEngine([src('sv-secret')])
+  expect(engine.statuses()[0].state).toBe('ok')
+  const [r] = await rows(engine, 'SELECT count(*) AS n, round(sum(revenue), 2) AS revenue FROM transactions')
+  expect(Number(r.n)).toBe(1000)
+  expect(Math.abs(Number(r.revenue) - expected().v1.revenue)).toBeLessThan(0.01)
+  await engine.close()
+  for (const [pw, msg] of [[undefined, 'This workbook is protected with a password. Enter it to read the workbook.'], ['nope', 'The password is wrong.']] as const) {
+    const { engine: e } = await bootEngine([src(pw)])
+    expect(e.statuses()[0]).toMatchObject({ state: 'error', error: msg, auth: true })
+    await e.close()
+  }
 })

@@ -38,6 +38,7 @@ npm run geo                                      # bundled maps and places (Natu
 .venv/bin/python scripts/xlsb-ref.py            # .xlsb reference values (pyxlsb) for tests/fixtures/xlsb
 .venv/bin/python scripts/xls-fixtures.py         # .xls workbook and xlrd reference values (xlwt, xlrd, openpyxl)
 .venv/bin/python scripts/spatial-ref.py          # shapefiles (pyshp) and KML/KMZ for tests/fixtures/spatial
+.venv/bin/python scripts/encrypted-fixture.py    # Sales.xlsx with a password (msoffcrypto-tool)
 node scripts/fetch-duckdb-extensions.ts --update-lock   # after a DuckDB upgrade: pin new extension hashes (review the diff)
 ```
 

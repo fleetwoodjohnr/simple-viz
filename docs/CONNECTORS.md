@@ -25,6 +25,11 @@ before it reads any file, server or address it hasn't been allowed to read befor
 Local files are watched: when a workbook is saved, the project refreshes (spreadsheet apps save by replacing the file;
 the folder is watched). Large files are fine — extracts live in a local DuckDB cache, and charts query aggregates.
 
+Password-protected workbooks (.xlsx, .xlsm, .xlsb from Excel 2010 on; ECMA-376 Agile Encryption) are read when the
+password is entered: the sheet list asks for it, it is kept in the system keychain with the source (never in the
+project), the workbook is decrypted in memory only, and a wrong password asks again. Tested against workbooks
+encrypted by msoffcrypto-tool (unit `decrypt`, integration `formats`, e2e `arrow`).
+
 ## Files on the web and in cloud storage
 
 | Where | Address | Credentials | Tested by |
@@ -57,7 +62,7 @@ the password again.
 | Source | Why | Instead |
 |---|---|---|
 | Excel 95 and older (.xls BIFF5) | Old 8-bit format | Save as .xlsx |
-| Password-protected workbooks | The file is encrypted | Remove the password in Excel |
+| Password-protected .xls (Excel 97–2003) and Excel 2007 workbooks | Older encryption schemes (RC4, Standard) | Open in Excel and save as .xlsx (Excel 2010 and later encryption is read) |
 | Amazon Redshift | The postgres extension relies on server features Redshift lacks; untested | Unload to S3 (Parquet) and read from S3 |
 | Snowflake, BigQuery, Databricks, Athena, Oracle | Each needs its own driver or API and authentication (often OAuth), none bundled yet | Export to Parquet/CSV in cloud storage and read it from there; Athena and Starburst Galaxy users can connect through Trino |
 | Google Sheets | Needs OAuth sign-in | Publish to the web as CSV and add its address |

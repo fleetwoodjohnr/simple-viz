@@ -711,7 +711,7 @@ function castExpr(col: string, ty: string): string | null {
   return isSafeType(t) ? `TRY_CAST(${ident(col)} AS ${t})` : null
 }
 
-const isAuthError = (e: unknown) => /password authentication failed|no password supplied|authentication failed|password is required|Access denied for user|Login failed for user/i.test(String((e as Error)?.message ?? e))
+const isAuthError = (e: unknown) => /password authentication failed|no password supplied|authentication failed|password is required|Access denied for user|Login failed for user|protected with a password|password is wrong/i.test(String((e as Error)?.message ?? e))
 
 function splitRef(ref: string | undefined, s: ResolvedSource): [string | null, string] {
   const r = ref ?? ''

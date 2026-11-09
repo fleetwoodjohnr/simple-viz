@@ -44,7 +44,7 @@ async function control(m: ControlMessage): Promise<unknown> {
     case 'tables':
       return (await Engine.probe(m.source, extensionsDir)).tables
     case 'sheets': {
-      return fileTables(new Uint8Array(await fs.readFile(m.path)), m.format as SheetFormat)
+      return fileTables(new Uint8Array(await fs.readFile(m.path)), m.format as SheetFormat, m.password)
     }
   }
 }

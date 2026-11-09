@@ -65,6 +65,13 @@ URL-encoded into the address, and only `http:`, `https:` and `mailto:` addresses
 the page and again in the main process). A **portable copy** (File → Save a Portable Copy) contains the tables' data itself: share it as you would the
 data.
 
+## Password-protected workbooks
+
+A workbook's password is asked for when it is added and kept only in the system keychain, keyed by the source (like
+database passwords). Decryption (AES with SHA-512 key derivation, [MS-OFFCRYPTO] Agile Encryption) runs in the engine
+process, in memory; the decrypted workbook is never written to disk (only the extracted table, in the cache, as for
+any workbook). The password check uses the file's verifier, so a wrong password is reported, not mistaken for damage.
+
 ## Network
 
 Simple Viz contacts only the databases and web/cloud addresses the user adds and, once a day if enabled, GitHub's

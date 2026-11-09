@@ -160,7 +160,7 @@ async function resolveSource(s: Source, settings: Settings): Promise<ResolvedSou
     const r = s.remote ?? { provider: 'http' as const }
     return { ...base, format: s.format, path: s.path, header: s.header, remote: { provider: r.provider, region: r.region, endpoint: r.endpoint, urlStyle: r.urlStyle, useSsl: r.useSsl, keyId: r.keyId }, password: r.hasSecret ? await creds.getPassword(s.id) : undefined }
   }
-  if (s.kind === 'file') return { ...base, format: s.format, path: path.resolve(s.path), header: s.header }
+  if (s.kind === 'file') return { ...base, format: s.format, path: path.resolve(s.path), header: s.header, password: s.encrypted ? await creds.getPassword(s.id) : undefined }
   return {
     ...base,
     mode: s.mode === 'live' && !extractOnly(s.kind) ? 'live' : 'extract',
@@ -511,11 +511,12 @@ function registerIpc() {
     return creds.setPassword(id, password as string | null)
   })
   handle('credential:status', () => creds.backend())
-  handle('sheet:tables', (_e, p: unknown) => {
+  handle('sheet:tables', (_e, p: unknown, password?: unknown) => {
     const file = assertGranted(p)
     const format = FILE_FORMATS[extOf(file)]
     if (!isSheetFormat(format)) throw new Error('Not a spreadsheet')
-    return engine.request({ op: 'sheets', path: file, format })
+    if (password !== undefined && (typeof password !== 'string' || password.length > 1000)) throw new Error('Invalid password')
+    return engine.request({ op: 'sheets', path: file, format, password })
   })
 
   handle('pdf:export', async (e) => {

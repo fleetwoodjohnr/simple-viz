@@ -16,9 +16,14 @@ export function SheetPicker({ path }: { path: string }) {
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [range, setRange] = useState('')
   const [error, setError] = useState('')
+  // A password-protected workbook: asked for, used to list its sheets, then kept in the keychain with the source.
+  const [password, setPassword] = useState<string | null>(null)
+  const [typed, setTyped] = useState('')
   const name = path.split(/[\\/]/).pop()!
+  const needsPassword = /protected with a password|password is wrong/i.test(error)
   useEffect(() => {
-    window.simpleViz.sheetTables(path).then(
+    setError('')
+    window.simpleViz.sheetTables(path, password ?? undefined).then(
       (t) => {
         setTables(t)
         // Excel tables are the cleanest data when present; otherwise every sheet, or the tables found inside a sheet that
@@ -27,20 +32,33 @@ export function SheetPicker({ path }: { path: string }) {
         const found = (sheet: string) => t.filter((x) => x.kind === 'detected' && x.sheet === sheet)
         setPicked(new Set((tbls.length ? tbls : t.filter((x) => x.kind === 'sheet').flatMap((x) => (found(x.ref).length ? found(x.ref) : [x]))).map((x) => x.ref)))
       },
-      (e: Error) => setError(e.message)
+      (e: Error) => setError(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
     )
-  }, [path])
+  }, [path, password])
   const toggle = (ref: string) => setPicked((s) => (s.has(ref) ? new Set([...s].filter((x) => x !== ref)) : new Set([...s, ref])))
   const refs = [...picked, ...(range.trim() ? [range.trim()] : [])]
-  const add = () => {
+  const add = async () => {
     const ext = name.split('.').pop()!.toLowerCase()
-    P.addSource(P.fileSource(path, FILE_FORMATS[ext], refs))
+    const src = P.fileSource(path, FILE_FORMATS[ext], refs)
+    if (password) await window.simpleViz.credentialSet(src.id, password)
+    P.addSource(password ? { ...src, encrypted: true } : src)
     close()
   }
   const icon = { sheet: <FileSpreadsheet className="size-4 text-text-3" />, table: <Table2 className="size-4 text-text-3" />, name: <Tag className="size-4 text-text-3" />, detected: <Sparkles className="size-4 text-text-3" /> }
   return (
     <Modal open onOpenChange={(o) => !o && close()} title={`Add data from ${name}`} description="Choose the sheets, Excel tables or named ranges to use. Each becomes a table you can query with SQL." width={520} footer={<><Btn onClick={close}>Cancel</Btn><Btn variant="primary" disabled={!refs.length} onClick={add} data-testid="sheet-add">Add {refs.length || ''}</Btn></>}>
-      {error ? (
+      {needsPassword ? (
+        <form className="space-y-2" onSubmit={(e) => (e.preventDefault(), setPassword(typed))}>
+          <p className="text-[13px] text-text-2">{error}</p>
+          <div className="flex gap-2">
+            <input type="password" autoFocus aria-label="Workbook password" className={inputCls} value={typed} onChange={(e) => setTyped(e.target.value)} data-testid="workbook-password" />
+            <Btn type="submit" variant="primary" disabled={!typed} data-testid="workbook-unlock">
+              Open
+            </Btn>
+          </div>
+          <p className="text-[11.5px] text-text-3">The password is kept in your system keychain, never in the project file.</p>
+        </form>
+      ) : error ? (
         <p className="text-[13px] text-danger">{error}</p>
       ) : !tables ? (
         <div className="flex items-center gap-2 py-6 text-[13px] text-text-3"><Loader2 className="size-4 animate-spin" /> Reading the workbook…</div>

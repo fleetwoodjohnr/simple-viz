@@ -8,6 +8,7 @@ import type { ResolvedSource } from '../shared/engine-protocol'
 import { isServer, isRemotePath } from '../shared/project'
 import { readArrow } from './arrow'
 import { stageSqlServer } from './sqlserver'
+import { decryptWorkbook, isEncryptedWorkbook } from './decrypt'
 import { stageWarehouse } from './warehouses'
 import { isSpreadsheetXml, xmlRecords, xmlTables } from '../core/xmlrows'
 import { listTables } from '../core/sheets/rows'
@@ -84,7 +85,7 @@ export async function extractSelect(conn: DuckDBConnection, s: ResolvedSource, r
 async function stageSheet(conn: DuckDBConnection, s: ResolvedSource, ref: string | undefined, memo: Memo) {
   memo.book ??= (async () => {
     const bytes = isRemotePath(s.path) ? await readBytes(conn, s.path!) : await readLocal(s.path!)
-    return readWorkbook(bytes, s.format as SheetFormat)
+    return readWorkbook(isEncryptedWorkbook(bytes) ? decryptWorkbook(bytes, s.password) : bytes, s.format as SheetFormat)
   })()
   const table = tableRows(await memo.book, ref, s.header !== false)
   if (!table.columns.length) throw new Error(`“${ref ?? 'The first sheet'}” is empty.`)
@@ -135,7 +136,8 @@ export async function readBytes(conn: DuckDBConnection, url: string): Promise<Ui
 }
 
 /** The tables a file offers (sheet picker, connection dialog): sheets and named tables, or an XML file's records. */
-export async function fileTables(bytes: Uint8Array, format: SheetFormat) {
+export async function fileTables(bytes: Uint8Array, format: SheetFormat, password?: string) {
+  if (isEncryptedWorkbook(bytes)) bytes = decryptWorkbook(bytes, password)
   if (format === 'xml2003') {
     const text = new TextDecoder().decode(bytes)
     if (!isSpreadsheetXml(text)) return xmlTables(text)
