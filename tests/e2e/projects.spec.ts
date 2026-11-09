@@ -1,6 +1,6 @@
 // A project's life outside one session: opened on another computer (it asks before reading sources), files moved
 // (relink), and unsaved work after a crash (recovery).
-import { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect, launch, quit, salesProject, tempDir, stubDialogs, messagesShown, MOD } from './helpers'
 
@@ -79,4 +79,27 @@ test('unsaved work comes back after a crash', async () => {
   await again.page.getByTestId('relation-customers').click()
   await expect(again.page.getByTestId('relation-rows')).toHaveText('120 rows')
   await quit(again.app)
+})
+
+test('a portable copy carries its data to a computer without the sources', async () => {
+  test.setTimeout(180_000)
+  const dir = tempDir()
+  const { app, page } = await launch()
+  await salesProject(app, page, dir)
+  const pkg = path.join(tempDir(), 'sales (with data).sviz')
+  await stubDialogs(app, { save: pkg })
+  await page.evaluate(() => (window as any).__sv.runCommand('file.savePortable'))
+  await expect(page.getByText(/Saved a portable copy with the data of 2 tables/)).toBeVisible()
+  await quit(app)
+  // Another computer: the workbook and the CSV aren't there.
+  rmSync(path.join(dir, 'Sales.xlsx'))
+  rmSync(path.join(dir, 'customers.csv'))
+  const other = await launch()
+  await stubDialogs(other.app, { open: [pkg], message: 0 })
+  await other.page.evaluate(() => (window as any).__sv.runCommand('file.open'))
+  await other.page.getByTestId('relation-sales_enriched').click()
+  await expect(other.page.getByTestId('relation-rows')).toHaveText('1,000 rows')
+  // The sources can't be read here: the packaged data is shown as the last good data.
+  await expect(other.page.getByTestId('refresh-status')).toHaveAttribute('data-state-summary', 'error')
+  await quit(other.app)
 })

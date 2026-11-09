@@ -10,17 +10,24 @@ src/main/        Electron main process: window, secure IPC (validated arguments;
                  settings/recents/recovery (store.ts), updater, credentials (OS keychain), file watching,
                  engine-host.ts (starts the engine, restarts it, hands the window a port to it)
 src/engine/      The engine, in an Electron utility process: DuckDB (@duckdb/node-api), locked down at boot.
-                 engine.ts (boot, sandbox, SQL gate, queries, paging, refresh), ingest.ts (files, spreadsheets, databases)
+                 engine.ts (boot, sandbox, SQL gate, queries, paging, refresh, portable packages), ingest.ts (files,
+                 spreadsheets, XML, web/cloud files, databases), arrow.ts (Arrow/Feather, LZ4), sqlserver.ts (tedious)
 src/preload/     contextBridge API (window.simpleViz) and the engine port handoff
 src/shared/      Typed contracts: ipc-types.ts (main ⇄ renderer), engine-protocol.ts (engine messages + validators),
                  project.ts (the .sviz project model)
 src/core/        Pure TypeScript, unit-tested: sql/ (AST walk for the gate and lineage, SQL text scanners), project/
-                 (.sviz pack, unpack, migrations), calc/ (Tableau function macros), profile.ts, errors.ts,
-                 sheets/ (spreadsheet readers and the XLSX writer, copied from Simple Cell; see its README)
-src/renderer/    React UI: app/ (Home, Data, SQL editor, dialogs, commands), state/ (zustand store, project lifecycle,
-                 engine client), ui/ (Radix-based kit from Simple Cell, virtualized DataGrid)
-tests/           unit/ (vitest) · integration/ (real DuckDB, real files, PostgreSQL in podman or a CI service) ·
-                 e2e/ (Playwright drives the real app, also the packaged one) · fixtures/ (npm run fixtures)
+                 (.sviz pack, unpack, migrations), calc/ (calculated fields: Tableau syntax, LOD, table calculations,
+                 macros), query/ (chart and model query compilers), charts/ (chart plugins → ECharts options, maps,
+                 bundled Natural Earth GeoJSON), stats/ (statistics, regression, forecasting, clustering), transform.ts
+                 (visual steps → SQL), dashboard.ts (layout, actions), xmlrows.ts, profile.ts, errors.ts,
+                 sheets/ (spreadsheet readers incl. the .xls (BIFF8) reader, and the XLSX writer; from Simple Cell)
+src/renderer/    React UI: app/ (Home, Data with models and transforms, SQL editor, Charts, Dashboards, Analytics,
+                 dialogs, commands), state/ (zustand store, project lifecycle, engine client), ui/ (Radix-based kit from
+                 Simple Cell, virtualized DataGrid)
+tests/           unit/ (vitest) · integration/ (real DuckDB, real files; PostgreSQL, MariaDB, SQL Server, S3Mock and
+                 Azurite in podman) · e2e/ (Playwright drives the real app, also the packaged one; axe accessibility
+                 audit) · perf/ (npm run bench) · fixtures/ (npm run fixtures; reference values from SciPy, statsmodels,
+                 pyarrow and xlrd)
 ```
 
 ## Processes
@@ -62,6 +69,17 @@ modification time are unchanged are not read again. Datasets are views, so deriv
 (zip-bomb limits, no DOCTYPE, macros never run), then typed from every row and appended to DuckDB. One code path for all
 spreadsheet formats, sheets, Excel tables, named ranges and `Sheet!A1:D9` ranges.
 
+**Charts compile to SQL.** A chart is a dataset, field encodings, filters and options. `core/query/compile.ts` turns it
+into one SQL query with Tableau's order of operations (context filters, FIXED, dimension filters and top N,
+INCLUDE/EXCLUDE, aggregation, measure filters, table calculations) and at most 20,000 marks; a chart over a model
+(`core/query/model.ts`) aggregates each fact table at the view's grain before combining them, so relationships never
+double count. A plugin (`core/charts/`) turns the result into an ECharts option; analyses that need every row
+(histograms, density, correlations, cohorts) wrap the query in SQL that aggregates. Statistics follow the same rule:
+sufficient statistics in SQL over every row, a reproducible sample only for iterative fits (`core/stats/`).
+
+**Spreadsheets without conversion.** `.xls` is read by a BIFF8 reader in the sheet core, Arrow/Feather by Apache
+Arrow's JS library, other XML by `core/xmlrows.ts`; there is no LibreOffice or other external converter.
+
 **CodeMirror 6 for SQL.** The suite's editor; schema-aware completion from `@codemirror/lang-sql`; no CSP relaxation.
 
 ## Security
@@ -76,7 +94,10 @@ user has not approved.
 | Component | License |
 |---|---|
 | Electron, React, Radix UI, zustand, Tailwind CSS, fflate, @xmldom/xmldom, CodeMirror 6, sql-formatter | MIT |
-| DuckDB, @duckdb/node-api, DuckDB postgres and sqlite extensions | MIT |
+| DuckDB, @duckdb/node-api, DuckDB postgres, sqlite, mysql, httpfs and azure extensions | MIT |
+| tedious (SQL Server driver) and its Azure identity dependencies | MIT |
+| Apache Arrow (JS) | Apache-2.0 |
+| Natural Earth map data | Public domain |
 | Apache ECharts | Apache-2.0 |
 | lucide-react | ISC |
 | Inter | SIL OFL 1.1 |

@@ -22,7 +22,7 @@ and [Simple Cell](https://github.com/fleetwoodjohnr/simple-cell).
 - **Always current.** When a project opens, Simple Viz checks every source; edited spreadsheets and changed tables are
   re-read, and everything built on them recalculates. If a source is unavailable you see the last good data, clearly
   marked.
-- **Charts and dashboards.** Over 35 chart types — from bars and lines to waterfalls, sankeys, Gantt charts, cohorts,
+- **Charts and dashboards.** 33 chart types — from bars and lines to waterfalls, sankeys, Gantt charts, cohorts,
   violins, maps of countries or states (or your own GeoJSON) and small multiples. Drag fields to build charts, with calculated fields that follow Tableau's rules (level of
   detail, table calculations). Put charts on a dashboard: clicking one filters the others; filters, drill-down, text
   that shows the current selection; export to PDF or PNG.
@@ -32,12 +32,17 @@ and [Simple Cell](https://github.com/fleetwoodjohnr/simple-cell).
 - **Private.** No account, no telemetry. Passwords live in your system keychain, never in project files. Queries only
   read: your files and databases are never changed.
 
-## Build from source
+## Documentation
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) — set up, test, definition of done
 - [ARCHITECTURE.md](ARCHITECTURE.md) — processes, engine, key decisions
 - [docs/SECURITY.md](docs/SECURITY.md) — threat model and protections
 - [docs/CONNECTORS.md](docs/CONNECTORS.md) — every source, how it's read and tested, and what isn't supported yet
+- [docs/SQL.md](docs/SQL.md) and [docs/CALCULATIONS.md](docs/CALCULATIONS.md) — writing queries and calculated fields
+- [docs/TABLEAU_PARITY.md](docs/TABLEAU_PARITY.md) — what Simple Viz does compared with Tableau, with sources
+- [docs/PROJECT_FORMAT.md](docs/PROJECT_FORMAT.md) — the `.sviz` file, portable copies, migrations
+- [docs/PERFORMANCE_BENCHMARKS.md](docs/PERFORMANCE_BENCHMARKS.md) — timings at 10 thousand to 10 million rows
+- [docs/BUILD_AND_RELEASE.md](docs/BUILD_AND_RELEASE.md) — building, testing, signing and releasing
 
 ## License
 
