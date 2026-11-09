@@ -169,6 +169,24 @@ test('quick table calculation computed along a chosen dimension', async () => {
     const s = await chartSeries(page)
     return totals.every((t) => Math.abs((s.series[String(last[0].s)][s.categories.indexOf(String(t.region))] ?? NaN) - Number(t.r)) < 0.01)
   }).toBe(true)
+  // Along segment, then region: one running total through every mark, so the last mark is the grand total.
+  await page.getByTestId('pill-y-0').click()
+  await page.getByRole('menuitem', { name: 'Compute using' }).press('ArrowRight')
+  await page.getByTestId('compute-using-region').press('Enter')
+  const [all] = await sql(page, 'SELECT sum(revenue) AS r, max(region) AS lastRegion FROM sales_enriched')
+  const lastMark = async () => {
+    const s = await chartSeries(page)
+    return s.series[String(last[0].s)][s.categories.indexOf(String(all.lastRegion))]
+  }
+  await expect.poll(async () => Math.abs((await lastMark()) - Number(all.r)) < 0.01).toBe(true)
+  expect(await page.evaluate(() => (window as any).__sv.get().project.charts[0].enc.y[0].computeUsing)).toEqual(['segment', 'region'])
+  // …restarting every segment: back to a total per segment.
+  await page.getByTestId('pill-y-0').click()
+  await page.getByRole('menuitem', { name: 'Compute using' }).press('ArrowRight')
+  await page.getByRole('menuitem', { name: 'Restarting every' }).press('ArrowRight')
+  await page.getByTestId('restart-every-segment').press('Enter')
+  const [seg] = await sql(page, `SELECT sum(revenue) AS r FROM sales_enriched WHERE segment = (SELECT max(segment) FROM sales_enriched)`)
+  await expect.poll(async () => Math.abs((await lastMark()) - Number(seg.r)) < 0.01).toBe(true)
   await quit(app)
 })
 

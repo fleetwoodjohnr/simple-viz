@@ -562,11 +562,29 @@ function Pill({ r, role, index, chart, field }: { r: FieldRef; role: Role; index
             <MenuCheck checked={!r.computeUsing?.length} onCheckedChange={() => patch({ computeUsing: undefined })}>
               Along the x axis (default)
             </MenuCheck>
-            {chartDims(chart).map((f) => (
-              <MenuCheck key={f} checked={r.computeUsing?.[0] === f} onCheckedChange={() => patch({ computeUsing: [f] })} data-testid={`compute-using-${f}`}>
-                Along {f}
-              </MenuCheck>
-            ))}
+            {/* Several can be chosen: the order they are chosen in is the order the calculation walks them. */}
+            {chartDims(chart).map((f) => {
+              const on = !!r.computeUsing?.includes(f)
+              const next = on ? r.computeUsing!.filter((x) => x !== f) : [...(r.computeUsing ?? []), f]
+              return (
+                <MenuCheck key={f} checked={on} onCheckedChange={() => patch({ computeUsing: next.length ? next : undefined, restartEvery: r.restartEvery && next.includes(r.restartEvery) && next.length > 1 ? r.restartEvery : undefined })} data-testid={`compute-using-${f}`}>
+                  Along {f}
+                  {on && (r.computeUsing?.length ?? 0) > 1 ? ` (${r.computeUsing!.indexOf(f) + 1})` : ''}
+                </MenuCheck>
+              )
+            })}
+            {(r.computeUsing?.length ?? 0) > 1 && (
+              <SubMenu label="Restarting every">
+                <MenuCheck checked={!r.restartEvery} onCheckedChange={() => patch({ restartEvery: undefined })}>
+                  Never
+                </MenuCheck>
+                {r.computeUsing!.slice(0, -1).map((f) => (
+                  <MenuCheck key={f} checked={r.restartEvery === f} onCheckedChange={() => patch({ restartEvery: f })} data-testid={`restart-every-${f}`}>
+                    {f}
+                  </MenuCheck>
+                ))}
+              </SubMenu>
+            )}
           </SubMenu>
         )}
         {measure && (

@@ -12,6 +12,7 @@
   chart in a tooltip.
 - **Calculations and parameters.** `+` joins text next to calculated fields that return text. Filters can follow a
   parameter (a value, a range's ends, top N); number parameters can have a range, shown as a slider.
+  Table calculations computed along several dimensions, restarting every one of them.
 - **More sources.** ClickHouse and Trino/Presto (extract).
 - **Maps.** Point maps place cities and US ZIP codes by name. Custom maps from shapefiles and KML/KMZ files.
   Background map tiles from a tile server you choose (off by default).

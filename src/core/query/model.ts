@@ -17,7 +17,7 @@ import type { CalcField, Chart, Parameter, SetDef } from '../../shared/charts'
 import { compileCalc, setTable, CalcError, type CalcSource, type Lod } from '../calc/compile'
 import type { ColumnInfo } from '../../shared/engine-protocol'
 import { tableSource, type Model } from '../../shared/project'
-import { aggregateCalls, fieldTitle, filterSql, isDate, lit, quickCalc, quotedNames, substituteParams, tableCalcSql, topN, QueryError, type CompiledQuery, type OutField, type Role, type Windows } from './compile'
+import { aggregateCalls, computeAlong, fieldTitle, filterSql, isDate, lit, quickCalc, quotedNames, substituteParams, tableCalcSql, topN, QueryError, type CompiledQuery, type OutField, type Role, type Windows } from './compile'
 
 const q = (s: string) => `"${s.replace(/"/g, '""')}"`
 
@@ -410,9 +410,9 @@ export function compileModelQuery(input: ModelInput): CompiledQuery {
   const windowed = measures.some((m) => calcMeasures.get(m.key)?.kind === 'tablecalc' || !!m.ref.quick)
   if (!windowed) return { sql: `${marks}${order ? ` ORDER BY ${order}` : ''} LIMIT ${maxMarks + 1}`, fields, limit: maxMarks }
   const along = (m: OutField): Windows => {
-    const want = (m.ref.computeUsing ?? []).map((f) => f.toLowerCase())
-    const by = want.length ? dims.filter((d) => d.role !== 'tooltip' && want.includes(d.ref.field.toLowerCase())) : dims.filter((d) => d.role === 'x')
-    const part = dims.filter((d) => d.role !== 'tooltip' && !by.includes(d)).map((d) => d.key)
+    const c = computeAlong(m, dims)
+    const by = c ? c.by : dims.filter((d) => d.role === 'x')
+    const part = c ? c.part : dims.filter((d) => d.role !== 'tooltip' && !by.includes(d)).map((d) => d.key)
     const p = part.length ? `PARTITION BY ${part.join(', ')}` : ''
     return { ordered: (o) => `OVER (${p ? `${p} ` : ''}ORDER BY ${o ?? (by.length ? by.map((d) => d.key).join(', ') : '1')})`, all: () => `OVER (${p})` }
   }

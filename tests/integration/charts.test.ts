@@ -112,6 +112,14 @@ describe('chart queries', () => {
     const ref2 = await rows(engine, `SELECT region, segment, sum(sum(revenue)) OVER (PARTITION BY segment ORDER BY region) AS rs FROM sales GROUP BY region, segment`)
     const want2 = new Map(ref2.map((r) => [key(r, 'region', 'segment'), Number(r.rs)]))
     def.forEach((r) => near(r.m0, want2.get(key(r, 'd0', 'd1'))!))
+    // Along both, segment first then region: one running total through the whole table, in that order.
+    const both = await run({ enc: enc(['segment', 'region']) })
+    const ref3 = await rows(engine, `SELECT region, segment, sum(sum(revenue)) OVER (ORDER BY segment, region) AS rs FROM sales GROUP BY region, segment`)
+    const want3 = new Map(ref3.map((r) => [key(r, 'region', 'segment'), Number(r.rs)]))
+    both.forEach((r) => near(r.m0, want3.get(key(r, 'd0', 'd1'))!))
+    // …restarting every segment: along region within each segment (the default here, reached another way).
+    const restart = await run({ enc: { ...enc(['segment', 'region']), y: [sum('revenue', { quick: 'running_sum', computeUsing: ['segment', 'region'], restartEvery: 'segment' })] } })
+    restart.forEach((r) => near(r.m0, want2.get(key(r, 'd0', 'd1'))!))
   })
 
   it('+ joins text, as in Tableau', async () => {

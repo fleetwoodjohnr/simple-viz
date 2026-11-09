@@ -249,6 +249,8 @@ in regression, multiplicative seasonality, `.xlsb` files.
 
 Also done: viz in tooltip.
 
+Also done: "compute using" several dimensions in a chosen order, restarting every one of them (datasets and models) — integration `charts`, e2e `charts`.
+
 Also done: `+` joins text next to calculated fields that return text — unit `calc`; filters bound to parameters (a value, a range's ends, top N; on datasets and models, where parameter filters had been ignored) and number parameters with a range (clamped, stepped, a slider on dashboards) — unit `charts`, integration `charts`, `model`, e2e `objects`.
 
 Also done: ClickHouse (HTTP interface, `readonly=1`) and Trino/Presto (REST protocol) sources, extract only, in the connection dialog — integration `warehouses` (real ClickHouse 24.8 and Trino 470 containers: types, a join with Excel, refresh, table lists, a wrong password).

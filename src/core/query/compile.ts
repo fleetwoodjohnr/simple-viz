@@ -267,10 +267,9 @@ export function compileQuery(input: QueryInput): CompiledQuery {
   let hidden = 0
   /** A measure's windows and partition: along its "compute using" dimensions when it has them, else the defaults. */
   const along = (m: OutField) => {
-    const want = (m.ref.computeUsing ?? []).map((f) => f.toLowerCase())
-    const by = want.length ? dims.filter((d) => d.role !== 'tooltip' && want.includes(d.ref.field.toLowerCase())) : []
-    if (!by.length) return { w: win, part: partitionDims }
-    const part = dims.filter((d) => d.role !== 'tooltip' && !by.includes(d)).map((d) => d.key)
+    const c = computeAlong(m, dims)
+    if (!c) return { w: win, part: partitionDims }
+    const { by, part } = c
     const p = part.length ? `PARTITION BY ${part.join(', ')}` : ''
     const w: Windows = { ordered: (order) => `OVER (${p ? `${p} ` : ''}ORDER BY ${order ?? by.map((d) => d.key).join(', ')})`, all: () => `OVER (${p})` }
     return { w, part }
@@ -398,6 +397,18 @@ export function windowAgg(agg: string, partition: string[]): string {
     .replace(/\bcovar\s*\(/gi, 'covar_samp(')
     .replace(/\bpercentile\s*\(/gi, 'quantile_cont(')
   return plain.replace(AGG_CALL, (m) => `${m}${over}`)
+}
+
+/**
+ * "Compute using": the view's dimensions a table calculation runs along, in the order chosen (the first changes
+ * slowest), and the ones that partition it — the others, plus the "restarting every" dimension. Null: the default.
+ */
+export function computeAlong(m: OutField, dims: OutField[]): { by: OutField[]; part: string[] } | null {
+  const want = (m.ref.computeUsing ?? []).map((f) => f.toLowerCase())
+  const restart = m.ref.restartEvery?.toLowerCase()
+  const by = want.map((w) => dims.find((d) => d.role !== 'tooltip' && d.ref.field.toLowerCase() === w)).filter((d): d is OutField => !!d && d.ref.field.toLowerCase() !== restart)
+  if (!by.length) return null
+  return { by, part: dims.filter((d) => d.role !== 'tooltip' && !by.includes(d)).map((d) => d.key) }
 }
 
 export interface Windows {

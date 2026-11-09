@@ -16,6 +16,8 @@ export interface FieldRef {
   /** Table calculations (quick or calculated): the view's dimensions they run along ("compute using"); the other
    *  dimensions partition. Absent = along the x axis, partitioned by the rest. */
   computeUsing?: string[]
+  /** With several "compute using" dimensions: start again for each value of this one (Tableau's "Restarting every"). */
+  restartEvery?: string
   /** Display name override. */
   label?: string
   /** Number format code (Excel style, e.g. "$#,##0", "0.0%"); absent = automatic. */
