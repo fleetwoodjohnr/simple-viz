@@ -47,6 +47,41 @@ describe('spreadsheet tables', () => {
     expect(listTables(back).filter((x) => x.kind === 'detected').map((x) => x.ref)).toEqual(['Data!A3:C7'])
   })
 
+  it('reads a header over two rows: the group above names its columns, merged or running to the next group', () => {
+    const wb = new Workbook()
+    const s = wb.addSheet('Years')
+    const cells: (string | number | null)[][] = [
+      ['Regional results', null, null, null, null, null],
+      [null, null, null, null, null, null],
+      [null, 2023, null, 2024, null, null],
+      ['Region', 'Sales', 'Profit', 'Sales', 'Profit', 'Notes'],
+      ['East', 10, 2, 12, 3, 'ok'],
+      ['West', 7, 1, 9, 2, null]
+    ]
+    cells.forEach((r, i) => r.forEach((v, j) => v !== null && s.set(i, j, { v })))
+    // Merged the way Excel does it: 2023 over B:C, 2024 over D:E, so “Notes” belongs to no group.
+    s.merges.push({ sheet: s.id, r0: 2, c0: 1, r1: 2, c1: 2 }, { sheet: s.id, r0: 2, c0: 3, r1: 2, c1: 4 })
+    const back = readWorkbook(writeXlsx(wb).data, 'xlsx')
+    const found = listTables(back).filter((x) => x.kind === 'detected')
+    expect(found.map((x) => [x.ref, x.rows])).toEqual([['Years!A3:F6', 2]])
+    const t = tableRows(back, found[0].ref)
+    expect(t.columns.map((c) => [c.name, c.type])).toEqual([['Region', 'VARCHAR'], ['2023 Sales', 'BIGINT'], ['2023 Profit', 'BIGINT'], ['2024 Sales', 'BIGINT'], ['2024 Profit', 'BIGINT'], ['Notes', 'VARCHAR']])
+    expect(t.columns[3].values).toEqual([12, 9])
+    // Without merged cells a group runs to the next one.
+    s.merges.length = 0
+    expect(tableRows(wb, 'Years!A3:E6').columns.map((c) => c.name)).toEqual(['Region', '2023 Sales', '2023 Profit', '2024 Sales', '2024 Profit'])
+    // A title right above the header, or a first data row of text, is not a group row.
+    const plain = new Workbook()
+    const ps = plain.addSheet('P')
+    ;[['Report', null, null], ['Name', 'City', 'Age'], ['Ann', 'Paris', 30]].forEach((r, i) => r.forEach((v, j) => v !== null && ps.set(i, j, { v })))
+    expect(tableRows(plain, 'P!A2:C3').columns.map((c) => c.name)).toEqual(['Name', 'City', 'Age'])
+    expect(tableRows(plain, 'P').columns.map((c) => c.name)).toEqual(['Report', 'F2', 'F3'])
+    const gap = new Workbook()
+    const gs = gap.addSheet('G')
+    ;[['Name', null, 'City'], ['Ann', 'x', 'Paris'], ['Bob', 'y', 'Rome']].forEach((r, i) => r.forEach((v, j) => v !== null && gs.set(i, j, { v })))
+    expect(tableRows(gap, 'G').columns.map((c) => c.name)).toEqual(['Name', 'F2', 'City'])
+  })
+
   it('finds the tables in a messy sheet: titles and notes left out, two tables apart, headers found', () => {
     const wb = new Workbook()
     const s = wb.addSheet('Report 2025')

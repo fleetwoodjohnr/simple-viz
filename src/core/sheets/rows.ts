@@ -57,7 +57,7 @@ export function listTables(wb: Workbook): SheetTableRef[] {
     // Tables inside a messy sheet (a title above, notes below, several tables): offered as cell ranges.
     const blocks = findTables(s)
     const whole = blocks.length === 1 && blocks[0].r0 === a.r0 && blocks[0].c0 === a.c0 && blocks[0].r1 === a.r1 && blocks[0].c1 === a.c1
-    if (!whole) for (const b of blocks) out.push({ ref: `${/^[A-Za-z_]\w*$/.test(s.name) ? s.name : `'${s.name.replace(/'/g, "''")}'`}!${colName(b.c0)}${b.r0 + 1}:${colName(b.c1)}${b.r1 + 1}`, kind: 'detected', rows: b.r1 - b.r0, columns: b.c1 - b.c0 + 1, sheet: s.name })
+    if (!whole) for (const b of blocks) out.push({ ref: `${/^[A-Za-z_]\w*$/.test(s.name) ? s.name : `'${s.name.replace(/'/g, "''")}'`}!${colName(b.c0)}${b.r0 + 1}:${colName(b.c1)}${b.r1 + 1}`, kind: 'detected', rows: b.r1 - b.r0 - (groupHeader(s, b) ? 1 : 0), columns: b.c1 - b.c0 + 1, sheet: s.name })
   }
   for (const t of wb.tables) out.push({ ref: t.displayName || t.name, kind: 'table', rows: t.area.r1 - t.area.r0 - (t.totalsRow ? 1 : 0), columns: t.area.c1 - t.area.c0 + 1 })
   for (const n of wb.names) {
@@ -71,7 +71,8 @@ export function listTables(wb: Workbook): SheetTableRef[] {
 /**
  * The tables in a sheet, as Tableau's Data Interpreter finds them: runs of rows separated by blank rows; in each,
  * leading rows with a single cell (titles) and trailing ones (notes, sources) are left out, and the header is the
- * first row with text in most of the table's columns. Runs of fewer than two columns or two rows aren't tables.
+ * first row with text in most of the table's columns, with the row of group labels above it if there is one (see
+ * groupHeader). Runs of fewer than two columns or two rows aren't tables.
  * Sheets over a million cells aren't searched.
  */
 export function findTables(s: Sheet): Area[] {
@@ -108,8 +109,10 @@ export function findTables(s: Sheet): Area[] {
       prev.r1 = body[body.length - 1]
       return
     }
-    const start = head >= 0 ? body[head] : body[0]
+    let start = head >= 0 ? body[head] : body[0]
     if (c1 - c0 < 1 || body[body.length - 1] - start < 1) return
+    // A row of group labels right above the header belongs to it.
+    if (head >= 0 && inCols(start - 1).length && groupHeader(s, { sheet: s.id, r0: start - 1, c0, r1: body[body.length - 1], c1 })) start--
     out.push({ sheet: s.id, r0: start, c0, r1: body[body.length - 1], c1 })
   }
   // Runs of rows separated by empty rows; within a run, tables side by side separated by empty columns.
@@ -132,6 +135,35 @@ export function findTables(s: Sheet): Area[] {
   }
   if (run.length) split(run)
   return out.sort((x, y) => x.r0 - y.r0 || x.c0 - y.c0)
+}
+
+/**
+ * A header over two rows — groups such as a year above “Sales | Profit” — at the top of `area`: for each column, the
+ * column of the group label above it (-1: none), or null when the first row is an ordinary header. The second row is
+ * all text and names more columns than the first, under it comes data, and a label covers the columns it is merged
+ * over, or else the ones up to the next label. One label over every column is a title, not a group.
+ */
+export function groupHeader(s: Sheet, area: Area): number[] | null {
+  if (area.r1 < area.r0 + 2) return null
+  const at = (r: number, i: number) => {
+    const v = s.get(r, area.c0 + i)?.v
+    return v === null || v === undefined || v === '' || v instanceof CellError ? null : v
+  }
+  const cols = Array.from({ length: area.c1 - area.c0 + 1 }, (_, i) => i)
+  const sub = cols.filter((i) => at(area.r0 + 1, i) !== null)
+  const top = cols.filter((i) => at(area.r0, i) !== null)
+  if (sub.length < Math.max(2, Math.ceil(cols.length * 0.6)) || sub.some((i) => typeof at(area.r0 + 1, i) !== 'string')) return null
+  if (!top.length || top.length >= sub.length || top.some((i) => !sub.includes(i))) return null
+  // ponytail: a table of nothing but text keeps its first row as the header; needs a value that isn't text under the names.
+  if (!sub.some((i) => at(area.r0 + 2, i) !== null && typeof at(area.r0 + 2, i) !== 'string')) return null
+  const group = cols.map(() => -1)
+  for (const i of top) {
+    const m = s.mergeAt(area.r0, area.c0 + i)
+    const end = m ? m.c1 - area.c0 : Math.min(...top.filter((j) => j > i), cols.length) - 1
+    for (let j = i; j <= end && j < cols.length; j++) if (m || j === i || at(area.r0 + 1, j) !== null) group[j] = i
+  }
+  if (top.length === 1 && sub.every((j) => group[j] === top[0])) return null
+  return top.some((i) => group.filter((g) => g === i).length > 1) ? group : null
 }
 
 function usedArea(s: Sheet): Area | null {
@@ -184,9 +216,14 @@ export function tableRows(wb: Workbook, ref: string | undefined, header = true):
   // Column names: header text, or F1, F2… (Excel's convention); blanks and duplicates get unique names.
   const names: string[] = []
   const used = new Set<string>()
+  const text = (r: number, i: number) => {
+    const v = sheet.get(r, area.c0 + i)?.v
+    return v === null || v === undefined || v instanceof CellError ? '' : String(typeof v === 'number' ? formatValue(v, fmt(sheet.get(r, area.c0 + i)?.s), wb.date1904, 255).text : v).trim()
+  }
+  // A header over two rows: “2023” above “Sales” names the column “2023 Sales”.
+  const groups = hasHeader && tableHeader === null ? groupHeader(sheet, { ...area, r1 }) : null
   for (let i = 0; i < width; i++) {
-    const v = hasHeader ? sheet.get(area.r0, area.c0 + i)?.v : null
-    let n = v === null || v === undefined || v instanceof CellError ? '' : String(typeof v === 'number' ? formatValue(v, fmt(sheet.get(area.r0, area.c0 + i)?.s), wb.date1904, 255).text : v).trim()
+    let n = !hasHeader ? '' : groups ? `${groups[i] >= 0 ? text(area.r0, groups[i]) : ''} ${text(area.r0 + 1, i)}`.trim() : text(area.r0, i)
     if (!n) n = `F${i + 1}`
     let unique = n
     for (let k = 2; used.has(unique.toLowerCase()); k++) unique = `${n}_${k}`
@@ -195,7 +232,7 @@ export function tableRows(wb: Workbook, ref: string | undefined, header = true):
   }
 
   // Raw cells, skipping rows that are entirely empty.
-  const start = hasHeader ? area.r0 + 1 : area.r0
+  const start = hasHeader ? area.r0 + (groups ? 2 : 1) : area.r0
   const raw: { v: Scalar; f?: string }[][] = names.map(() => [])
   let errorCells = 0
   for (let r = start; r <= r1; r++) {
