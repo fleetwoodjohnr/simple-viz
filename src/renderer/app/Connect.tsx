@@ -204,7 +204,7 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
 }
 
 const PLACEHOLDER = { http: 'https://example.com/data/sales.csv', s3: 's3://my-bucket/folder/sales.parquet', azure: 'az://container/folder/sales.csv' }
-const FORMAT_LABELS: Record<FileFormat, string> = { csv: 'CSV', tsv: 'TSV', json: 'JSON', jsonl: 'JSON Lines', parquet: 'Parquet', arrow: 'Arrow / Feather', xlsx: 'Excel', xls: 'Excel 97–2003 (.xls)', ods: 'OpenDocument', xml2003: 'Excel XML 2003' }
+const FORMAT_LABELS: Record<FileFormat, string> = { csv: 'CSV', tsv: 'TSV', json: 'JSON', jsonl: 'JSON Lines', parquet: 'Parquet', arrow: 'Arrow / Feather', xlsx: 'Excel', xls: 'Excel 97–2003 (.xls)', xlsb: 'Excel binary (.xlsb)', ods: 'OpenDocument', xml2003: 'Excel XML 2003' }
 
 /** A file on the web, in S3 (or S3-compatible storage) or in Azure Blob storage. Secrets go to the keychain. */
 export function RemoteDialog() {

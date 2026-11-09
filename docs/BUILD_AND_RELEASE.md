@@ -35,6 +35,7 @@ npm run fixtures                                 # test workbooks, CSVs, expecte
 npm run geo                                      # bundled maps from Natural Earth (SHA-256 pinned)
 .venv/bin/python scripts/stats-ref.py            # statistics reference values (SciPy, statsmodels)
 .venv/bin/python scripts/arrow-fixtures.py       # Arrow/Feather files (pyarrow)
+.venv/bin/python scripts/xlsb-ref.py            # .xlsb reference values (pyxlsb) for tests/fixtures/xlsb
 .venv/bin/python scripts/xls-fixtures.py         # .xls workbook and xlrd reference values (xlwt, xlrd, openpyxl)
 node scripts/fetch-duckdb-extensions.ts --update-lock   # after a DuckDB upgrade: pin new extension hashes (review the diff)
 ```

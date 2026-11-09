@@ -210,6 +210,7 @@ Details per source, and what isn't supported (with reasons): [docs/CONNECTORS.md
 | SQL Server / Azure SQL, extract (tedious, read-only intent, TLS from the SSL setting); typed columns incl. nullable ones | integration `sqlserver`, e2e `sqlserver` (SQL Server 2022 in podman, x64) |
 | Files on the web (HTTP/S, optional bearer token), in Amazon S3 and S3-compatible storage (region, endpoint, path style, keys in the keychain), in Azure Blob (connection string); any format incl. spreadsheets; only each source's exact address is readable | integration `remote` (local server, S3Mock, Azurite), e2e `remote` |
 | Excel 97–2003 `.xls`, read natively (BIFF8 in the sheet core: shared strings across records, RK/MULRK, cached formula results, 1900/1904 dates, hidden sheets); encrypted and Excel 95 files refused with a reason | unit `xls` (cell by cell against xlrd; hand-made records), integration `formats`, e2e `arrow` |
+| Excel binary `.xlsb`, read natively (BIFF12 records: shared strings, numbers, booleans, errors, cached formula results, number formats so dates are dates, 1904 dates, hidden sheets; the macro part is never read) | unit `xlsb` (Excel-made files against pyxlsb), integration `formats` |
 | Arrow IPC / Feather v2, uncompressed, LZ4 or ZSTD | unit `arrow` (pyarrow files), integration `formats`, e2e `arrow` |
 | Any XML file: the repeated element is a row, attributes/children/nested leaves are typed columns; no entity expansion | unit `xmlrows`, integration `formats` |
 | OpenDocument and Excel XML 2003 readers covered here too (they were only tested in Simple Cell) | unit `sheet-formats` |
@@ -217,7 +218,7 @@ Details per source, and what isn't supported (with reasons): [docs/CONNECTORS.md
 
 ### Known limitations
 
-- `.xlsb`, Excel 95 `.xls`, password-protected workbooks, Redshift, Snowflake, BigQuery, Databricks, Athena, Trino,
+- Excel 95 `.xls`, password-protected workbooks, Redshift, Snowflake, BigQuery, Databricks, Athena, Trino,
   ClickHouse, Oracle, Google Sheets, ODBC/JDBC: not supported (reasons in docs/CONNECTORS.md).
 - SQL Server is extract only. S3-compatible services other than the S3 emulator (MinIO, R2, GCS) use the same code but
   weren't tested against the services themselves.

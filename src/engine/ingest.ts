@@ -60,6 +60,7 @@ export async function extractSelect(conn: DuckDBConnection, s: ResolvedSource, r
       }
       case 'xlsx':
       case 'xls':
+      case 'xlsb':
       case 'ods':
         return stageSheet(conn, s, ref, memo)
     }

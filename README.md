@@ -13,7 +13,7 @@ and [Simple Cell](https://github.com/fleetwoodjohnr/simple-cell).
 
 ## What it does
 
-- **Connect.** Excel (`.xlsx`, `.xlsm`, `.xls`), OpenDocument (`.ods`), CSV, TSV, JSON, Parquet, Arrow/Feather, XML,
+- **Connect.** Excel (`.xlsx`, `.xlsm`, `.xls`, `.xlsb`), OpenDocument (`.ods`), CSV, TSV, JSON, Parquet, Arrow/Feather, XML,
   SQLite and DuckDB files — on your computer, on the web, in Amazon S3 (and compatible storage) or Azure Blob storage —
   and PostgreSQL, MySQL/MariaDB and SQL Server. Choose sheets, Excel tables, named ranges or cell ranges. Drop files
   anywhere in the window. See [docs/CONNECTORS.md](docs/CONNECTORS.md).

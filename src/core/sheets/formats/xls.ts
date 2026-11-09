@@ -92,7 +92,7 @@ export function readCfb(buf: Uint8Array): Map<string, Uint8Array> {
 // ---------------------------------------------------------------- BIFF8
 
 /** Built-in number formats that Excel doesn't store (the date ones matter: they make a number a date). */
-const BUILTIN: Record<number, string> = {
+export const BUILTIN: Record<number, string> = {
   0: 'General', 1: '0', 2: '0.00', 3: '#,##0', 4: '#,##0.00', 9: '0%', 10: '0.00%', 11: '0.00E+00', 12: '# ?/?', 13: '# ??/??',
   14: 'm/d/yyyy', 15: 'd-mmm-yy', 16: 'd-mmm', 17: 'mmm-yy', 18: 'h:mm AM/PM', 19: 'h:mm:ss AM/PM', 20: 'h:mm', 21: 'h:mm:ss', 22: 'm/d/yyyy h:mm',
   37: '#,##0 ;(#,##0)', 38: '#,##0 ;[Red](#,##0)', 39: '#,##0.00;(#,##0.00)', 40: '#,##0.00;[Red](#,##0.00)', 45: 'mm:ss', 46: '[h]:mm:ss', 47: 'mm:ss.0', 48: '##0.0E+0', 49: '@'
@@ -152,7 +152,7 @@ function readString(r: Rec, o: number, cch: number): { s: string; end: number } 
   return { s, end: o + runs * 4 + ext }
 }
 
-const rk = (v: number) => {
+export const rk = (v: number) => {
   let n: number
   if (v & 0x02) n = v >> 2
   else {
@@ -163,7 +163,7 @@ const rk = (v: number) => {
   return v & 0x01 ? n / 100 : n
 }
 
-const ERRORS: Record<number, string> = { 0x00: '#NULL!', 0x07: '#DIV/0!', 0x0f: '#VALUE!', 0x17: '#REF!', 0x1d: '#NAME?', 0x24: '#NUM!', 0x2a: '#N/A' }
+export const ERRORS: Record<number, string> = { 0x00: '#NULL!', 0x07: '#DIV/0!', 0x0f: '#VALUE!', 0x17: '#REF!', 0x1d: '#NAME?', 0x24: '#NUM!', 0x2a: '#N/A' }
 
 export function importXls(bytes: Uint8Array): ImportResult {
   const streams = readCfb(bytes)

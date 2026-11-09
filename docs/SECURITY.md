@@ -48,7 +48,7 @@ renderer, logs or project files. A secret for a remote file is scoped to that fi
 
 Spreadsheets are opened with Simple Cell's readers: ZIP limits against zip bombs (entry count, sizes, compression ratio,
 checked again after inflating), DOCTYPE stripped before XML parsing (no entity expansion, no external entities). VBA and
-other macros are never run: `.xls` files are read by a BIFF8 parser that never opens the macro storage, and nothing is
+other macros are never run: `.xls` and `.xlsb` files are read by parsers that never open the macro storage or part, and nothing is
 handed to another program for conversion. Encrypted workbooks are refused. Workbooks over 512 MB, XML files over
 100 MB and custom map files over 25 MB are refused.
 

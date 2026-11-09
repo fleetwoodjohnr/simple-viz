@@ -11,6 +11,7 @@ before it reads any file, server or address it hasn't been allowed to read befor
 |---|---|---|---|
 | Excel workbook | .xlsx .xlsm .xltx .xltm | Simple Cell's reader: sheets, Excel tables, named ranges, cell ranges; cached formula values; dates from number formats. Macros are never run. | integration `engine`, e2e `data`, `acceptance` |
 | Excel 97–2003 | .xls | A native BIFF8 reader in the same sheet core (no conversion, no LibreOffice): sheets, shared strings, numbers, booleans, errors, cached formula results, dates (1900 and 1904 systems). The macro storage is never read. | unit `xls` (against xlrd), integration `formats`, e2e `arrow` |
+| Excel binary | .xlsb | A native BIFF12 reader in the same sheet core: sheets, shared strings, numbers, booleans, errors, cached formula results, dates by number format (1900 and 1904 systems). The macro part (vbaProject.bin) is never read. | unit `xlsb` (against pyxlsb on files made by Excel), integration `formats` |
 | OpenDocument spreadsheet | .ods | Simple Cell's reader | unit `sheet-formats` (a LibreOffice-written file) |
 | Excel XML 2003 | .xml (SpreadsheetML) | Simple Cell's reader | unit `sheet-formats` |
 | Any other XML | .xml | The most repeated element is a row (or the one you pick); attributes, child elements and nested leaves are columns, with types inferred. DOCTYPEs are dropped before parsing (no entities). | unit `xmlrows`, integration `formats` |
@@ -53,7 +54,6 @@ the password again.
 
 | Source | Why | Instead |
 |---|---|---|
-| Excel binary workbooks (.xlsb) | A different binary format (BIFF12); no reader yet | Save as .xlsx in Excel |
 | Excel 95 and older (.xls BIFF5) | Old 8-bit format | Save as .xlsx |
 | Password-protected workbooks | The file is encrypted | Remove the password in Excel |
 | Amazon Redshift | The postgres extension relies on server features Redshift lacks; untested | Unload to S3 (Parquet) and read from S3 |

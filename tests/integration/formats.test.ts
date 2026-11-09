@@ -31,6 +31,18 @@ it('reads an ordinary XML file: its repeated elements are the rows', async () =>
 })
 
 
+it('reads an Excel binary (.xlsb) workbook natively', async () => {
+  const xlsb = path.join(root, 'tests', 'fixtures', 'xlsb', 'sample.xlsb')
+  const { engine } = await bootEngine([fileSource('b', xlsb, 'xlsb', [{ alias: 'lorem', ref: 'Sheet1' }])])
+  expect(engine.statuses()[0].state).toBe('ok')
+  const { fileTables } = await import('../../src/engine/ingest')
+  const { readFileSync } = await import('node:fs')
+  expect((await fileTables(new Uint8Array(readFileSync(xlsb)), 'xlsb')).map((t) => t.ref)).toEqual(expect.arrayContaining(['Sheet1', 'rich test']))
+  const r = await rows(engine, 'SELECT count(*) AS n FROM lorem')
+  expect(Number(r[0].n)).toBeGreaterThan(5)
+  await engine.close()
+})
+
 it('reads an Excel 97–2003 (.xls) workbook natively (no conversion)', async () => {
   const xls = path.join(root, 'tests', 'fixtures', 'Sales.xls')
   const { engine } = await bootEngine([fileSource('l', xls, 'xls', [{ alias: 'transactions', ref: 'Transactions' }, { alias: 'notes', ref: 'Notes' }]), fileSource('c', path.join(root, 'tests', 'fixtures', 'customers.csv'), 'csv', [{ alias: 'customers' }])])

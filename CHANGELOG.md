@@ -26,7 +26,7 @@
   relationships, several fact tables), with calculated fields and top-N filters. Visual transforms — filter, calculate, join, group, pivot, unpivot and more —
   with a live preview and the equivalent SQL. Date tables and hierarchies.
 - **More sources.** MySQL and MariaDB (extract or live), SQL Server (extract), files on the web, in Amazon S3 and
-  S3-compatible storage or in Azure Blob storage (keys in the keychain), Excel 97–2003 `.xls` (read natively, no
+  S3-compatible storage or in Azure Blob storage (keys in the keychain), Excel binary `.xlsb` and Excel 97–2003 `.xls` (read natively, no
   conversion), Arrow and Feather files (LZ4/ZSTD), and any XML file (its repeated elements become rows).
 - **More charts and maps.** Waterfall, Pareto, funnel, gauge, bullet, radar, sankey, network, sunburst, calendar,
   candlestick, sparklines, Gantt, density, violin, correlation matrix and cohort charts; small multiples (Panels).

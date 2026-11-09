@@ -10,7 +10,7 @@ import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import type { ColumnInfo, EngineConfig, QueryResult, RelationInfo, ResolvedSource, ResultPage, SourceStatus } from '../shared/engine-protocol'
-import { SERVER, isServer, isRemotePath } from '../shared/project'
+import { SERVER, isServer, isRemotePath, isSheetFormat } from '../shared/project'
 import type { SheetFormat } from '../core/sheets/rows'
 import { gateProblems, collectRefs, SAFE_TABLE_FUNCTIONS } from '../core/sql/ast'
 import { explainError } from '../core/errors'
@@ -681,7 +681,7 @@ export class Engine {
           await c.run(`LOAD ${lit(path.join(extensionsDir, `${e}.duckdb_extension`))}`)
         }
         await remoteSecret(c, s)
-        if (s.format === 'xlsx' || s.format === 'xls' || s.format === 'ods' || s.format === 'xml2003') return { tables: (await fileTables(await readBytes(c, s.path!), s.format as SheetFormat)).map((t) => t.ref) }
+        if (isSheetFormat(s.format)) return { tables: (await fileTables(await readBytes(c, s.path!), s.format as SheetFormat)).map((t) => t.ref) }
         const { select } = await extractSelect(c, s, undefined)
         await c.run(`DESCRIBE ${select}`)
         return { tables: [decodeURIComponent(s.path!.split(/[/?#]/).filter(Boolean).pop() ?? 'data').replace(/\.[a-z0-9]+$/i, '')] }
