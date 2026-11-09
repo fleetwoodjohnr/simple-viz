@@ -2,7 +2,7 @@
 // dynamic titles, and layout helpers (snap, align, distribute, templates).
 
 import type { ChartFilter } from '../shared/charts'
-import { GRID, type DashAction, type DashItem, type Dashboard, type Selections } from '../shared/dashboards'
+import { GRID, type DashAction, type DashItem, type Dashboard, type Device, type DeviceLayout, type Selections } from '../shared/dashboards'
 import { isSafeExternalUrl } from '../shared/urls'
 
 type Value = string | number | boolean | null
@@ -223,4 +223,123 @@ export function findSlot(items: DashItem[], w: number, h: number, cw: number, ch
       }
   }
   return { x: pad, y: pad, w: snap(Math.min(w, cw - 2 * pad)), h: snap(Math.min(h, ch - 2 * pad)) }
+}
+
+// ---------------------------------------------------------------- tiled layout, device layouts
+
+const geometry = (i: { x: number; y: number; w: number; h: number }) => ({ x: i.x, y: i.y, w: i.w, h: i.h })
+/** Items laid out on their own (not inside a container, not floating, not decoration). */
+const tileable = (i: DashItem) => !i.parent && !i.floating && i.kind !== 'shape'
+
+/**
+ * Tiled layout (Tableau's tiled objects): the items fill the dashboard in rows, in reading order, without overlapping.
+ * Rows are items whose vertical centres fall within the first item's band; each row's height and each item's width are
+ * kept as proportions of the current ones, so moving an item reorders it and resizing one gives it a larger share.
+ */
+export function tileItems(items: DashItem[], W: number, H: number, pad = 16): DashItem[] {
+  const tiles = items.filter(tileable).sort((a, b) => a.y + a.h / 2 - (b.y + b.h / 2) || a.x - b.x)
+  if (!tiles.length) return items
+  const rows: DashItem[][] = []
+  for (const t of tiles) {
+    const row = rows[rows.length - 1]
+    const first = row?.[0]
+    if (row && first && t.y + t.h / 2 < first.y + first.h) row.push(t)
+    else rows.push([t])
+  }
+  const heights = rows.map((r) => Math.max(GRID * 2, ...r.map((i) => i.h)))
+  const availH = H - pad * (rows.length + 1)
+  const hSum = heights.reduce((a, b) => a + b, 0)
+  const out = new Map<string, { x: number; y: number; w: number; h: number }>()
+  let y = pad
+  rows.forEach((row, ri) => {
+    const rh = ri === rows.length - 1 ? H - pad - y : Math.max(GRID * 2, snap((heights[ri] / hSum) * availH))
+    const sorted = [...row].sort((a, b) => a.x - b.x)
+    const availW = W - pad * (sorted.length + 1)
+    const wSum = sorted.reduce((a, i) => a + Math.max(GRID * 2, i.w), 0)
+    let x = pad
+    sorted.forEach((it, ci) => {
+      const w = ci === sorted.length - 1 ? W - pad - x : Math.max(GRID * 2, snap((Math.max(GRID * 2, it.w) / wSum) * availW))
+      out.set(it.id, { x, y, w, h: rh })
+      x += w + pad
+    })
+    y += rh + pad
+  })
+  return items.map((i) => (out.has(i.id) ? { ...i, ...out.get(i.id)! } : i))
+}
+
+/**
+ * A device layout generated from the default one. Phone: one column in reading order, full width (charts 260 px
+ * high, other items their own height). Tablet: the default layout scaled to 1024 × 768.
+ */
+export function autoDeviceLayout(d: Dashboard, dev: 'tablet' | 'phone'): DeviceLayout {
+  const pos: DeviceLayout['pos'] = {}
+  if (dev === 'tablet') {
+    const W = 1024
+    const H = 768
+    const sx = W / d.size.w
+    const sy = H / d.size.h
+    for (const i of d.items) pos[i.id] = { x: snap(i.x * sx), y: snap(i.y * sy), w: Math.max(GRID * 2, snap(i.w * sx)), h: Math.max(GRID * 2, snap(i.h * sy)) }
+    return { w: W, h: H, pos }
+  }
+  const W = 390
+  const pad = 12
+  let y = pad
+  const order = d.items.filter((i) => !i.parent && i.kind !== 'shape').sort((a, b) => a.y - b.y || a.x - b.x)
+  for (const i of d.items) if (i.kind === 'shape') pos[i.id] = { ...geometry(i), hidden: true }
+  for (const i of order) {
+    const h = i.kind === 'chart' ? 260 : i.kind === 'container' ? 260 * Math.max(1, d.items.filter((c) => c.parent === i.id).length) : Math.min(i.h, 160)
+    pos[i.id] = { x: pad, y, w: W - 2 * pad, h }
+    y += h + pad
+  }
+  // Children of a row container become a column on a phone: their container lays them out.
+  for (const i of d.items) if (i.parent) pos[i.id] = geometry(i)
+  return { w: W, h: Math.max(y, 640), pos }
+}
+
+/** The dashboard as a device shows it: that layout's size and positions; hidden items left out. */
+export function deviceView(d: Dashboard, dev: Device): Dashboard {
+  const L = dev !== 'default' ? d.devices?.[dev] : undefined
+  if (!L) return d
+  const items = d.items
+    .filter((i) => !L.pos[i.id]?.hidden)
+    .map((i) => {
+      const p = L.pos[i.id]
+      const it = p ? { ...i, ...geometry(p) } : i
+      return dev === 'phone' && it.kind === 'container' && it.container ? { ...it, container: { ...it.container, direction: 'column' as const } } : it
+    })
+    .map((i) => clampItem(i, L.w, L.h))
+  return { ...d, tiled: false, size: { ...d.size, w: L.w, h: L.h }, items }
+}
+
+/**
+ * An edit made in a device layout, written back: positions (and size) go to the layout; everything else (text, chart,
+ * properties) to the items themselves; an item removed there is hidden there; a new item is added to every layout.
+ */
+export function applyDeviceEdit(d: Dashboard, dev: 'tablet' | 'phone', next: Dashboard): Dashboard {
+  const L = d.devices?.[dev]
+  if (!L) return next
+  const pos = { ...L.pos }
+  const byId = new Map(next.items.map((i) => [i.id, i]))
+  const items = d.items.map((i) => {
+    const n = byId.get(i.id)
+    if (!n) {
+      pos[i.id] = { ...(pos[i.id] ?? geometry(i)), hidden: true }
+      return i
+    }
+    pos[i.id] = geometry(n)
+    const keep = dev === 'phone' && i.kind === 'container' ? { container: i.container } : {}
+    return { ...n, ...geometry(i), ...keep }
+  })
+  for (const n of next.items) if (!d.items.some((i) => i.id === n.id)) {
+    items.push(clampItem({ ...n }, d.size.w, d.size.h))
+    pos[n.id] = geometry(n)
+  }
+  return { ...next, tiled: d.tiled, size: d.size, items, devices: { ...d.devices, [dev]: { w: next.size.w, h: next.size.h, pos } } }
+}
+
+/** The layout for a window of this width: phone below 600 px, tablet below 1100 px, when the dashboard has them. */
+export function deviceFor(d: Dashboard, width: number): Device {
+  if (width < 600 && d.devices?.phone) return 'phone'
+  if (width < 1100 && d.devices?.tablet) return 'tablet'
+  return 'default'
 }

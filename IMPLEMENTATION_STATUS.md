@@ -249,6 +249,8 @@ in regression, multiplicative seasonality, `.xlsb` files.
 
 Also done: viz in tooltip.
 
+Also done: tiled dashboards and tablet/phone layouts — unit `charts` (tiling fills without overlap and keeps proportions; device edits written back; layout by width), e2e `tiled`; story points keeping their filter choices — unit `project`, e2e `example`; viz-in-tooltip size and filter field — e2e `charts`; LOD, table calculations and computed sets on models (row above).
+
 Also done: computed sets (a condition such as `SUM([revenue]) > 1000`, or the top/bottom N by a measure), computed after context filters and before dimension filters as in Tableau, and combined sets (either, both, first only) — integration `charts` (against hand-written SQL, through the SQL gate), e2e `objects`. Trend models, reference distributions and boxes; damped trends and ARIMA (rows above).
 
 Not yet: tiled (automatic) dashboard layout beyond row/column containers; LOD expressions and table

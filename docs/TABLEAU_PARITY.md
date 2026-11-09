@@ -49,18 +49,18 @@ _Checked against Tableau's documentation on 8 November 2026._
 | [Forecasting](https://help.tableau.com/current/pro/desktop/en-us/forecasting.htm) | Exponential smoothing (level, plain or damped trend, additive or multiplicative season) chosen by AICc, prediction intervals, on charts and in Analytics; seasonal ARIMA in Analytics (beyond Tableau) | ◐ No multiplicative trend (Tableau's multiplicative-trend models); chart overlays use exponential smoothing only |
 | [Clustering](https://help.tableau.com/current/pro/desktop/en-us/clustering.htm) | k-means (k chosen by Calinski–Harabasz, as Tableau), clusters saved as a dataset | ◐ In Analytics, not dragged onto a chart |
 | Statistics | Descriptives, correlation, t-tests, ANOVA, chi-square, rank tests, regression, logistic regression, PCA, anomalies — validated against SciPy and statsmodels | ✅ (beyond Tableau) |
-| [Viz in tooltip](https://help.tableau.com/current/pro/desktop/en-us/viz_in_tooltip.htm) | Format → Chart in tooltip: another saved chart, filtered to the hovered mark | ◐ Fixed size; filtered by every field the two charts share |
+| [Viz in tooltip](https://help.tableau.com/current/pro/desktop/en-us/viz_in_tooltip.htm) | Format → Chart in tooltip: another saved chart, filtered to the hovered mark (by every shared field or one chosen field), at a chosen size | ✅ |
 
 ## Dashboards
 
 | Tableau | Simple Viz | |
 |---|---|---|
 | [Dashboards](https://help.tableau.com/current/pro/desktop/en-us/dashboards_create.htm) | Charts, text with live values, images, shapes, buttons, filter controls, layout containers | ✅ |
-| [Floating and tiled layout](https://help.tableau.com/current/pro/desktop/en-us/dashboards_organize_floatingandtiled.htm) | Free canvas with grid snapping, align, distribute, group, lock; row/column containers | ◐ No tiled auto-layout |
+| [Floating and tiled layout](https://help.tableau.com/current/pro/desktop/en-us/dashboards_organize_floatingandtiled.htm) | Free canvas with grid snapping, align, distribute, group, lock; row/column containers; tiled layout (objects fill the dashboard in rows, re-flow when added, moved or resized; floating objects stay on top) | ✅ |
 | [Actions](https://help.tableau.com/current/pro/desktop/en-us/actions.htm) | Filter, highlight, go to dashboard, open a web page (`{Field}` or `<Field>` in the address), set a parameter, change set values | ✅ |
-| [Device layouts](https://help.tableau.com/current/pro/desktop/en-us/dashboards_dsd_create.htm) | Size presets (desktop, laptop, tablet, phone, A4, Letter) | ◐ One layout per dashboard |
+| [Device layouts](https://help.tableau.com/current/pro/desktop/en-us/dashboards_dsd_create.htm) | Size presets; tablet and phone layouts made from the default (phone: one column), edited on their own (removing an object hides it there); view mode picks the layout by the window's width | ◐ The window is at least 960 px wide, so the phone layout is shown by choosing it (and in presentations on small screens) |
 | Presentation | Presentation mode with dashboard tabs | ✅ |
-| [Stories](https://help.tableau.com/current/pro/desktop/en-us/stories.htm) | Dashboards in order with captions; reorder, present full screen with ← → | ◐ A point shows a dashboard as it is now (it doesn't keep its own filter state) |
+| [Stories](https://help.tableau.com/current/pro/desktop/en-us/stories.htm) | Dashboards in order with captions; each point can keep its own filter choices; reorder, present full screen with ← → | ◐ Clicked-mark selections aren't kept, only filter choices |
 | Export | Dashboards: PDF (page sizes), PNG and a self-contained web page (HTML); charts: PNG, SVG and CSV; query results: CSV, Excel and Parquet | ✅ |
 
 ## Sharing

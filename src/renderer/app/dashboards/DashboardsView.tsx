@@ -13,18 +13,43 @@ import { ChartTile, TextTile, FilterTile, ButtonTile, ParamTile } from './Tile'
 import { ChartIcon, openChart } from '../charts/ChartBuilder'
 import { askText } from '../Dialogs'
 import { exportDashboardPdf, exportDashboardPng, exportDashboardHtml } from './export'
-import { align, distribute, clampItem, snap, layoutContainer, findSlot, TEMPLATES, type Align } from '@/core/dashboard'
+import { align, distribute, clampItem, snap, layoutContainer, findSlot, tileItems, deviceView, applyDeviceEdit, autoDeviceLayout, deviceFor, TEMPLATES, type Align } from '@/core/dashboard'
 import { newId } from '@/core/project/sviz'
-import { GRID, SIZES, type DashAction, type DashItem, type Dashboard, type Selections } from '@/shared/dashboards'
+import { GRID, SIZES, type DashAction, type DashItem, type Dashboard, type Device, type Selections } from '@/shared/dashboards'
 
-const { LayoutDashboard, Bookmark, Plus, Copy, Star, Trash2, MoreHorizontal, Type, Filter, MousePointerClick, Image, Square, Columns3, Rows3, Lock, Unlock, Group, Ungroup, Eye, Pencil, Maximize, Download, RotateCcw, AlignLeft, AlignCenterHorizontal, AlignRight, AlignStartHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignHorizontalSpaceAround, AlignVerticalSpaceAround, X, FileText, FileCode2, SlidersHorizontal } = Icons
+const { LayoutDashboard, Bookmark, Plus, Copy, Star, Trash2, MoreHorizontal, Type, Filter, MousePointerClick, Image, Square, Columns3, Rows3, Lock, Unlock, Group, Ungroup, Eye, Pencil, Maximize, Download, RotateCcw, AlignLeft, AlignCenterHorizontal, AlignRight, AlignStartHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignHorizontalSpaceAround, AlignVerticalSpaceAround, X, FileText, FileCode2, SlidersHorizontal, Monitor, Tablet, Smartphone, LayoutGrid } = Icons
 
 export function newDashboard(name: string, items: DashItem[] = []): Dashboard {
   return { id: newId(), name, size: { mode: 'fit', w: 1366, h: 768 }, items, actions: [{ id: newId(), kind: 'filter', source: '*', target: '*' }], updatedAt: Date.now() }
 }
 
+/**
+ * Changes a dashboard. On the active dashboard, edits made in a device layout go to that layout, and a tiled
+ * dashboard is re-tiled after every change.
+ */
 export function updateDash(id: string, fn: (d: Dashboard) => Dashboard) {
-  P.edit((p) => ({ ...p, dashboards: p.dashboards.map((d) => (d.id === id ? { ...fn(d), updatedAt: Date.now() } : d)) }))
+  const { device, active } = getDash()
+  P.edit((p) => ({
+    ...p,
+    dashboards: p.dashboards.map((d) => {
+      if (d.id !== id) return d
+      const dev = id === active && device !== 'default' && d.devices?.[device] ? device : null
+      let next = dev ? applyDeviceEdit(d, dev, fn(deviceView(d, dev))) : fn(d)
+      if (next.tiled && !dev) next = { ...next, items: tileItems(next.items, next.size.w, next.size.h) }
+      return { ...next, updatedAt: Date.now() }
+    })
+  }))
+}
+
+/** The window's width, kept current (device layouts follow it in view mode). */
+function useWindowWidth() {
+  const [w, setW] = useState(window.innerWidth)
+  useEffect(() => {
+    const on = () => setW(window.innerWidth)
+    window.addEventListener('resize', on)
+    return () => window.removeEventListener('resize', on)
+  }, [])
+  return w
 }
 
 const editItems = (id: string, fn: (items: DashItem[]) => DashItem[]) => updateDash(id, (d) => ({ ...d, items: fn(d.items) }))
@@ -159,7 +184,8 @@ function Palette({ d }: { d: Dashboard }) {
   const add = (item: Omit<DashItem, 'id' | 'x' | 'y'>) => {
     const id = newId()
     // Into free space, so a new object never covers an existing one.
-    const it: DashItem = { ...item, id, ...findSlot(d.items, item.w, item.h, d.size.w, d.size.h) }
+    // Tiled: a new row at the bottom (the tiling makes room); otherwise the first free spot.
+    const it: DashItem = { ...item, id, ...(d.tiled ? { x: 0, y: d.size.h, w: item.w, h: item.h } : findSlot(d.items, item.w, item.h, d.size.w, d.size.h)) }
     editItems(d.id, (items) => [...items, it])
     setDash({ selected: [id] })
   }
@@ -222,11 +248,19 @@ function PaletteBtn({ icon, label, onClick, testid }: { icon: ReactNode; label: 
 
 // ---------------------------------------------------------------- canvas
 
-function Workspace({ d }: { d: Dashboard }) {
-  const { mode, selected } = useDash(useShallow((s) => ({ mode: s.mode, selected: s.selected })))
-  const dirtyFilters = useDash((s) => Object.keys(s.selections[d.id] ?? NO_SELECTIONS).length + (s.marks[d.id] ?? NO_MARKS).length > 0)
+function Workspace({ d: saved }: { d: Dashboard }) {
+  const { mode, selected, device } = useDash(useShallow((s) => ({ mode: s.mode, selected: s.selected, device: s.device })))
+  const dirtyFilters = useDash((s) => Object.keys(s.selections[saved.id] ?? NO_SELECTIONS).length + (s.marks[saved.id] ?? NO_MARKS).length > 0)
   const canvasRef = useRef<HTMLDivElement>(null)
+  const width = useWindowWidth()
+  // The layout shown: the one being edited or previewed, or in view mode the one for the window's width.
+  const dev = device !== 'default' && saved.devices?.[device] ? device : mode === 'view' ? deviceFor(saved, width) : 'default'
+  const d = deviceView(saved, dev)
   const sel = d.items.filter((i) => selected.includes(i.id))
+  const pickDevice = (v: Device) => {
+    if (v !== 'default' && !saved.devices?.[v]) P.edit((p) => ({ ...p, dashboards: p.dashboards.map((x) => (x.id === saved.id ? { ...x, devices: { ...x.devices, [v]: autoDeviceLayout(x, v) } } : x)) }))
+    setDash({ device: v, selected: [] })
+  }
   const dark = useApp((s) => s.dark)
   return (
     <div className="flex min-w-0 flex-1">
@@ -237,6 +271,14 @@ function Workspace({ d }: { d: Dashboard }) {
           <Segmented value={mode} onChange={(m) => setDash({ mode: m, selected: [] })} label="Mode" options={[{ value: 'edit', label: <span className="flex items-center gap-1" data-testid="mode-edit"><Pencil className="size-3.5" /> Edit</span> }, { value: 'view', label: <span className="flex items-center gap-1" data-testid="mode-view"><Eye className="size-3.5" /> View</span> }]} />
           {mode === 'edit' && sel.length > 0 && <Arrange d={d} sel={sel} />}
           <div className="flex-1" />
+          <Segmented value={device} onChange={pickDevice} label="Device layout" options={[{ value: 'default', label: <span className="flex items-center gap-1" data-testid="device-default"><Monitor className="size-3.5" /> Default</span>, title: 'The layout for large windows' }, { value: 'tablet', label: <span className="flex items-center gap-1" data-testid="device-tablet"><Tablet className="size-3.5" /> Tablet</span>, title: 'A layout for windows under 1,100 px (made from the default the first time)' }, { value: 'phone', label: <span className="flex items-center gap-1" data-testid="device-phone"><Smartphone className="size-3.5" /> Phone</span>, title: 'A layout for windows under 600 px: one column (made from the default the first time)' }]} />
+          {device !== 'default' && saved.devices?.[device] && mode === 'edit' && (
+            <Tip label={`Delete the ${device} layout (the default is used instead)`}>
+              <IconBtn label={`Delete the ${device} layout`} onClick={() => (P.edit((p) => ({ ...p, dashboards: p.dashboards.map((x) => (x.id === saved.id ? { ...x, devices: Object.fromEntries(Object.entries(x.devices ?? {}).filter(([k]) => k !== device)) } : x)) })), setDash({ device: 'default' }))} data-testid="device-delete">
+                <Trash2 className="size-4" />
+              </IconBtn>
+            </Tip>
+          )}
           {dirtyFilters && (
             <Btn size="sm" variant="ghost" onClick={() => resetFilters(d.id)} data-testid="reset-filters">
               <RotateCcw className="size-3.5" /> Reset filters
@@ -466,7 +508,7 @@ export function Canvas({ d, edit, canvasRef }: { d: Dashboard; edit: boolean; ca
 
   return (
     <div ref={host} className="relative min-h-0 flex-1 overflow-auto bg-workspace p-4" onPointerDown={() => edit && setDash({ selected: [] })}>
-      <div style={{ width: d.size.w * scale, height: d.size.h * scale }} className="mx-auto">
+      <div style={{ width: d.size.w * scale, height: d.size.h * scale }} className="mx-auto" data-layout-width={d.size.w}>
         <div
           ref={canvasRef}
           tabIndex={edit ? 0 : -1}
@@ -566,6 +608,11 @@ function Properties({ d, sel }: { d: Dashboard; sel: DashItem[] }) {
             <Line label="Fit to window">
               <Switch checked={d.size.mode === 'fit'} onChange={(v) => updateDash(d.id, (x) => ({ ...x, size: { ...x.size, mode: v ? 'fit' : 'fixed' } }))} label="Fit to window" />
             </Line>
+            {!d.devices || getDash().device === 'default' ? (
+              <Line label="Tiled layout">
+                <Switch checked={!!d.tiled} onChange={(v) => updateDash(d.id, (x) => ({ ...x, tiled: v }))} label="Tiled layout" />
+              </Line>
+            ) : null}
             <Line label="Refresh every">
               <select className={cx(inputCls, 'h-7 w-24 text-[12px]')} aria-label="Refresh every" value={d.refreshEveryMin ?? 0} onChange={(e) => updateDash(d.id, (x) => ({ ...x, refreshEveryMin: Number(e.target.value) || undefined }))}>
                 {[0, 1, 5, 15, 60].map((m) => (
@@ -580,6 +627,11 @@ function Properties({ d, sel }: { d: Dashboard; sel: DashItem[] }) {
         </>
       ) : (
         <Section title={{ chart: 'Chart', text: 'Text', filter: 'Filter control', button: 'Button', image: 'Image', shape: 'Shape', container: 'Layout container', param: 'Parameter control' }[one.kind]}>
+          {d.tiled && !one.parent && one.kind !== 'shape' && (
+            <Line label="Floating (over the tiles)">
+              <Switch checked={!!one.floating} onChange={(v) => setItem({ floating: v })} label="Floating" />
+            </Line>
+          )}
           {one.kind === 'chart' && (
             <>
               <label className="block text-[12px]">
@@ -816,6 +868,7 @@ function Line({ label, children }: { label: string; children: ReactNode }) {
 function Presentation({ d }: { d: Dashboard }) {
   const dashboards = useApp((s) => s.project!.dashboards)
   const ref = useRef<HTMLDivElement>(null)
+  const width = useWindowWidth()
   const i = dashboards.findIndex((x) => x.id === d.id)
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
@@ -828,7 +881,7 @@ function Presentation({ d }: { d: Dashboard }) {
   return (
     <div className="fixed inset-0 z-[70] flex flex-col bg-workspace" data-testid="presentation">
       <div className="min-h-0 flex-1">
-        <Canvas d={{ ...d, size: { ...d.size, mode: 'fit' } }} edit={false} canvasRef={ref} />
+        <Canvas d={((v) => ({ ...v, size: { ...v.size, mode: 'fit' as const } }))(deviceView(d, deviceFor(d, width)))} edit={false} canvasRef={ref} />
       </div>
       <div className="flex h-11 items-center gap-1 border-t border-border bg-panel px-3" role="tablist" aria-label="Dashboards">
         {dashboards.map((x) => (

@@ -187,6 +187,8 @@ test('viz in tooltip: hovering a bar shows another chart filtered to it', async 
   await addField(page, 'region', 'x')
   await addField(page, 'revenue', 'y')
   await page.getByTestId('tooltip-chart').selectOption({ index: 1 })
+  await page.getByTestId('tooltip-chart-w').fill('400')
+  await page.getByTestId('tooltip-chart-h').fill('240')
   await expect.poll(async () => (await chartSeries(page)).categories.length).toBeGreaterThan(1)
   const pt = await page.locator('[data-testid=chart-canvas] [data-testid=echart]').first().evaluate((el) => {
     const c = (el as any).__echart
@@ -207,6 +209,8 @@ test('viz in tooltip: hovering a bar shows another chart filtered to it', async 
   })
   expect(shown.n).toBe(Number(ref.n))
   near(shown.total, Number(ref.r))
+  const size = await page.getByRole('tooltip', { name: /./ }).filter({ has: tip }).evaluate((el) => [el.clientWidth, el.clientHeight])
+  expect(size).toEqual([400, 240])
   await page.mouse.move(5, 5)
   await expect(tip).toHaveCount(0)
   await quit(app)

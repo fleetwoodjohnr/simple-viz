@@ -232,3 +232,52 @@ describe('parameters', () => {
     expect(coerceParam({ type: 'number' }, '')).toBeNull()
   })
 })
+
+import { tileItems, autoDeviceLayout, deviceView, applyDeviceEdit, deviceFor } from '@/core/dashboard'
+
+describe('tiled and device layouts', () => {
+  const item = (id: string, x: number, y: number, w: number, h: number, extra: Partial<DashItem> = {}): DashItem => ({ id, kind: 'chart', x, y, w, h, ...extra })
+  const overlap = (a: DashItem, b: DashItem) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+
+  it('tiles fill the dashboard in rows without overlapping, keeping proportions; floating items stay', () => {
+    const items = [item('a', 0, 0, 400, 200), item('b', 420, 10, 200, 200), item('c', 0, 300, 300, 400), item('f', 50, 50, 100, 100, { floating: true })]
+    const t = tileItems(items, 1000, 800)
+    const tiles = t.filter((i) => i.id !== 'f')
+    for (const a of tiles) for (const b of tiles) if (a !== b) expect(overlap(a, b)).toBe(false)
+    const [a, b, c] = ['a', 'b', 'c'].map((id) => t.find((i) => i.id === id)!)
+    expect(a.y).toBe(b.y) // one row
+    expect(a.w).toBeGreaterThan(b.w) // 2 : 1
+    expect(b.x + b.w).toBe(1000 - 16) // fills the width
+    expect(c.y + c.h).toBe(800 - 16) // and the height
+    expect(c.w).toBe(1000 - 32)
+    expect(c.h).toBeGreaterThan(a.h) // 400 : 200
+    expect(t.find((i) => i.id === 'f')).toEqual(items[3])
+    // Moving an item below another reorders it into its own row.
+    const moved = tileItems(t.map((i) => (i.id === 'b' ? { ...i, y: 760 } : i)), 1000, 800)
+    expect(moved.find((i) => i.id === 'b')!.y).toBeGreaterThan(moved.find((i) => i.id === 'c')!.y)
+  })
+
+  it('device layouts: a phone column, edits written back to the layout, the layout picked by width', () => {
+    const d: Dashboard = { id: 'd', name: 'D', size: { mode: 'fit', w: 1366, h: 768 }, items: [item('t', 16, 16, 1300, 40, { kind: 'text', text: 'Title' }), item('a', 16, 72, 600, 300), item('b', 640, 72, 600, 300), item('s', 0, 0, 50, 50, { kind: 'shape' })], actions: [], updatedAt: 0 }
+    const phone = autoDeviceLayout(d, 'phone')
+    expect(phone.w).toBe(390)
+    expect(['t', 'a', 'b'].map((id) => phone.pos[id].y)).toEqual([...['t', 'a', 'b'].map((id) => phone.pos[id].y)].sort((x, y) => x - y))
+    expect(phone.pos.a.w).toBe(390 - 24)
+    expect(phone.pos.s.hidden).toBe(true)
+    const withPhone = { ...d, devices: { phone } }
+    const view = deviceView(withPhone, 'phone')
+    expect(view.size.w).toBe(390)
+    expect(view.items.map((i) => i.id)).toEqual(['t', 'a', 'b'])
+    // Moving an item and removing another on the phone: the default layout is unchanged; the removed one is hidden there.
+    const next = { ...view, items: view.items.filter((i) => i.id !== 'b').map((i) => (i.id === 'a' ? { ...i, y: 500, text: undefined } : i.id === 't' ? { ...i, text: 'New title' } : i)) }
+    const back = applyDeviceEdit(withPhone, 'phone', next)
+    expect(back.items.find((i) => i.id === 'a')).toMatchObject({ x: 16, y: 72 })
+    expect(back.devices!.phone!.pos.a.y).toBe(500)
+    expect(back.devices!.phone!.pos.b.hidden).toBe(true)
+    expect(back.items.find((i) => i.id === 'b')).toBeDefined()
+    expect(back.items.find((i) => i.id === 't')!.text).toBe('New title')
+    expect(deviceFor(withPhone, 500)).toBe('phone')
+    expect(deviceFor(withPhone, 900)).toBe('default') // no tablet layout
+    expect(deviceFor({ ...d, devices: { tablet: autoDeviceLayout(d, 'tablet') } }, 900)).toBe('tablet')
+  })
+})

@@ -49,6 +49,17 @@ test('a story: dashboards in order with captions, presented point by point', asy
   await page.getByTestId('story-caption').fill('Where revenue comes from')
   await page.getByTestId('story-caption').blur()
   await expect(page.getByTestId('story-point-0')).toHaveText('1. Where revenue comes from')
+  // The point keeps a filter choice: Texas, shown again when coming back to it after the filter changed.
+  const region = page.locator('[data-testid=story-view] [data-testid=filter-dropdown]')
+  await region.selectOption('Texas')
+  await page.getByTestId('story-capture').click()
+  await expect(page.getByTestId('story-capture')).toContainText('Filters kept')
+  await region.selectOption('')
+  await expect(page.getByTestId('story-capture')).toContainText('Keep the new filters')
+  await page.getByTestId('story-point-1').click()
+  await page.getByTestId('story-point-0').click()
+  await expect(region).toHaveValue('Texas')
+  expect(await page.evaluate(() => (window as any).__sv.get().project.stories[0].points[0].selections.region.values)).toEqual(['Texas'])
   await page.getByTestId('story-point-1').click()
   await expect(page.locator('[data-testid=story-view] [data-testid=item-chart]')).toHaveCount(0) // the blank dashboard
   // Presented: full screen, ← → move between points, Esc leaves.

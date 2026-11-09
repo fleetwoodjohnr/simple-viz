@@ -2,14 +2,14 @@
 // workspace, or full screen with ← → like a presentation. The dashboards stay interactive.
 
 import { useEffect, useRef } from 'react'
-import { BookOpen, ChevronLeft, ChevronRight, Maximize, Plus, Trash2, X } from 'lucide-react'
+import { BookOpen, ChevronLeft, ChevronRight, Filter, Maximize, Plus, Trash2, X } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useApp } from '../../state/store'
 import * as P from '../../state/project'
 import { Btn, IconBtn, cx, inputCls } from '../../ui'
 import { newId } from '@/core/project/sviz'
 import type { Story } from '@/shared/project'
-import { useDash, setDash } from './runtime'
+import { useDash, setDash, getDash, NO_SELECTIONS } from './runtime'
 import { Canvas } from './DashboardsView'
 
 const NO_STORIES: Story[] = []
@@ -56,6 +56,13 @@ export function StoryView({ story, presenting }: { story: Story; presenting?: bo
   const cur = story.points[i]
   const d = cur && dashboards.find((x) => x.id === cur.dashboard)
   const go = (j: number) => j >= 0 && j < story.points.length && setDash({ storyPoint: j })
+  // A point with captured filters shows them (Tableau's story points keep their dashboard's state).
+  const kept = cur?.selections
+  useEffect(() => {
+    if (cur && kept) setDash((s) => ({ selections: { ...s.selections, [cur.dashboard]: structuredClone(kept) }, marks: { ...s.marks, [cur.dashboard]: [] } }))
+  }, [cur?.id, kept]) // eslint-disable-line react-hooks/exhaustive-deps
+  const live = useDash((s) => (cur ? (s.selections[cur.dashboard] ?? NO_SELECTIONS) : NO_SELECTIONS))
+  const capture = () => cur && setPoints((pts) => pts.map((p) => (p.id === cur.id ? { ...p, selections: structuredClone(getDash().selections[cur.dashboard] ?? {}) } : p)))
   useEffect(() => {
     if (!presenting) return
     const k = (e: KeyboardEvent) => {
@@ -135,6 +142,14 @@ export function StoryView({ story, presenting }: { story: Story; presenting?: bo
           <IconBtn size="sm" label="Move later" disabled={i === story.points.length - 1} onClick={() => move(1)}>
             <ChevronRight className="size-4" />
           </IconBtn>
+          <Btn size="sm" variant="ghost" onClick={capture} title="This point will show the dashboard with the filter choices it has now" data-testid="story-capture">
+            <Filter className="size-3.5" /> {kept ? (JSON.stringify(kept) === JSON.stringify(live) ? 'Filters kept' : 'Keep the new filters') : 'Keep these filters'}
+          </Btn>
+          {kept && (
+            <Btn size="sm" variant="ghost" onClick={() => setPoints((pts) => pts.map((p) => (p.id === cur.id ? { id: p.id, dashboard: p.dashboard, caption: p.caption } : p)))} data-testid="story-forget">
+              Forget filters
+            </Btn>
+          )}
           <Btn size="sm" variant="ghost" onClick={() => (setPoints((pts) => pts.filter((p) => p.id !== cur.id)), go(Math.max(0, i - 1)))}>
             Remove point
           </Btn>

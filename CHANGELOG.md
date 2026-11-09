@@ -8,6 +8,8 @@
   combined sets.
 - **Models.** Level of detail expressions, table calculations, quick calculations and computed sets work on related
   tables, without double counting.
+- **Dashboards.** Tiled layout; tablet and phone layouts; story points that keep their filter choices; the size of a
+  chart in a tooltip.
 - **Chart analytics.** Logarithmic, exponential, power and polynomial trend lines; percentile lines, confidence
   intervals of the mean and quartile reference boxes.
 

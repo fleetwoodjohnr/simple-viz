@@ -29,6 +29,17 @@ export interface DashItem {
   container?: { direction: 'row' | 'column'; gap: number }
   /** Show the tile's title bar (charts). */
   showTitle?: boolean
+  /** Tiled dashboards: a floating item keeps its own position, over the tiles. */
+  floating?: boolean
+}
+
+export type Device = 'default' | 'tablet' | 'phone'
+
+/** A device layout: its own size and item positions (items without one are placed automatically; hidden ones aren't shown). */
+export interface DeviceLayout {
+  w: number
+  h: number
+  pos: Record<string, { x: number; y: number; w: number; h: number; hidden?: boolean }>
 }
 
 export interface DashAction {
@@ -59,6 +70,10 @@ export interface Dashboard {
   refreshEveryMin?: number
   /** Saved filter selections ("views"). */
   views?: { id: string; name: string; selections: Selections }[]
+  /** Tiled layout: the items fill the dashboard without overlapping, in rows; their sizes are kept as proportions. */
+  tiled?: boolean
+  /** Layouts for smaller screens, shown when the window is narrow (or previewed). */
+  devices?: Partial<Record<'tablet' | 'phone', DeviceLayout>>
   updatedAt: number
 }
 

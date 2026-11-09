@@ -1,6 +1,6 @@
 // The Simple Viz project model: what a .sviz file stores (as project.json). Pure data, no credentials, ever.
 import type { CalcField, Chart, Parameter } from './charts'
-import type { Dashboard } from './dashboards'
+import type { Dashboard, Selections } from './dashboards'
 import type { FeatureCollection } from '../core/charts/geo'
 
 // Bump PROJECT_SCHEMA_VERSION and add a step to src/core/project/migrate.ts for every incompatible change.
@@ -132,7 +132,8 @@ export interface Model {
 export interface Story {
   id: string
   name: string
-  points: { id: string; dashboard: string; caption: string }[]
+  /** Each point: a dashboard, its caption, and the filter choices it shows (captured with "Keep these filters"). */
+  points: { id: string; dashboard: string; caption: string; selections?: Selections }[]
 }
 
 /** The data a model table reads. */

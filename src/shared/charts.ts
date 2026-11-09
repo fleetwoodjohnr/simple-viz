@@ -106,8 +106,11 @@ export interface ChartOptions {
   /** Densify a date axis: every period between the first and last, empty ones as null (Tableau's "Show Missing
    *  Values"); table calculations run over them. */
   showMissing?: boolean
-  /** Viz in tooltip: another saved chart, shown filtered to the hovered mark. */
+  /** Viz in tooltip: another saved chart, shown filtered to the hovered mark, at this size (default 280 × 180). */
   tooltipChart?: string
+  tooltipSize?: { w: number; h: number }
+  /** Viz in tooltip: filter it by these fields only (default: every field the two charts share). */
+  tooltipFields?: string[]
   /** Combo chart: series index (from y) drawn as lines instead of bars, and on the right axis. */
   lineSeries?: number[]
   rightAxis?: number[]

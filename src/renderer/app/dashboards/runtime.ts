@@ -1,7 +1,7 @@
 // Dashboard state that is not saved in the project: current filter selections, selected marks, drill-down levels,
 // edit/view mode and presentation mode.
 import { create } from 'zustand'
-import type { Selections } from '@/shared/dashboards'
+import type { Device, Selections } from '@/shared/dashboards'
 import type { MarkSelection } from '@/core/dashboard'
 
 type Value = string | number | boolean | null
@@ -18,6 +18,8 @@ interface Runtime {
   story: string | null
   storyPoint: number
   mode: 'edit' | 'view'
+  /** The layout being edited or previewed (default: the window's width picks one in view mode). */
+  device: Device
   presenting: boolean
   selected: string[]
   /** Per dashboard. */
@@ -26,7 +28,7 @@ interface Runtime {
   drill: Record<string, Record<string, Drill>>
 }
 
-export const useDash = create<Runtime>(() => ({ active: null, story: null, storyPoint: 0, mode: 'edit', presenting: false, selected: [], selections: {}, marks: {}, drill: {} }))
+export const useDash = create<Runtime>(() => ({ active: null, story: null, storyPoint: 0, mode: 'edit', device: 'default', presenting: false, selected: [], selections: {}, marks: {}, drill: {} }))
 export const setDash = useDash.setState
 export const getDash = useDash.getState
 

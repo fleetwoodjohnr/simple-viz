@@ -165,7 +165,8 @@ export function ChartView({ chart, extra, highlight, onMark, className, testid, 
         clearTimeout(tipTimer.current)
         if (!m) return setTip(null)
         const has = new Set((tipFields ?? '').split('\u0000'))
-        const filters = Object.entries(m.values).filter(([f]) => has.has(f.toLowerCase())).map(([f, v]) => ({ id: `tip:${f}`, field: f, op: 'in' as const, values: [v] }))
+        const only = chart.options.tooltipFields?.map((f) => f.toLowerCase())
+        const filters = Object.entries(m.values).filter(([f]) => has.has(f.toLowerCase()) && (!only?.length || only.includes(f.toLowerCase()))).map(([f, v]) => ({ id: `tip:${f}`, field: f, op: 'in' as const, values: [v] }))
         tipTimer.current = setTimeout(() => setTip({ x: m.x, y: m.y, filters }), 250)
       }
     : undefined
@@ -200,7 +201,7 @@ export function ChartView({ chart, extra, highlight, onMark, className, testid, 
       {data?.truncated && <div className="absolute bottom-1 left-2 rounded bg-warn/15 px-2 py-0.5 text-[11px] text-warn">Showing the first {MAX_MARKS.toLocaleString()} marks — add a filter to see the rest.</div>}
       {loading && data && <Loader2 className="absolute right-2 top-2 size-4 animate-spin text-text-3" aria-label="Updating" />}
       {tip && tipChart && (
-        <div className="pointer-events-none absolute z-30 h-[180px] w-[280px] rounded-lg bg-elev p-1 shadow-[0_0_0_1px_var(--border),0_8px_24px_-8px_rgb(0_0_0/0.35)]" style={{ left: Math.max(0, tip.x + 12), top: Math.max(0, tip.y + 12) }} role="tooltip" aria-label={tipChart.name}>
+        <div className="pointer-events-none absolute z-30 rounded-lg bg-elev p-1 shadow-[0_0_0_1px_var(--border),0_8px_24px_-8px_rgb(0_0_0/0.35)]" style={{ left: Math.max(0, tip.x + 12), top: Math.max(0, tip.y + 12), width: chart.options.tooltipSize?.w ?? 280, height: chart.options.tooltipSize?.h ?? 180 }} role="tooltip" aria-label={tipChart.name}>
           <ChartView chart={tipChart} extra={tip.filters} testid="viz-tooltip" noTip />
         </div>
       )}

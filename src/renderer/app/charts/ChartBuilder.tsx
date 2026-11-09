@@ -942,6 +942,7 @@ function TooltipChartPicker({ chart, setO }: { chart: Chart; setO: (p: Partial<C
   const others = charts.filter((c) => c.id !== chart.id)
   if (!others.length) return null
   return (
+    <>
     <label className="mt-2 flex items-center gap-2 text-[12px] text-text-2" title="Hovering a mark shows this chart, filtered to the mark">
       Chart in tooltip
       <select className={cx(inputCls, 'h-6 flex-1 px-1 text-[12px]')} aria-label="Chart in tooltip" value={chart.options.tooltipChart ?? ''} onChange={(e) => setO({ tooltipChart: e.target.value || undefined })} data-testid="tooltip-chart">
@@ -952,6 +953,27 @@ function TooltipChartPicker({ chart, setO }: { chart: Chart; setO: (p: Partial<C
           </option>
         ))}
       </select>
+      {chart.options.tooltipChart && (
+        <>
+          {(['w', 'h'] as const).map((k) => (
+            <input key={k} type="number" min={120} max={800} step={20} aria-label={k === 'w' ? 'Tooltip chart width' : 'Tooltip chart height'} className={cx(inputCls, 'h-6 w-14 px-1 text-[12px]')} value={chart.options.tooltipSize?.[k] ?? (k === 'w' ? 280 : 180)} onChange={(e) => setO({ tooltipSize: { w: 280, h: 180, ...chart.options.tooltipSize, [k]: Math.max(120, Math.min(800, Number(e.target.value) || 0)) } })} data-testid={`tooltip-chart-${k}`} />
+          ))}
+        </>
+      )}
     </label>
+    {chart.options.tooltipChart && chartDims(chart).length > 1 && (
+      <label className="mt-1 flex items-center gap-2 text-[12px] text-text-2" title="Which of the hovered mark's fields filter the chart in the tooltip">
+        Filtered by
+        <select className={cx(inputCls, 'h-6 flex-1 px-1 text-[12px]')} aria-label="Tooltip chart filtered by" value={chart.options.tooltipFields?.[0] ?? ''} onChange={(e) => setO({ tooltipFields: e.target.value ? [e.target.value] : undefined })} data-testid="tooltip-chart-fields">
+          <option value="">every shared field</option>
+          {chartDims(chart).map((f) => (
+            <option key={f} value={f}>
+              {f} only
+            </option>
+          ))}
+        </select>
+      </label>
+    )}
+    </>
   )
 }
