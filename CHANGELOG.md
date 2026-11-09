@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 — 2026-11-09
 
 - **Data.** Excel (xlsx, xlsm), OpenDocument, XML 2003, CSV, TSV, JSON, JSON Lines, Parquet, SQLite and DuckDB files;
   PostgreSQL as a fast local extract or live. Pick sheets, Excel tables, named ranges or cell ranges. Previews of any
