@@ -131,6 +131,8 @@ export interface CalcField {
   name: string
   formula: string
   description?: string
+  /** A set: the member values of a dimension (the formula is generated from them: 'In' or 'Out'). */
+  set?: { field: string; values: (string | number | boolean)[] }
 }
 
 export interface Parameter {

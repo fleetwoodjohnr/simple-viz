@@ -164,7 +164,7 @@ function Builder({ chart }: { chart: Chart }) {
   const fields = useMemo(() => fieldDefs(rel?.columns ?? [], calcs, calcTypes), [rel, calcs, calcTypes])
   const [filterFor, setFilterFor] = useState<{ field: string; id?: string; asMeasure?: boolean } | null>(null)
   const [calcEdit, setCalcEdit] = useState<CalcField | 'new' | null>(null)
-  const [groupFor, setGroupFor] = useState<FieldDef | null>(null)
+  const [groupFor, setGroupFor] = useState<{ f: FieldDef; mode: 'group' | 'set' } | null>(null)
   const [autoType, setAutoType] = useState(() => !chart.enc.x.length && !chart.enc.y.length)
   const upd = (fn: (c: Chart) => Chart) => updateChart(chart.id, fn)
 
@@ -235,7 +235,7 @@ function Builder({ chart }: { chart: Chart }) {
 
   return (
     <div className="flex min-w-0 flex-1">
-      <FieldsPanel chart={chart} fields={fields} onAdd={add} onDataset={(name) => upd((c) => ({ ...c, dataset: name, enc: emptyEncodings(), filters: [] }))} onCalc={setCalcEdit} onGroup={setGroupFor} />
+      <FieldsPanel chart={chart} fields={fields} onAdd={add} onDataset={(name) => upd((c) => ({ ...c, dataset: name, enc: emptyEncodings(), filters: [] }))} onCalc={setCalcEdit} onGroup={(f, mode) => setGroupFor({ f, mode })} />
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-2 border-b border-border bg-panel px-3 py-2">
           <input aria-label="Chart name" className="h-8 min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 text-[14px] font-semibold outline-none hover:border-border focus:border-accent" defaultValue={chart.name} key={chart.name} onBlur={(e) => e.target.value.trim() && e.target.value !== chart.name && upd((c) => ({ ...c, name: e.target.value.trim() }))} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} data-testid="chart-name" />
@@ -280,7 +280,7 @@ function Builder({ chart }: { chart: Chart }) {
         const f = fieldDefs(rel?.columns ?? [], [...calcs, c], calcTypes).find((x) => x.name === c.name)
         if (f) add('y', f)
       }} />}
-      {groupFor && <GroupDialog dataset={chart.dataset} field={groupFor.name} type={groupFor.type} onClose={() => setGroupFor(null)} />}
+      {groupFor && <GroupDialog dataset={chart.dataset} field={groupFor.f.name} type={groupFor.f.type} mode={groupFor.mode} onClose={() => setGroupFor(null)} />}
     </div>
   )
 }
@@ -306,7 +306,7 @@ async function exportData(chart: Chart) {
 
 const DRAG = 'application/x-simple-viz-field'
 
-function FieldsPanel({ chart, fields, onAdd, onDataset, onCalc, onGroup }: { chart: Chart; fields: FieldDef[]; onAdd: (r: ShelfRole, f: FieldDef) => void; onDataset: (n: string) => void; onCalc: (c: CalcField | 'new') => void; onGroup: (f: FieldDef) => void }) {
+function FieldsPanel({ chart, fields, onAdd, onDataset, onCalc, onGroup }: { chart: Chart; fields: FieldDef[]; onAdd: (r: ShelfRole, f: FieldDef) => void; onDataset: (n: string) => void; onCalc: (c: CalcField | 'new') => void; onGroup: (f: FieldDef, mode: 'group' | 'set') => void }) {
   const relations = useApp((s) => s.relations)
   const models = useApp((s) => s.project!.models)
   const hierarchies = useApp((s) => s.project!.hierarchies)
@@ -392,21 +392,21 @@ function FieldsPanel({ chart, fields, onAdd, onDataset, onCalc, onGroup }: { cha
   )
 }
 
-function FieldGroup({ title, fields, onAdd, onGroup }: { title: string; fields: FieldDef[]; onAdd: (r: ShelfRole, f: FieldDef) => void; onGroup?: (f: FieldDef) => void }) {
+function FieldGroup({ title, fields, onAdd, onGroup }: { title: string; fields: FieldDef[]; onAdd: (r: ShelfRole, f: FieldDef) => void; onGroup?: (f: FieldDef, mode: 'group' | 'set') => void }) {
   if (!fields.length) return null
   return (
     <>
       <div className="px-1.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-text-3">{title}</div>
       <ul>
         {fields.map((f) => (
-          <FieldItem key={f.name} f={f} onAdd={onAdd} onGroup={onGroup && !isDate(f.type) ? () => onGroup(f) : undefined} />
+          <FieldItem key={f.name} f={f} onAdd={onAdd} onGroup={onGroup && !isDate(f.type) ? (mode) => onGroup(f, mode) : undefined} />
         ))}
       </ul>
     </>
   )
 }
 
-function FieldItem({ f, onAdd, onEdit, onGroup }: { f: FieldDef; onAdd: (r: ShelfRole, f: FieldDef) => void; onEdit?: () => void; onGroup?: () => void }) {
+function FieldItem({ f, onAdd, onEdit, onGroup }: { f: FieldDef; onAdd: (r: ShelfRole, f: FieldDef) => void; onEdit?: () => void; onGroup?: (mode: 'group' | 'set') => void }) {
   const icon = f.calc ? <Calculator className="size-3.5" /> : isDate(f.type) ? <Calendar className="size-3.5" /> : isNumeric(f.type) ? <Hash className="size-3.5" /> : <Type className="size-3.5" />
   return (
     <li
@@ -445,8 +445,11 @@ function FieldItem({ f, onAdd, onEdit, onGroup }: { f: FieldDef; onAdd: (r: Shel
           {onGroup && (
             <>
               <MenuSep />
-              <MenuItem icon={<Icons.Group />} onSelect={onGroup} data-testid={`group-${f.name}`}>
+              <MenuItem icon={<Icons.Group />} onSelect={() => onGroup('group')} data-testid={`group-${f.name}`}>
                 Create group…
+              </MenuItem>
+              <MenuItem icon={<Icons.CircleDot />} onSelect={() => onGroup('set')} data-testid={`set-${f.name}`}>
+                Create set…
               </MenuItem>
             </>
           )}

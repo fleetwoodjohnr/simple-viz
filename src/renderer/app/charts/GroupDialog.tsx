@@ -6,14 +6,16 @@ import { get, toast } from '../../state/store'
 import * as P from '../../state/project'
 import { Btn, Modal, cx, inputCls } from '../../ui'
 import { distinctValues } from './FilterDialog'
-import { groupFormula } from '@/core/calc/compile'
+import { groupFormula, setFormula } from '@/core/calc/compile'
 import { isNumeric } from '@/core/query/compile'
 import { newId } from '@/core/project/sviz'
 import type { CalcField } from '@/shared/charts'
 
 type Value = string | number | boolean
 
-export function GroupDialog({ dataset, field, type, onClose }: { dataset: string; field: string; type: string; onClose: () => void }) {
+/** mode 'set': the ticked values are a set's members (Tableau's sets: In or Out), no group names. */
+export function GroupDialog({ dataset, field, type, mode = 'group', onClose }: { dataset: string; field: string; type: string; mode?: 'group' | 'set'; onClose: () => void }) {
+  const isSet = mode === 'set'
   const [values, setValues] = useState<Value[] | null>(null)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [name, setName] = useState('')
@@ -35,9 +37,13 @@ export function GroupDialog({ dataset, field, type, onClose }: { dataset: string
   }
   const save = () => {
     const taken = new Set(get().project?.calcs.map((c) => c.name.toLowerCase()))
-    let nm = `${field} (group)`
-    for (let i = 2; taken.has(nm.toLowerCase()); i++) nm = `${field} (group ${i})`
-    const c: CalcField = { id: newId(), dataset, name: nm, formula: groupFormula(field, groups, other, !isNumeric(type)) }
+    const base = `${field} (${isSet ? 'set' : 'group'}`
+    let nm = `${base})`
+    for (let i = 2; taken.has(nm.toLowerCase()); i++) nm = `${base} ${i})`
+    const members = (values ?? []).filter((v) => picked.has(String(v)))
+    const c: CalcField = isSet
+      ? { id: newId(), dataset, name: nm, formula: setFormula(field, members), set: { field, values: members } }
+      : { id: newId(), dataset, name: nm, formula: groupFormula(field, groups, other, !isNumeric(type)) }
     P.edit((p) => ({ ...p, calcs: [...p.calcs, c] }))
     toast(`Created “${nm}”`, 'success')
     onClose()
@@ -47,14 +53,14 @@ export function GroupDialog({ dataset, field, type, onClose }: { dataset: string
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title={`Group ${field}`}
-      description="Tick values, name the group and add it; repeat for more groups."
+      title={isSet ? `Set of ${field}` : `Group ${field}`}
+      description={isSet ? 'Tick the members: the set field is In for them and Out for the rest. A dashboard set action can change them.' : 'Tick values, name the group and add it; repeat for more groups.'}
       width={520}
       footer={
         <>
           <Btn onClick={onClose}>Cancel</Btn>
-          <Btn variant="primary" disabled={!groups.length} onClick={save} data-testid="group-save">
-            Create field
+          <Btn variant="primary" disabled={isSet ? false : !groups.length} onClick={save} data-testid="group-save">
+            {isSet ? 'Create set' : 'Create field'}
           </Btn>
         </>
       }
@@ -71,6 +77,8 @@ export function GroupDialog({ dataset, field, type, onClose }: { dataset: string
           </li>
         ))}
       </ul>
+      {!isSet && (
+        <>
       <div className="mt-2 flex gap-2">
         <input aria-label="Group name" placeholder="Group name" className={cx(inputCls, 'h-8 flex-1')} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addGroup()} />
         <Btn disabled={!picked.size} onClick={addGroup} data-testid="group-add">
@@ -93,6 +101,8 @@ export function GroupDialog({ dataset, field, type, onClose }: { dataset: string
       <label className="mt-3 flex items-center gap-2 text-[12.5px]">
         <input type="checkbox" className="size-4 accent-[var(--accent)]" checked={other} onChange={(e) => setOther(e.target.checked)} /> Put the other values in “Other”
       </label>
+        </>
+      )}
     </Modal>
   )
 }

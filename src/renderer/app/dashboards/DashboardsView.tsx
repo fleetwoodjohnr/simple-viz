@@ -716,12 +716,13 @@ function Actions({ d }: { d: Dashboard }) {
         {d.actions.map((a) => (
           <li key={a.id} className="rounded-lg bg-panel-2 p-2 text-[12px] shadow-[0_0_0_1px_var(--border)]">
             <div className="flex items-center gap-1.5">
-              <select aria-label="Action kind" className="h-7 flex-1 rounded-md border border-border bg-panel px-1 text-[12px]" value={a.kind} onChange={(e) => setActions((all) => all.map((x) => (x.id === a.id ? { ...x, kind: e.target.value as DashAction['kind'], target: e.target.value === 'navigate' ? (project.dashboards.find((y) => y.id !== d.id)?.id ?? '') : e.target.value === 'url' ? '' : e.target.value === 'param' ? (project.params[0]?.name ?? '') : '*' } : x)))}>
+              <select aria-label="Action kind" className="h-7 flex-1 rounded-md border border-border bg-panel px-1 text-[12px]" value={a.kind} onChange={(e) => setActions((all) => all.map((x) => (x.id === a.id ? { ...x, kind: e.target.value as DashAction['kind'], target: e.target.value === 'navigate' ? (project.dashboards.find((y) => y.id !== d.id)?.id ?? '') : e.target.value === 'url' ? '' : e.target.value === 'param' ? (project.params[0]?.name ?? '') : e.target.value === 'set' ? (project.calcs.find((c) => c.set)?.name ?? '') : '*' } : x)))}>
                 <option value="filter">Filter</option>
                 <option value="highlight">Highlight</option>
                 <option value="navigate">Go to dashboard</option>
                 <option value="url">Open a web page</option>
                 <option value="param">Set a parameter</option>
+                <option value="set">Change set values</option>
               </select>
               <IconBtn size="sm" label="Remove action" onClick={() => setActions((all) => all.filter((x) => x.id !== a.id))}>
                 <X className="size-3.5" />
@@ -737,8 +738,16 @@ function Actions({ d }: { d: Dashboard }) {
                   </option>
                 ))}
               </select>{' '}
-              {a.kind === 'url' ? 'opens ' : a.kind === 'param' ? 'sets ' : 'to '}
-              {a.kind === 'param' ? (
+              {a.kind === 'url' ? 'opens ' : a.kind === 'param' || a.kind === 'set' ? 'sets ' : 'to '}
+              {a.kind === 'set' ? (
+                <select aria-label="Target set" className="h-6 rounded border border-border bg-panel px-0.5 text-[11.5px]" value={a.target} onChange={(e) => setActions((all) => all.map((x) => (x.id === a.id ? { ...x, target: e.target.value } : x)))}>
+                  {project.calcs.filter((c) => c.set).map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              ) : a.kind === 'param' ? (
                 <>
                   <select aria-label="Target parameter" className="h-6 rounded border border-border bg-panel px-0.5 text-[11.5px]" value={a.target} onChange={(e) => setActions((all) => all.map((x) => (x.id === a.id ? { ...x, target: e.target.value } : x)))}>
                     {project.params.map((p) => (

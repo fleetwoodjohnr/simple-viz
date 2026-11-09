@@ -17,7 +17,10 @@ async function clickBar(page: Page, tile: Locator, category: string) {
       const c = (node as any).__echart
       const opt = c.getOption()
       const i = opt.xAxis[0].data.indexOf(cat)
-      const [x, y] = c.convertToPixel({ seriesIndex: 0 }, [i, opt.series[0].data[i].value / 2])
+      // The series with a bar for this category (with a color field, the others have none there).
+      const val = (d: any) => (d !== null && typeof d === 'object' ? d.value : d)
+      const si = Math.max(0, opt.series.findIndex((s: any) => val(s.data[i]) != null))
+      const [x, y] = c.convertToPixel({ seriesIndex: si }, [i, val(opt.series[si].data[i]) / 2])
       return { x, y, scale: Number(node.closest('[data-scale]')?.getAttribute('data-scale') ?? 1) }
     }, category)
     const box = (await el.boundingBox())!
@@ -213,5 +216,54 @@ test('parameters: created in the chart builder, a reference line, a dashboard co
   await page.getByTestId('mode-view').click()
   await clickBar(page, tile, 'Texas')
   await expect.poll(() => page.evaluate(() => (window as any).__sv.get().project.params.find((p: any) => p.name === 'Focus').value)).toBe('Texas')
+  await quit(app)
+})
+
+test('sets: created from a field, In/Out on a chart, changed by a set action', async () => {
+  test.setTimeout(180_000)
+  const { app, page } = await launch()
+  await salesProject(app, page, tempDir())
+  await page.getByTestId('nav-charts').click()
+  await page.getByTestId('new-chart-empty').click()
+  await page.getByTestId('chart-dataset').selectOption('sales_enriched')
+  for (const [field, shelf] of [['region', 'x'], ['revenue', 'y']]) {
+    await page.getByTestId(`field-${field}`).hover()
+    await page.getByTestId(`field-menu-${field}`).click()
+    await page.getByTestId(`add-to-${shelf}`).click()
+  }
+  await page.getByTestId('field-region').hover()
+  await page.getByTestId('field-menu-region').click()
+  await page.getByTestId('set-region').click()
+  await page.getByRole('dialog').getByRole('checkbox', { name: 'Texas' }).check()
+  await page.getByTestId('group-save').click()
+  await page.getByTestId('field-region (set)').dragTo(page.getByTestId('shelf-color'))
+  const inOut = async (scope: Page | Locator) => {
+    const opt = await scope.locator('[data-testid=echart]').first().evaluate((el) => (el as any).__echart.getOption())
+    const cats: string[] = opt.xAxis[0].data
+    const inSeries = opt.series.find((s: any) => s.name === 'In')
+    const val = (d: any) => (d !== null && typeof d === 'object' ? d.value : d)
+    return cats.filter((_, i) => inSeries && val(inSeries.data[i]) != null)
+  }
+  await expect.poll(() => inOut(page)).toEqual(['Texas'])
+  // Stacked, so a click at the category's centre lands on its bar (grouped bars sit either side of it).
+  await page.evaluate(() => {
+    const sv = (window as any).__sv
+    sv.P.edit((p: any) => ({ ...p, charts: p.charts.map((c: any) => ({ ...c, options: { ...c.options, stack: 'stacked' } })) }))
+  })
+
+  // A set action on a dashboard: clicking New York makes it the set's member.
+  await page.getByTestId('nav-dashboards').click()
+  await page.getByTestId('new-dashboard-empty').click()
+  await page.locator('[data-testid^=palette-chart-]').first().click()
+  await page.getByTestId('mode-view').click()
+  await page.getByTestId('mode-edit').click() // nothing selected: the dashboard's own properties and actions
+  await page.getByRole('button', { name: 'Add action' }).click()
+  await page.getByLabel('Action kind').last().selectOption('set')
+  await page.getByLabel('Target set').selectOption('region (set)')
+  await page.getByTestId('mode-view').click()
+  const tile = page.locator('[data-testid=item-chart]').first()
+  await clickBar(page, tile, 'New York')
+  await expect.poll(() => page.evaluate(() => (window as any).__sv.get().project.calcs.find((c: any) => c.set).set.values)).toEqual(['New York'])
+  await expect.poll(() => inOut(tile)).toEqual(['New York'])
   await quit(app)
 })

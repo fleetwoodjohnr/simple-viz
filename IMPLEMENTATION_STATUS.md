@@ -70,6 +70,7 @@ Linux, Windows and macOS._
 | Calculated fields: DuckDB SQL + `[Field]`, Tableau `IF … ELSEIF … END`, Tableau function names (ZN, IIF, COUNTD, DATEADD…), `+` joining text | unit `calc`, integration `charts`, e2e `charts` |
 | Compute using: a table calculation runs along a chosen dimension of the view, partitioned by the others | integration `charts`, e2e `charts` |
 | Show missing dates: every period of a date axis from the first to the last, empty ones null; table calculations run over them | integration `charts`, e2e `charts` |
+| Sets: a dimension's chosen members In, the rest Out (field menu → Create set…); a dashboard set action makes the clicked value the member | unit `calc`, e2e `objects` |
 | Groups: a dimension's values combined under names (field menu → Create group…), the rest kept or put in Other; saved as a calculated field | unit `calc`, e2e `charts` |
 | Level of detail: FIXED (before dimension filters, after context filters), INCLUDE, EXCLUDE; aggregated over one row per view × LOD combination, as Tableau documents | integration `charts` (5 LOD cases) |
 | Table calculations: RUNNING_*, WINDOW_*, RANK*, LOOKUP, INDEX, SIZE, FIRST, LAST, TOTAL; quick calcs (running total, % of total, rank, difference, moving average, year over year) | integration `charts › table calculations` |

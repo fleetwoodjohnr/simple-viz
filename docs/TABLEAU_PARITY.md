@@ -33,7 +33,7 @@ _Checked against Tableau's documentation on 8 November 2026._
 | [Parameters](https://help.tableau.com/current/pro/desktop/en-us/parameters_create.htm) | Number, text, date, yes/no, with lists; in formulas (and so in calculated filters), reference lines, dashboard controls and parameter actions | ◐ Filters can't bind to a parameter directly (use a calculated field); no range limits in the control |
 | [Hierarchies](https://help.tableau.com/current/pro/desktop/en-us/qs_hierarchies.htm) | Drill paths saved and reused; drill down/up on dashboards | ✅ |
 | [Groups](https://help.tableau.com/current/pro/desktop/en-us/sortgroup_groups_creating.htm) | Field menu → Create group…: tick values, name the group (the rest keep their names or become Other); saved as an editable calculated field | ◐ Not by selecting marks in the chart |
-| [Sets](https://help.tableau.com/current/pro/desktop/en-us/sortgroup_sets_create.htm) | — | ✗ |
+| [Sets](https://help.tableau.com/current/pro/desktop/en-us/sortgroup_sets_create.htm) | Field menu → Create set…: chosen members are In, the rest Out (a field for shelves and filters); set actions change the members | ◐ No conditional or top-N sets, no combined sets |
 
 ## Charts and analytics
 
@@ -57,7 +57,7 @@ _Checked against Tableau's documentation on 8 November 2026._
 |---|---|---|
 | [Dashboards](https://help.tableau.com/current/pro/desktop/en-us/dashboards_create.htm) | Charts, text with live values, images, shapes, buttons, filter controls, layout containers | ✅ |
 | [Floating and tiled layout](https://help.tableau.com/current/pro/desktop/en-us/dashboards_organize_floatingandtiled.htm) | Free canvas with grid snapping, align, distribute, group, lock; row/column containers | ◐ No tiled auto-layout |
-| [Actions](https://help.tableau.com/current/pro/desktop/en-us/actions.htm) | Filter, highlight, go to dashboard, open a web page (`{Field}` or `<Field>` in the address), set a parameter | ◐ No set actions |
+| [Actions](https://help.tableau.com/current/pro/desktop/en-us/actions.htm) | Filter, highlight, go to dashboard, open a web page (`{Field}` or `<Field>` in the address), set a parameter, change set values | ✅ |
 | [Device layouts](https://help.tableau.com/current/pro/desktop/en-us/dashboards_dsd_create.htm) | Size presets (desktop, laptop, tablet, phone, A4, Letter) | ◐ One layout per dashboard |
 | Presentation | Presentation mode with dashboard tabs | ✅ |
 | [Stories](https://help.tableau.com/current/pro/desktop/en-us/stories.htm) | — | ✗ |

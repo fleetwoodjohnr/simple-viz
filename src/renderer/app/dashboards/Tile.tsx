@@ -86,6 +86,13 @@ export function ChartTile({ d, item, interactive }: { d: Dashboard; item: DashIt
       const hit = Object.entries(m.values).find(([f]) => !want || f.toLowerCase() === want)
       if (hit) P.setParam(a.target, hit[1])
     }
+    // Set actions: the set's members become the clicked mark's value of its field.
+    for (const a of d.actions) {
+      if (a.kind !== 'set' || !a.target || (a.source !== '*' && a.source !== item.id)) continue
+      const set = useApp.getState().project?.calcs.find((c) => c.set && c.name.toLowerCase() === a.target.toLowerCase())?.set
+      const hit = set && Object.entries(m.values).find(([f]) => f.toLowerCase() === set.field.toLowerCase())
+      if (hit && hit[1] !== null) P.setSetValues(a.target, [hit[1] as string | number | boolean])
+    }
     // URL actions open their page.
     for (const a of d.actions) {
       if (a.kind !== 'url' || !a.target.trim() || (a.source !== '*' && a.source !== item.id)) continue

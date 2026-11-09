@@ -418,9 +418,17 @@ function splitTop(s: string, sep: string): string[] {
 
 /** A group (Tableau's "Create Group"): a calculated field mapping chosen values of a dimension to group names; the
  *  values in no group keep their own name, or become "Other". */
+const litOf = (v: string | number | boolean) => (typeof v === 'string' ? `'${v.replace(/'/g, "''")}'` : String(v))
+const refOf = (field: string) => `[${field.replace(/\]/g, ']]')}]`
+
+/** A set (Tableau's sets): "In" for the member values of a dimension, "Out" for the rest. */
+export function setFormula(field: string, values: (string | number | boolean)[]): string {
+  return values.length ? `IF ${refOf(field)} IN (${values.map(litOf).join(', ')}) THEN 'In' ELSE 'Out' END` : "'Out'"
+}
+
 export function groupFormula(field: string, groups: { name: string; values: (string | number | boolean)[] }[], other: boolean, text = true): string {
-  const lit = (v: string | number | boolean) => (typeof v === 'string' ? `'${v.replace(/'/g, "''")}'` : String(v))
-  const ref = `[${field.replace(/\]/g, ']]')}]`
+  const lit = litOf
+  const ref = refOf(field)
   const whens = groups.filter((g) => g.values.length).map((g) => `  WHEN ${ref} IN (${g.values.map(lit).join(', ')}) THEN ${lit(g.name)}`)
   return `CASE\n${whens.join('\n')}\n  ELSE ${other ? "'Other'" : text ? ref : `STR(${ref})`}\nEND`
 }

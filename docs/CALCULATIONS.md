@@ -71,6 +71,12 @@ Field menu → **Create group…** on a dimension: tick values, name the group, 
 calculated field, `<field> (group)`, with a `CASE … WHEN [field] IN (…) THEN 'name' … END` formula you can edit like
 any other.
 
+## Sets
+
+Field menu → **Create set…** on a dimension: tick the members. The set is a field, `<field> (set)`, that is `In` for
+them and `Out` for the rest — put it on Color or filter by it. On a dashboard, a **Change set values** action makes the
+clicked mark's value the set's member, so every chart using the set follows the click.
+
 ## Joining text
 
 `+` joins text as in Tableau — `[First name] + ' ' + [Last name]`, `STR([Year]) + '%'` — when the value next to it is

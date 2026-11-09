@@ -6,6 +6,7 @@ import { describe, holdRequestsUntil, onEngineConnected } from './engine'
 import { newProject as blankProject, newId, packProject, unpackProject } from '@/core/project/sviz'
 import { DEFAULT_REFRESH, FILE_FORMATS, PROJECT_EXTENSION, isRemotePath, isSheetFormat, toAlias, type Dataset, type FileSource, type Project, type Source } from '@/shared/project'
 import { coerceParam } from '@/shared/charts'
+import { setFormula } from '@/core/calc/compile'
 import type { OpenedFile, RecoveryEntry } from '@/shared/ipc-types'
 import type { SourceStatus } from '@/shared/engine-protocol'
 
@@ -465,4 +466,9 @@ export function removeDataset(id: string) {
 /** Sets a parameter's current value (kept in the project, like Tableau's). */
 export function setParam(name: string, value: unknown) {
   edit((p) => ({ ...p, params: p.params.map((x) => (x.name.toLowerCase() === name.toLowerCase() ? { ...x, value: coerceParam(x, value) } : x)) }))
+}
+
+/** Replaces a set's members (a set action), regenerating its formula. */
+export function setSetValues(name: string, values: (string | number | boolean)[]) {
+  edit((p) => ({ ...p, calcs: p.calcs.map((c) => (c.set && c.name.toLowerCase() === name.toLowerCase() ? { ...c, set: { ...c.set, values }, formula: setFormula(c.set.field, values) } : c)) }))
 }

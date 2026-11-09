@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { compileCalc, CalcError, groupFormula } from '@/core/calc/compile'
+import { compileCalc, CalcError, groupFormula, setFormula } from '@/core/calc/compile'
 import { aggregateCalls, windowAgg } from '@/core/query/compile'
 
 const cols = ['Sales', 'Profit', 'Region', 'Order Date', 'tags']
@@ -60,6 +60,12 @@ describe('calculated field syntax', () => {
     expect(compileCalc(f, cols, [], 't').expr).toContain(`WHEN "Region" IN ('Virginia', 'New York')`)
     expect(groupFormula('Sales', [{ name: 'Small', values: [1, 2] }], true, false)).toContain("IN (1, 2) THEN 'Small'\n  ELSE 'Other'")
     expect(groupFormula('Sales', [{ name: 'Small', values: [1] }], false, false)).toContain('ELSE STR([Sales])')
+  })
+
+  it('sets: In for the members, Out for the rest; an empty set is all Out', () => {
+    expect(setFormula('Region', ['Texas', "O'Hare"])).toBe("IF [Region] IN ('Texas', 'O''Hare') THEN 'In' ELSE 'Out' END")
+    expect(compileCalc(setFormula('Region', ['Texas']), cols, [], 't').expr).toBe(`CASE WHEN "Region" IN ('Texas') THEN 'In' ELSE 'Out' END`)
+    expect(setFormula('Region', [])).toBe("'Out'")
   })
 
   it('joins text with + as Tableau does, next to a text value, text field or text function', () => {

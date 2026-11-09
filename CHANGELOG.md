@@ -13,8 +13,8 @@
   timer; a failed refresh keeps the last good data, marked stale with the reason.
 - **Charts.** Drag fields onto shelves; Simple Viz suggests the chart type. Bar, line, area, combo, pie, scatter,
   histogram, box plot, heat map, treemap, KPI, table and crosstab. Calculated fields with Tableau's syntax and
-  semantics: FIXED/INCLUDE/EXCLUDE level of detail, table calculations, quick calculations, `+` joining text; groups of
-  a dimension's values; show missing dates (table calculations run over the empty periods); table calculations computed along a chosen
+  semantics: FIXED/INCLUDE/EXCLUDE level of detail, table calculations, quick calculations, `+` joining text; groups and sets
+  of a dimension's values (set actions on dashboards); show missing dates (table calculations run over the empty periods); table calculations computed along a chosen
   dimension. Filters, top N, reference
   and trend lines, number formats; PNG, SVG and CSV export.
 - **Dashboards.** Drag charts onto a canvas, resize, align, group, lock; text with live values, filter controls,
