@@ -21,6 +21,7 @@ const api: SimpleVizApi = {
   readFile: (p) => ipcRenderer.invoke('files:read', p),
   saveDialog: (name, exts) => ipcRenderer.invoke('files:save-dialog', name, exts),
   writeFile: (p, data) => ipcRenderer.invoke('files:write', p, data),
+  openExample: () => ipcRenderer.invoke('examples:open'),
   packageData: (tables) => ipcRenderer.invoke('project:package', tables),
   storePackagedData: (id, files) => ipcRenderer.invoke('project:store-packaged', id, files),
   grantDroppedFile: (file) => {

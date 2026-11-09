@@ -164,3 +164,14 @@ describe('patterns', () => {
     expect((plugin('waterfall').option!(d, LIGHT) as A).aria.decal.show).toBe(false)
   })
 })
+
+describe('axis labels', () => {
+  it('stay compact with a number format, keeping the currency symbol', () => {
+    const money = f('m0', 'revenue', 'measure', 'y', 'DOUBLE', { format: '$#,##0' })
+    const compact = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(1_250_000)
+    expect(fmt(1_250_000, money, 'axis')).toBe(`$${compact}`)
+    expect(fmt(1_250_000, money)).toBe('$1,250,000')
+    expect(fmt(950, money, 'axis')).toBe('$950')
+    expect(fmt(0.25, f('m1', 'share', 'measure', 'y', 'DOUBLE', { format: '0%' }), 'axis')).toBe('25%')
+  })
+})

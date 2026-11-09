@@ -222,7 +222,8 @@ function Workspace({ d }: { d: Dashboard }) {
   return (
     <div className="flex min-w-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-1.5 border-b border-border bg-panel px-3 py-1.5">
+        {/* Wraps: with a selection, the arrange tools would not fit a narrow window on one line. */}
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-panel px-3 py-1.5">
           <span className="mr-2 truncate text-[14px] font-semibold" data-testid="dashboard-name">{d.name}</span>
           <Segmented value={mode} onChange={(m) => setDash({ mode: m, selected: [] })} label="Mode" options={[{ value: 'edit', label: <span className="flex items-center gap-1"><Pencil className="size-3.5" /> Edit</span> }, { value: 'view', label: <span className="flex items-center gap-1" data-testid="mode-view"><Eye className="size-3.5" /> View</span> }]} />
           {mode === 'edit' && sel.length > 0 && <Arrange d={d} sel={sel} />}
@@ -268,7 +269,7 @@ function Arrange({ d, sel }: { d: Dashboard; sel: DashItem[] }) {
   const al = (a: Align) => apply((s) => align(s, a))
   const one = sel.length === 1 ? sel[0] : null
   return (
-    <div className="ml-2 flex items-center gap-0.5 border-l border-border pl-2" role="toolbar" aria-label="Arrange">
+    <div className="ml-2 flex flex-wrap items-center gap-0.5 border-l border-border pl-2" role="toolbar" aria-label="Arrange">
       {sel.length > 1 && (
         <>
           <IconBtn label="Align left" onClick={() => al('left')} data-testid="align-left"><AlignLeft className="size-4" /></IconBtn>

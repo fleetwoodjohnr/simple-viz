@@ -90,6 +90,8 @@ export interface SimpleVizApi {
   readFile(path: string): Promise<OpenedFile>
   saveDialog(defaultName: string, extensions: string[]): Promise<string | null>
   writeFile(path: string, data: Uint8Array): Promise<{ mtime: number }>
+  /** Writes a fresh copy of the example project into the user's data folder; returns the project file's path. */
+  openExample(): Promise<string>
   /** Portable packages: each table's cached copy as Parquet, by `sourceId__alias`. */
   packageData(tables: { sourceId: string; ref?: string; alias: string }[]): Promise<Record<string, Uint8Array>>
   /** Keeps a portable package's data for a project (the engine starts from it where nothing is cached). */

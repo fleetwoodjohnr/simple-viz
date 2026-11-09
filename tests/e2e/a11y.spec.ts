@@ -29,6 +29,10 @@ const DIALOGS: [string, Record<string, unknown>][] = [
 
 async function audit(theme: 'light' | 'dark') {
   const { app, page } = await launch({ settings: { theme } })
+  // The theme is applied after the first paint: audit once it is (a slow machine was caught mid-switch).
+  if (theme === 'dark') await expect(page.locator('html')).toHaveClass(/\bdark\b/)
+  else await expect(page.locator('html')).not.toHaveClass(/\bdark\b/)
+  await page.waitForTimeout(300)
   const found: string[] = []
   found.push(...(await violations(page, `${theme} Home (empty)`)))
   await salesProject(app, page, tempDir())

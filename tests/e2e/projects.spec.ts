@@ -72,7 +72,12 @@ test('unsaved work comes back after a crash', async () => {
   await page.getByTestId('add-file').click()
   await page.getByTestId('relation-customers').waitFor()
   await expect.poll(() => (existsSync(path.join(userData, 'recovery')) ? readdirSync(path.join(userData, 'recovery')).length : 0), { timeout: 15_000 }).toBe(1)
+  // Wait until the killed instance is gone: on Windows it holds the single-instance lock a moment longer, and a new
+  // instance started meanwhile hands over to it and quits.
+  const gone = new Promise((r) => app.process().once('exit', r))
   app.process().kill('SIGKILL')
+  await gone
+  await new Promise((r) => setTimeout(r, 1500))
   const again = await launch({ userData })
   await expect(again.page.getByTestId('recovery')).toBeVisible()
   await again.page.getByTestId('recovery').getByRole('button', { name: 'Restore' }).click()

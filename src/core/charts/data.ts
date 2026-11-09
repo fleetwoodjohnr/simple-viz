@@ -50,6 +50,8 @@ const full = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 })
 export function fmt(v: Value, f?: OutField, mode: 'axis' | 'full' = 'full'): string {
   if (v === null || v === undefined) return 'Null'
   if (typeof v === 'number') {
+    // Axis labels stay short (compact, keeping a leading currency symbol): full amounts overlap on value axes.
+    if (f?.ref.format && mode === 'axis' && Math.abs(v) >= 10_000 && !f.ref.format.includes('%')) return `${/^"?([$€£¥])/.exec(f.ref.format)?.[1] ?? ''}${compact.format(v)}`
     if (f?.ref.format) return formatValue(v, f.ref.format).text
     if (f?.ref.quick === 'pct_total' || f?.ref.quick === 'pct_diff_prev' || f?.ref.quick === 'yoy') return `${(v * 100).toFixed(1)}%`
     return mode === 'axis' && Math.abs(v) >= 10_000 ? compact.format(v) : full.format(v)

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { FileSpreadsheet, Globe2, Loader2, Server, Table2, Tag } from 'lucide-react'
-import { useApp, get, toast } from '../state/store'
+import { useApp, get, set as setStore, toast } from '../state/store'
 import * as P from '../state/project'
 import { close } from './Dialogs'
 import { Btn, Field, Modal, Segmented, cx, inputCls } from '../ui'
@@ -136,6 +136,9 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
         </>
       }
     >
+      <div className="mb-3">
+        <Segmented value={kind} onChange={(v) => setStore({ dialog: { kind: 'connect-db', kind2: v } })} label="Database type" options={(Object.keys(SERVER) as ServerKind[]).map((k) => ({ value: k, label: SERVER[k].label }))} />
+      </div>
       <div className="grid grid-cols-[1fr_110px] gap-3">
         <Field label="Host">
           <input className={inputCls} value={f.host} onChange={(e) => upd({ host: e.target.value })} aria-label="Host" data-testid="pg-host" />

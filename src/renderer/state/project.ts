@@ -234,6 +234,17 @@ export async function openDialog() {
   if (files.length) await openFiles(files)
 }
 
+/** Opens a fresh copy of the example project (sales data, charts, a dashboard). */
+export async function openExample() {
+  try {
+    const path = await api().openExample()
+    await openFiles([await api().readFile(path)])
+    set({ workspace: 'dashboards' })
+  } catch (e) {
+    toast(`Couldn’t open the example: ${(e as Error).message}`, 'error')
+  }
+}
+
 export async function openPath(path: string) {
   try {
     await openFiles([await api().readFile(path)])

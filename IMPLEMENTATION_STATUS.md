@@ -56,6 +56,8 @@ Linux, Windows and macOS._
 | Crash recovery: unsaved work restored after the app is killed | e2e `projects` |
 | Portable copy (File → Save a Portable Copy): each table's cached data inside the `.sviz` as Parquet; on another computer it seeds the cache and stays the last good data until the sources can be read (live tables aren't included) | integration `formats`, e2e `projects` (opened in a fresh profile with the source files deleted) |
 | SQL editor: schema completion, formatting, plan, history, saved queries (in the project), CSV and Excel export | e2e `sqleditor` |
+| Example project from Home (sales data, five charts, a dashboard with a filter and cross-filtering), a fresh copy in the user's data folder | e2e `example` |
+| One database dialog for PostgreSQL, MySQL/MariaDB and SQL Server (switch at the top) | e2e `example` |
 
 ## M2 — Charts and calculations ✅
 

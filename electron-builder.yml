@@ -24,6 +24,8 @@ asarUnpack:
 extraResources:
   - from: resources/duckdb-ext/${os}-${arch}
     to: duckdb-ext
+  - from: resources/examples
+    to: examples
 fileAssociations:
   - ext: sviz
     name: Simple Viz Project

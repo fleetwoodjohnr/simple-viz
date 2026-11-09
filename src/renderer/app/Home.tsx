@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Clock, Database, FilePlus2, FileSpreadsheet, FolderOpen, LifeBuoy, MoreHorizontal, Pin, PinOff, Search, Server, Star, Trash2, BarChart3 } from 'lucide-react'
+import { Clock, Database, FilePlus2, FileSpreadsheet, FolderOpen, LayoutDashboard, LifeBuoy, MoreHorizontal, Pin, PinOff, Search, Server, Star, Trash2, BarChart3 } from 'lucide-react'
 import { useApp, set } from '../state/store'
 import * as P from '../state/project'
 import type { RecentFile } from '@/shared/ipc-types'
@@ -139,10 +139,11 @@ export function Home() {
 
         <section className="mt-9">
           <h3 className="mb-3 text-[13px] font-semibold text-text-2">{project ? `Add data to ${project.title}` : 'Start with your data'}</h3>
-          <div className="grid grid-cols-3 gap-3">
+          <div className={cx('grid gap-3', project ? 'grid-cols-3' : 'grid-cols-2 xl:grid-cols-4')}>
             <StartCard testid="start-file" icon={<FileSpreadsheet />} title="Excel, CSV or other file" body="xlsx, xls, ods, csv, json, parquet, arrow, xml, SQLite and DuckDB files" onClick={() => void pickDataFiles()} />
-            <StartCard testid="start-postgres" icon={<Server />} title="PostgreSQL" body="Query a database live, or keep a fast local extract" onClick={() => runCommand('data.connect')} />
+            <StartCard testid="start-postgres" icon={<Server />} title="Database" body="PostgreSQL, MySQL or SQL Server: live, or a fast local extract" onClick={() => runCommand('data.connect')} />
             <StartCard testid="start-blank" icon={<Database />} title={project ? 'Go to Data' : 'Blank project'} body={project ? 'Sources, previews and datasets' : 'Start empty and add sources later'} onClick={() => (project ? set({ workspace: 'data' }) : runCommand('file.new'))} />
+            {!project && <StartCard testid="start-example" icon={<LayoutDashboard />} title="Example project" body="Sales data with charts and a dashboard to explore" onClick={() => void P.openExample()} />}
           </div>
         </section>
 

@@ -1,0 +1,325 @@
+{
+ "schemaVersion": 1,
+ "id": "example-sales-overview",
+ "title": "Sales example",
+ "createdAt": 0,
+ "sources": [
+  {
+   "id": "example-sales",
+   "kind": "file",
+   "name": "Sales.xlsx",
+   "format": "xlsx",
+   "path": "${EXAMPLES}/Sales.xlsx",
+   "tables": [
+    {
+     "alias": "transactions",
+     "ref": "Transactions"
+    }
+   ],
+   "refresh": {
+    "onOpen": true,
+    "watch": true,
+    "onFocus": true,
+    "everyMin": 0
+   }
+  },
+  {
+   "id": "example-customers",
+   "kind": "file",
+   "name": "customers.csv",
+   "format": "csv",
+   "path": "${EXAMPLES}/customers.csv",
+   "tables": [
+    {
+     "alias": "customers"
+    }
+   ],
+   "refresh": {
+    "onOpen": true,
+    "watch": true,
+    "onFocus": true,
+    "everyMin": 0
+   }
+  }
+ ],
+ "datasets": [
+  {
+   "id": "example-dataset",
+   "name": "sales",
+   "sql": "SELECT t.order_id, t.order_date, t.customer_id, c.customer_name, c.region, c.segment, t.product_name, t.quantity,\n  t.revenue, t.cost, t.revenue - t.cost AS profit\nFROM transactions t LEFT JOIN customers c USING (customer_id)",
+   "description": "Orders with their customer, region and profit"
+  }
+ ],
+ "queries": [
+  {
+   "id": "example-query",
+   "name": "Revenue and profit by segment",
+   "sql": "SELECT segment, round(sum(revenue)) AS revenue, round(sum(profit)) AS profit\nFROM sales\nGROUP BY segment\nORDER BY revenue DESC"
+  }
+ ],
+ "charts": [
+  {
+   "id": "example-chart-1",
+   "name": "Profit",
+   "dataset": "sales",
+   "type": "kpi",
+   "enc": {
+    "x": [],
+    "y": [
+     {
+      "field": "profit",
+      "agg": "sum",
+      "format": "$#,##0"
+     },
+     {
+      "field": "revenue",
+      "agg": "sum",
+      "format": "$#,##0"
+     }
+    ],
+    "detail": [],
+    "tooltip": []
+   },
+   "filters": [],
+   "options": {
+    "title": "Profit"
+   },
+   "updatedAt": 0
+  },
+  {
+   "id": "example-chart-2",
+   "name": "Revenue by region",
+   "dataset": "sales",
+   "type": "bar",
+   "enc": {
+    "x": [
+     {
+      "field": "region"
+     }
+    ],
+    "y": [
+     {
+      "field": "revenue",
+      "agg": "sum",
+      "format": "$#,##0"
+     }
+    ],
+    "detail": [],
+    "tooltip": []
+   },
+   "filters": [],
+   "options": {
+    "sort": {
+     "by": "value",
+     "dir": "desc"
+    },
+    "refLines": [
+     {
+      "id": "avg",
+      "kind": "average"
+     }
+    ]
+   },
+   "updatedAt": 0
+  },
+  {
+   "id": "example-chart-3",
+   "name": "Revenue by month",
+   "dataset": "sales",
+   "type": "line",
+   "enc": {
+    "x": [
+     {
+      "field": "order_date",
+      "grain": "month"
+     }
+    ],
+    "y": [
+     {
+      "field": "revenue",
+      "agg": "sum",
+      "format": "$#,##0"
+     }
+    ],
+    "detail": [],
+    "tooltip": []
+   },
+   "filters": [],
+   "options": {
+    "forecast": {
+     "periods": 3
+    }
+   },
+   "updatedAt": 0
+  },
+  {
+   "id": "example-chart-4",
+   "name": "Revenue by state",
+   "dataset": "sales",
+   "type": "map",
+   "enc": {
+    "x": [
+     {
+      "field": "region"
+     }
+    ],
+    "y": [
+     {
+      "field": "revenue",
+      "agg": "sum",
+      "format": "$#,##0"
+     }
+    ],
+    "detail": [],
+    "tooltip": []
+   },
+   "filters": [],
+   "options": {
+    "map": "us-states"
+   },
+   "updatedAt": 0
+  },
+  {
+   "id": "example-chart-5",
+   "name": "Profit by product",
+   "dataset": "sales",
+   "type": "bar",
+   "enc": {
+    "x": [
+     {
+      "field": "product_name"
+     }
+    ],
+    "y": [
+     {
+      "field": "profit",
+      "agg": "sum",
+      "format": "$#,##0"
+     }
+    ],
+    "detail": [],
+    "tooltip": []
+   },
+   "filters": [],
+   "options": {
+    "horizontal": true,
+    "sort": {
+     "by": "value",
+     "dir": "desc"
+    }
+   },
+   "updatedAt": 0
+  }
+ ],
+ "models": [],
+ "hierarchies": [],
+ "calcs": [],
+ "params": [],
+ "dashboards": [
+  {
+   "id": "example-dashboard",
+   "name": "Sales overview",
+   "size": {
+    "mode": "fit",
+    "w": 1366,
+    "h": 760
+   },
+   "items": [
+    {
+     "id": "example-title",
+     "kind": "text",
+     "x": 24,
+     "y": 16,
+     "w": 640,
+     "h": 48,
+     "text": "Sales overview — {region}",
+     "textStyle": {
+      "size": 22,
+      "bold": true
+     }
+    },
+    {
+     "id": "example-filter",
+     "kind": "filter",
+     "x": 1040,
+     "y": 8,
+     "w": 304,
+     "h": 64,
+     "filter": {
+      "field": "region",
+      "mode": "dropdown",
+      "title": "Region",
+      "multi": true
+     }
+    },
+    {
+     "id": "example-kpi",
+     "kind": "chart",
+     "x": 24,
+     "y": 80,
+     "w": 320,
+     "h": 160,
+     "chartId": "example-chart-1"
+    },
+    {
+     "id": "example-region",
+     "kind": "chart",
+     "x": 360,
+     "y": 80,
+     "w": 480,
+     "h": 320,
+     "chartId": "example-chart-2"
+    },
+    {
+     "id": "example-map",
+     "kind": "chart",
+     "x": 856,
+     "y": 80,
+     "w": 488,
+     "h": 320,
+     "chartId": "example-chart-4"
+    },
+    {
+     "id": "example-kpi-note",
+     "kind": "text",
+     "x": 24,
+     "y": 256,
+     "w": 320,
+     "h": 144,
+     "text": "Switch to View (top of the dashboard), then click a region on the bars or the map to filter everything else. Click it again to clear.",
+     "textStyle": {
+      "size": 13
+     }
+    },
+    {
+     "id": "example-month",
+     "kind": "chart",
+     "x": 24,
+     "y": 416,
+     "w": 816,
+     "h": 328,
+     "chartId": "example-chart-3"
+    },
+    {
+     "id": "example-product",
+     "kind": "chart",
+     "x": 856,
+     "y": 416,
+     "w": 488,
+     "h": 328,
+     "chartId": "example-chart-5"
+    }
+   ],
+   "actions": [
+    {
+     "id": "example-action",
+     "kind": "filter",
+     "source": "*",
+     "target": "*"
+    }
+   ],
+   "updatedAt": 0
+  }
+ ],
+ "maps": []
+}

@@ -4,6 +4,7 @@ import { promises as fs, existsSync } from 'node:fs'
 import path from 'node:path'
 import type { ConnectionDraft, OpenedFile, RecentFile, Settings } from '../shared/ipc-types'
 import type { EngineConfig, ResolvedSource } from '../shared/engine-protocol'
+import { packProject, migrate } from '../core/project/sviz'
 import { DATA_EXTENSIONS, FILE_FORMATS, PROJECT_EXTENSION, SERVER, isServer, isRemotePath, isSheetFormat, type Project, type Source } from '../shared/project'
 import * as store from './store'
 import * as creds from './credentials'
@@ -84,6 +85,23 @@ function extensionsDir(): string | null {
   const os = ({ darwin: 'mac', win32: 'win' } as Record<string, string>)[process.platform] ?? process.platform
   const dir = app.isPackaged ? path.join(process.resourcesPath, 'duckdb-ext') : path.join(app.getAppPath(), 'resources', 'duckdb-ext', `${os}-${process.arch}`)
   return existsSync(dir) ? dir : null
+}
+
+/**
+ * The example project: its workbook, customer list and project template are copied into the user's data folder (a
+ * fresh copy each time), the template's ${EXAMPLES} paths point there, and the project is written as a .sviz.
+ */
+async function openExample(): Promise<string> {
+  const from = app.isPackaged ? path.join(process.resourcesPath, 'examples') : path.join(app.getAppPath(), 'resources', 'examples')
+  const to = path.join(app.getPath('userData'), 'examples')
+  await fs.mkdir(to, { recursive: true })
+  for (const f of ['Sales.xlsx', 'customers.csv']) await fs.copyFile(path.join(from, f), path.join(to, f))
+  const template = (await fs.readFile(path.join(from, 'example.json'), 'utf8')).replaceAll('${EXAMPLES}', to.replaceAll('\\', '\\\\'))
+  const file = path.join(to, 'Sales example.sviz')
+  await store.atomicWrite(file, packProject(migrate(JSON.parse(template))))
+  for (const f of ['Sales.xlsx', 'customers.csv', 'Sales example.sviz']) grant(path.join(to, f))
+  await addTrust(['Sales.xlsx', 'customers.csv'].map((f) => `file:${path.resolve(to, f)}`))
+  return file
 }
 
 // Sources the user approved: file paths, and database servers as kind:user@host:port/database.
@@ -444,6 +462,7 @@ function registerIpc() {
     if (ids !== undefined && (!Array.isArray(ids) || !ids.every(isId))) throw new Error('Invalid sources')
     return engine.request({ op: 'refresh', sourceIds: ids as string[] | undefined, force: !!force })
   })
+  handle('examples:open', () => openExample())
   handle('project:package', async (_e, tables: unknown) => {
     if (!Array.isArray(tables) || tables.length > 2000 || !tables.every((t) => t && isId(t.sourceId) && isName(t.alias) && (t.ref === undefined || (typeof t.ref === 'string' && t.ref.length <= 500)))) throw new Error('Invalid tables')
     const staged = await engine.request<Record<string, string>>({ op: 'package', tables })
