@@ -11,6 +11,41 @@ and [Simple Cell](https://github.com/fleetwoodjohnr/simple-cell).
 > refresh all work and are tested; see [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for exactly what is done, how it is
 > tested, and what isn't there yet. Simple Viz does **not** claim Tableau compatibility.
 
+![A dashboard in Simple Viz: a KPI, bars, a map, a forecast line and a filter](docs/screenshots/dashboard.png)
+
+| Build charts by dragging fields | Query files and databases with SQL | Preview any table |
+|---|---|---|
+| ![The chart builder with fields, shelves and chart types](docs/screenshots/chart-builder.png) | ![The SQL editor with a query and its result](docs/screenshots/sql.png) | ![A table of an Excel workbook in the Data view](docs/screenshots/data.png) |
+
+The screenshots show the example project that ships with the app (Home → *Example project*).
+
+## Install
+
+Download the installer for your computer from the [latest release](https://github.com/fleetwoodjohnr/simple-viz/releases/latest):
+
+| System | File | How |
+|---|---|---|
+| Windows 10/11 (64-bit) | `Simple-Viz-Setup-<version>.exe` | Run it and follow the installer |
+| macOS, Apple silicon (M1 and later) | `Simple-Viz-<version>-arm64.dmg` | Open it and drag Simple Viz to Applications |
+| macOS, Intel | `Simple-Viz-<version>.dmg` | Open it and drag Simple Viz to Applications |
+| Ubuntu, Debian | `simple-viz_<version>_amd64.deb` | `sudo apt install ./simple-viz_<version>_amd64.deb` |
+| Fedora, RHEL, openSUSE | `simple-viz-<version>.x86_64.rpm` | `sudo dnf install ./simple-viz-<version>.x86_64.rpm` |
+| Other Linux (x64) | `Simple-Viz-<version>.AppImage` | `chmod +x Simple-Viz-<version>.AppImage`, then run it |
+
+**The installers aren't code-signed yet**, so the system warns the first time:
+
+- **Windows:** on the “Windows protected your PC” screen choose *More info* → *Run anyway*.
+- **macOS:** open the app once, then go to System Settings → Privacy & Security and choose *Open Anyway* (on older
+  versions: right-click the app → *Open*).
+
+The app checks for a newer release once a day and asks before installing it (turn this off in Settings → About and
+updates); on macOS it opens the release page instead. Nothing else is sent anywhere.
+
+To connect through ODBC on Linux or macOS, also install unixODBC (`sudo apt install unixodbc`,
+`sudo dnf install unixODBC`, `brew install unixodbc`) and your database's driver.
+
+To build from source: `npm ci`, then `npm run dev` — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## What it does
 
 - **Connect.** Excel (`.xlsx`, `.xlsm`, `.xls`, `.xlsb`), OpenDocument (`.ods`), CSV, TSV, JSON, Parquet, Arrow/Feather, XML,
