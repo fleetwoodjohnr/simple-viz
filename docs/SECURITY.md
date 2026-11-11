@@ -36,9 +36,21 @@ open), so project SQL is treated as untrusted.
 bypassed): reading `/etc/passwd`-style files, writing files, loading extensions, changing settings, attaching
 databases, reading the cache, `postgres_scan` with an arbitrary server, two statements in one.
 
+## ODBC
+
+ODBC drivers are native libraries from other vendors, and DuckDB's ODBC extension adds SQL functions that open
+connections. Neither is ever present in the engine that runs user SQL: a table is read in a separate DuckDB instance
+that exists for that one read, sends only a catalog query or `SELECT *` of the chosen table, and hands the rows over
+as a Parquet file in the cache's tmp folder (removed afterwards). The integration test `odbc` checks that
+`odbc_connect` doesn't exist for user SQL. A connection string stored in a project is checked before use: no password,
+no file data source (`FILEDSN`, `SAVEFILE`), and a `Driver=` that names an installed driver, never a file. The
+password is added from the keychain when connecting and removed from any error message. Like every source of a project
+from elsewhere, an ODBC source asks before its first connection. What an installed driver does once loaded is the
+driver's business: install drivers only from their vendors.
+
 ## Credentials
 
-Database passwords, S3 secret keys, Azure connection strings and web access tokens are encrypted with the OS keychain (macOS Keychain, Windows DPAPI, libsecret/KWallet on Linux) via
+Database passwords, S3 and Athena secret keys, Google service-account keys, Azure connection strings and web access tokens are encrypted with the OS keychain (macOS Keychain, Windows DPAPI, libsecret/KWallet on Linux) via
 Electron `safeStorage` and stored in `userData/credentials.json`, keyed by source id. Without a keychain (Linux
 `basic_text`), passwords are kept in memory for the session only, and Settings → Security says so. They go to
 DuckDB as temporary secrets, never in connection strings (which `duckdb_databases()` would show), and never into the
@@ -73,6 +85,11 @@ process, in memory; the decrypted workbook is never written to disk (only the ex
 any workbook). The password check uses the file's verifier, so a wrong password is reported, not mistaken for damage.
 
 ## Network
+
+An Athena source runs queries that AWS bills for and writes their results to an S3 location. In a project from
+elsewhere, the approval prompt shows that location, and changing it (or the workgroup) asks again. A Google Sheets
+source contacts only `docs.google.com` and `www.googleapis.com` (and the token address inside a service account's key,
+https only), with a read-only Drive scope.
 
 Simple Viz contacts only the databases and web/cloud addresses the user adds and, once a day if enabled, GitHub's
 release feed for updates (downloads are checked against the release's SHA-512; installing always asks first). No

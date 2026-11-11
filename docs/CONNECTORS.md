@@ -38,10 +38,16 @@ encrypted by msoffcrypto-tool (unit `decrypt`, integration `formats`, e2e `arrow
 | Amazon S3 | `s3://bucket/key` | Access key ID and secret key, region | integration `remote` (S3Mock, path style, custom endpoint) |
 | S3-compatible (MinIO, Cloudflare R2, Google Cloud Storage with HMAC keys…) | `s3://…` with an endpoint | Same, plus the endpoint | Same code path as S3; not tested against those services themselves |
 | Azure Blob / Data Lake | `az://container/blob` | Storage account connection string | integration `remote` (Azurite) |
+| Google Sheets | The spreadsheet's address, `https://docs.google.com/spreadsheets/d/…` | None when it is shared as “Anyone with the link”; otherwise a service account's key (JSON) that the spreadsheet is shared with | integration `cloud-apis`, e2e `connectors`, against a local server answering as Google's export does (by link, through a service account with a read-only Drive token, not shared). **Not tested against Google itself** |
 
 Any file format above works. Each address is allowed individually: the engine can read that exact address and no
 other. Remote files can't be watched, so they refresh on open, when you return to the app, on a timer or on demand;
 unchanged data is detected by its content and kept as is.
+
+A Google Sheets spreadsheet is fetched as Google's own Excel export and read like any workbook (every sheet, named
+tables, ranges). There is no interactive “Sign in with Google”: that needs an application registered with Google by
+its publisher. A private spreadsheet read with a service account goes through Google Drive's export, which stops at
+10 MB; a larger one must be shared by link.
 
 ## Databases
 
@@ -56,11 +62,24 @@ unchanged data is detected by its content and kept as is.
 | Google BigQuery | Extract | Its REST API: a query job per table, result pages followed; signed in with a service-account key (exchanged for a read-only token with a signed JWT) or an access token; the *Database* field is the project (or project.dataset) | integration `warehouses` (the BigQuery emulator, paging included; sign-in against a local token server). Not tested against Google's service itself |
 | Snowflake | Extract | The SQL API v2: key-pair authentication (a JWT signed with your private key, issued as ACCOUNT.USER.SHA256:fingerprint) or an OAuth token; statements still running are followed by their handle, results by partition; the user's default warehouse runs the queries | integration `cloud-apis`, against a local server answering as the API's documentation describes (sign-in, 202 replies, partitions, value formats). **Not tested against Snowflake itself** |
 | Databricks | Extract | The SQL Statement Execution API with a personal access token; *User* is the SQL warehouse ID, *Database* `catalog.schema`; results inline (up to 25 MB per table), chunks followed on the same workspace only | integration `cloud-apis`, against a local server answering as the API's documentation describes. **Not tested against Databricks itself** |
+| Amazon Athena | Extract | Its API, each request signed with your access key (Signature Version 4): one query per table, followed until it finishes (stopped if it runs past the time limit), result pages followed; *Host* is the region (or an endpoint), *Database* the database (or `catalog.database`); the workgroup and, where the workgroup has none, the S3 location for query results are part of the connection | integration `cloud-apis` (the signer against AWS's published examples; a local server answering as the API's documentation describes: queued and running queries, pages, value formats, a failed query) and `warehouses` (moto, an AWS emulator that verifies each request's signature). **Not tested against Athena itself** |
+| Any database with an ODBC driver | Extract | DuckDB's odbc_scanner extension with a driver installed on your computer: a data source name (DSN) or a connection string; tables are listed where the database has a standard catalog, and can always be typed by name | integration `odbc`, e2e `connectors` (PostgreSQL 17 through its ODBC driver, psqlodbc, with unixODBC) |
+| SAP HANA | Extract | ODBC with SAP's driver (HDBODBC, part of the SAP HANA client), which you install | The connection string and the “no driver installed” message only (integration `odbc`). **Not tested against SAP HANA**: its driver can't be redistributed or installed in our tests |
+| Teradata | Extract | ODBC with Teradata's driver (Teradata Tools and Utilities), which you install | As SAP HANA. **Not tested against Teradata** |
 | Trino / Presto (and Starburst) | Extract | Its REST protocol, following result pages on the same server only; the *Database* field is `catalog` or `catalog.schema`; passwords sent only over TLS | integration `warehouses` (Trino 470, TPC-H catalog) |
 
 *Extract* copies tables into the fast local cache (works offline; refreshed on open and on demand). *Live* queries the
 server every time. A failed refresh keeps the last good data, marked stale with the reason; a wrong password asks for
 the password again.
+
+**ODBC** needs a driver manager: Windows has one; on Linux and macOS install unixODBC (`unixodbc` in most package
+managers, `brew install unixodbc`). A connection string kept in a project may name an installed driver or a DSN, but
+not a password (it goes in the password box, and from there to the keychain), a file data source, or a driver given as
+a file path: a project file from someone else can't make the app load a library of their choosing.
+
+**Athena** signs in with an access key ID and secret access key. Temporary credentials (session tokens), SSO and
+profiles from `~/.aws` are not supported. Athena bills for the data each query scans, and writes each result to S3:
+the location is shown when a project from elsewhere asks to connect.
 
 ## Not supported yet
 
@@ -68,13 +87,13 @@ the password again.
 |---|---|---|
 | Excel 95 and older (.xls BIFF5) | Old 8-bit format | Save as .xlsx |
 | Password-protected .xls (Excel 97–2003) and Excel 2007 workbooks | Older encryption schemes (RC4, Standard) | Open in Excel and save as .xlsx (Excel 2010 and later encryption is read) |
-| Athena | Each needs its own driver or API and authentication (often OAuth), none bundled yet | Export to Parquet/CSV in cloud storage and read it from there; Athena’s tables are files in S3, which Simple Viz reads directly (Starburst Galaxy connects as Trino) |
-| Google Sheets | Needs OAuth sign-in | Publish to the web as CSV and add its address |
-| ODBC / JDBC | Would need native drivers outside the sandbox | — |
+| SQL Server in live mode | DuckDB has no SQL Server extension of its own. The only one is a third-party community extension: not signed by DuckDB, not built for every platform Simple Viz ships on, and it would add functions that user SQL could call | Extract (the default) works; refresh as often as needed |
+| JDBC | Needs a Java runtime | The same databases have ODBC drivers |
+| Interactive Google or AWS sign-in (OAuth, SSO) | Needs an application registered with each provider | A service account's key (Google); an access key (AWS) |
 | Writing back to a source | Simple Viz is read-only by design | — |
 
 ## Size
 
 The DuckDB extensions are bundled (never downloaded at run time) and SHA-256 pinned per platform
-(`scripts/duckdb-extensions.lock.json`): postgres, sqlite, mysql, httpfs and azure — about 225 MB uncompressed on
+(`scripts/duckdb-extensions.lock.json`): postgres, sqlite, mysql, httpfs, azure and odbc — about 216 MB uncompressed on
 Linux x64, less in the compressed installers.

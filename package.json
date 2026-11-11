@@ -1,7 +1,7 @@
 {
   "name": "simple-viz",
   "productName": "Simple Viz",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A fast, modern, local-first business intelligence and data visualization app",
   "main": "out/main/index.js",
   "homepage": "https://github.com/fleetwoodjohnr/simple-viz",

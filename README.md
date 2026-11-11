@@ -7,15 +7,15 @@ any of them with SQL, build charts and interactive dashboards, and reopen them w
 Your data stays on your computer. Part of the Simple family of apps, with [Simple Docs](https://github.com/fleetwoodjohnr/simple-docs)
 and [Simple Cell](https://github.com/fleetwoodjohnr/simple-cell).
 
-> **Early development.** Data connections, SQL, charts and maps, dashboards, data modeling, statistics and automatic
-> refresh work today; more connectors are being built. See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for exactly what is done and
-> tested. Simple Viz does **not** claim Tableau compatibility.
+> **Young project.** Data connections, SQL, charts and maps, dashboards, data modeling, statistics and automatic
+> refresh all work and are tested; see [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for exactly what is done, how it is
+> tested, and what isn't there yet. Simple Viz does **not** claim Tableau compatibility.
 
 ## What it does
 
 - **Connect.** Excel (`.xlsx`, `.xlsm`, `.xls`, `.xlsb`), OpenDocument (`.ods`), CSV, TSV, JSON, Parquet, Arrow/Feather, XML,
   SQLite and DuckDB files — on your computer, on the web, in Amazon S3 (and compatible storage) or Azure Blob storage —
-  and PostgreSQL, MySQL/MariaDB, SQL Server, Oracle, Amazon Redshift, ClickHouse, Trino/Presto, BigQuery, Snowflake and Databricks. Choose sheets, Excel tables, named ranges or cell ranges. Drop files
+  and PostgreSQL, MySQL/MariaDB, SQL Server, Oracle, Amazon Redshift, ClickHouse, Trino/Presto, BigQuery, Snowflake, Databricks and Athena, any database with an ODBC driver, and Google Sheets. Choose sheets, Excel tables, named ranges or cell ranges. Drop files
   anywhere in the window. See [docs/CONNECTORS.md](docs/CONNECTORS.md).
 - **SQL on any of it.** A sheet called `Transactions` becomes a table called `transactions`. Join it with a PostgreSQL
   table, add calculated columns, and save the query as a dataset — no database import needed. Powered by DuckDB.
@@ -29,7 +29,7 @@ and [Simple Cell](https://github.com/fleetwoodjohnr/simple-cell).
   actions, saved views, text that shows the current selection, stories; export to PDF, PNG or a self-contained web
   page. Start from the example project on Home.
 - **Statistics.** Descriptive statistics, correlation, t-tests, ANOVA, chi-square, rank tests, linear and logistic
-  regression, forecasting, clustering and principal components, each with a plain-language summary and its
+  regression, forecasting (exponential smoothing and ARIMA), clustering and principal components, each with a plain-language summary and its
   assumptions, checked against SciPy and statsmodels. Forecasts and bands on charts.
 - **Private.** No account, no telemetry. Passwords live in your system keychain, never in project files. Queries only
   read: your files and databases are never changed.

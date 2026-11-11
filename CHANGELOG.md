@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-11-11
 
 - **Forecasting.** Damped and multiplicative trends in exponential smoothing; seasonal ARIMA in Analytics, with the orders chosen
   stepwise by AICc and estimated by exact maximum likelihood (checked against statsmodels and R's airline model).
@@ -19,6 +19,11 @@
 - **Messy sheets.** The tables inside a sheet with titles, notes or several tables are found and picked.
 - **More sources.** Oracle, Amazon Redshift, ClickHouse, Trino/Presto, Google BigQuery, Snowflake and Databricks (extract;
   Redshift, Snowflake and Databricks are tested against their protocol or documented APIs, not the live services).
+- **Athena, Google Sheets, ODBC.** Amazon Athena with an access key; Google Sheets by address (shared by link, or
+  with a service account's key); any database with an ODBC driver installed, SAP HANA and Teradata among them
+  (their own drivers needed; not tested against those two databases). All extract.
+- **Messy sheets.** Headers over two rows (a group above the column names) are read as one name.
+- **Reference lines per cell.** A line or band for each category, also on horizontal bars.
 - **Maps.** Point maps place cities and postal codes (US, UK, Canada and nine more countries) by name. Custom maps from shapefiles (including UTM and Web Mercator ones), TopoJSON and KML/KMZ files.
   Background map tiles from a tile server you choose (off by default).
 - **Chart analytics.** Logarithmic, exponential, power and polynomial trend lines; percentile lines, confidence

@@ -1,7 +1,7 @@
 # Implementation status
 
-_Last updated: 2026-11-09 · M0–M8 complete (with the limits listed); M9 (Tableau parity) largely done, remaining gaps
-listed below and in docs/TABLEAU_PARITY.md · version 0.1.0 (unreleased) · verified with automated tests on Linux (Fedora 44); CI builds, packages and tests on
+_Last updated: 2026-11-11 · M0–M9 complete (with the limits listed at the end of M9 and in docs/TABLEAU_PARITY.md)
+· version 0.2.0 · verified with automated tests on Linux (Fedora 44); CI builds, packages and tests on
 Linux, Windows and macOS._
 
 "Done" means implemented **and** covered by a passing automated test. A button existing in the UI does not count.
@@ -11,9 +11,9 @@ Linux, Windows and macOS._
 | Suite | Result |
 |---|---|
 | `npm run typecheck` | ✅ clean |
-| `npm test` (unit) | ✅ 109 tests |
-| `npm run test:integration` (real DuckDB, files; PostgreSQL 17, MariaDB 11, SQL Server 2022, S3Mock, Azurite in podman) | ✅ 108 tests |
-| `npm run e2e:headless` (the real app) | ✅ 31 tests in 20 specs: acceptance (24 steps), a11y (WCAG 2.2 AA, light and dark), analytics, arrow/xls, charts, dashboards, data, example, layout, maps, model, objects, projects, MySQL, PostgreSQL, remote files, SQL editor, SQL Server, smoke; updater (packaged only) |
+| `npm test` (unit) | ✅ 127 tests |
+| `npm run test:integration` (real DuckDB, files; PostgreSQL 17 (also through its ODBC driver), MariaDB 11, SQL Server 2022, Oracle 23ai Free, ClickHouse 24.8, Trino 470, the BigQuery emulator, moto, S3Mock, Azurite in podman) | ✅ 138 tests |
+| `npm run e2e:headless` (the real app) | ✅ 38 tests in 22 specs: acceptance (24 steps), a11y (WCAG 2.2 AA, light and dark), analytics, arrow/xls, charts, connectors (ODBC, Google Sheets), dashboards, data, example, layout, maps, model, objects, projects, MySQL, PostgreSQL, remote files, SQL editor, SQL Server, smoke, tiled; updater (packaged only) |
 | `npm run bench` (statistics on 10M rows) | ✅ see M5 |
 | Packaged Linux build (`electron-builder --linux dir`) + e2e | ✅ |
 | CI: Linux, Windows, macOS (arm64; Intel under Rosetta) build, test, package, test the packaged app; deb/rpm install on Ubuntu 22.04/24.04, Debian 12, Fedora 44; npm audit; CodeQL | ✅ run 42143235883 (commit 8b8a2c3). The M3, M4 and M5 runs had failed (an engine reboot under running queries, a save/recent-files race on Windows, stuck test workers); fixed in 8b8a2c3. The Intel smoke test under Rosetta passed on retry (first-launch translation); its launch wait no longer times out at 30 s |
@@ -225,16 +225,16 @@ Details per source, and what isn't supported (with reasons): [docs/CONNECTORS.md
 
 ### Known limitations
 
-- Excel 95 `.xls`, password-protected .xls and Excel 2007 workbooks, Athena, Google
-  Sheets, ODBC/JDBC: not supported (reasons in docs/CONNECTORS.md).
-- SQL Server, Oracle, Redshift, ClickHouse, Trino, BigQuery, Snowflake and Databricks are extract only. Redshift is tested
-  through PostgreSQL's protocol, not Redshift itself. BigQuery is tested against its
-  emulator, not Google's service; Snowflake and Databricks against local servers answering as their documented APIs
-  do, not the services themselves. Databricks tables are read inline (up to 25 MB each). S3-compatible services other than the S3 emulator (MinIO, R2, GCS) use the same code but
-  weren't tested against the services themselves.
-- SQL Server, MySQL, Oracle, ClickHouse, Trino, BigQuery (emulator), S3 and Azure tests run where podman is available (Linux CI); they are skipped on Windows and macOS
+- Excel 95 `.xls`, password-protected .xls and Excel 2007 workbooks, JDBC: not supported (reasons in
+  docs/CONNECTORS.md).
+- SQL Server, Oracle, Redshift, ClickHouse, Trino, BigQuery, Snowflake, Databricks, Athena and ODBC sources are extract
+  only. What each is tested against (the database itself, an emulator, or a local server answering as its documented
+  API does) is listed per connector in docs/CONNECTORS.md. Databricks tables are read inline (up to 25 MB each).
+  S3-compatible services other than the S3 emulator (MinIO, R2, GCS) use the same code but weren't tested against the
+  services themselves.
+- SQL Server, MySQL, Oracle, ClickHouse, Trino, BigQuery (emulator), Athena (moto), ODBC, S3 and Azure tests run where podman is available (Linux CI); they are skipped on Windows and macOS
   CI and say so.
-- The bundled extensions add about 114 MB (uncompressed, Linux x64) for MySQL, web/S3 and Azure.
+- The bundled extensions add about 115 MB (uncompressed, Linux x64) for MySQL, web/S3, Azure and ODBC.
 
 ## M8 — Hardening, documentation, release ✅
 
@@ -243,7 +243,7 @@ colors, charts as tables, the example project, portable copies, and every docume
 sections above with their tests. CI builds, tests and packages on Linux, Windows and macOS; a `v*` tag drafts a GitHub
 release with the installers, which is published only by hand.
 
-## M9 — Tableau parity
+## M9 — Tableau parity ✅
 
 Done (rows in the sections above): `+` joining text, groups, sets and set actions, densification of date axes
 (Show missing dates), compute using a chosen dimension, parameters (controls, reference lines, actions), URL actions,
@@ -288,6 +288,24 @@ Also done: tiled dashboards and tablet/phone layouts — unit `charts` (tiling f
 
 Also done: computed sets (a condition such as `SUM([revenue]) > 1000`, or the top/bottom N by a measure), computed after context filters and before dimension filters as in Tableau, and combined sets (either, both, first only) — integration `charts` (against hand-written SQL, through the SQL gate), e2e `objects`. Trend models, reference distributions and boxes; damped trends and ARIMA (rows above).
 
-Not yet: tiled (automatic) dashboard layout beyond row/column containers; LOD expressions and table
-calculations on models; conditional and top-N sets; ARIMA; map tiles, geocoding of cities, Shapefile/KML; cloud
-warehouses (Snowflake, BigQuery, Databricks, Oracle, …).
+Also done: headers over two rows in a sheet (a group above the column names) read as one name — unit `sheets`. Reference lines and bands per cell (each category, across its band), following horizontal bars — unit `charts`, e2e `maps`.
+
+Also done: Amazon Athena (its API, requests signed with Signature Version 4; workgroup and results location), extract only — integration `cloud-apis` (the signer against AWS's two published examples; a local stand-in for the documented API: queued and running queries, result pages, value formats, a failed query, a refused key) and `warehouses` (moto 5.1.4 in podman, which verifies every request's signature). Not Athena itself.
+
+Also done: any database with an ODBC driver (a DSN or a connection string), read by DuckDB's odbc_scanner in an instance of its own so that no ODBC function exists for user SQL; connection strings in projects checked (no password, no file data source, no driver given as a file) — integration `odbc`, e2e `connectors` (PostgreSQL 17 through psqlodbc and unixODBC: table list, extract equal to the direct one, wrong password, missing table). SAP HANA and Teradata use the same path with their vendors' drivers: only their connection strings and the “no driver installed” message are tested, **not the databases** (their drivers can't be installed in the tests).
+
+Also done: Google Sheets by address (Google's xlsx export; shared by link, or private with a service account's key and a read-only Drive token) — integration `cloud-apis`, e2e `connectors` (a local stand-in for Google's export and token endpoints, not Google itself).
+
+Not yet (each with its reason):
+- Excel 95 (BIFF5) workbooks and password-protected .xls / Excel 2007 workbooks: older formats and encryption that
+  couldn't be checked against independently written files here. Save as .xlsx.
+- SQL Server live mode: DuckDB itself can't attach SQL Server. The only way is a third-party community extension
+  (not signed by DuckDB, missing on two of the six platforms, and adding functions user SQL could call), which the
+  engine's rule of loading only pinned core extensions excludes. Extract works.
+- JDBC (needs a Java runtime; ODBC reaches the same databases). Interactive Google or AWS sign-in (OAuth, SSO,
+  session tokens): needs an application registered with each provider.
+- SAP HANA and Teradata are untested against the real databases (see above).
+- The phone layout isn't picked automatically (the window is at least 960 px wide, so it is shown by choosing it).
+- Snowflake, Databricks, Athena, Google Sheets and Redshift are tested against stand-ins for their documented APIs or
+  protocol, BigQuery against its emulator — not the live services.
+- Signed installers: code signing needs certificates (see docs/BUILD_AND_RELEASE.md).
