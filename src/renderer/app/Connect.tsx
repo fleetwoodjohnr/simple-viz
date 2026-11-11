@@ -7,7 +7,7 @@ import * as P from '../state/project'
 import { close } from './Dialogs'
 import { Btn, Field, Modal, Segmented, cx, inputCls } from '../ui'
 import { newId } from '@/core/project/sviz'
-import { DEFAULT_REFRESH, FILE_FORMATS, SERVER, extractOnly, isRemotePath, isSheetFormat, toAlias, type DbSource, type FileFormat, type FileSource, type RemoteOptions, type ServerKind } from '@/shared/project'
+import { DEFAULT_REFRESH, FILE_FORMATS, SERVER, extractOnly, isRemotePath, isSheetFormat, odbcProblem, toAlias, type DbSource, type FileFormat, type FileSource, type RemoteOptions, type ServerKind } from '@/shared/project'
 
 type SheetRef = { ref: string; kind: 'sheet' | 'table' | 'name' | 'detected'; rows: number; columns: number; sheet?: string }
 
@@ -92,7 +92,7 @@ export function SheetPicker({ path }: { path: string }) {
 export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
   const settings = useApp((s) => s.settings)
   const info = SERVER[kind]
-  const [f, setF] = useState({ name: '', host: kind === 'bigquery' ? 'bigquery.googleapis.com' : 'localhost', port: info.port, database: info.database, user: '', password: '', sslmode: 'prefer' as DbSource['sslmode'], mode: 'extract' as DbSource['mode'], timeoutSec: settings.refreshTimeoutSec })
+  const [f, setF] = useState({ name: '', host: kind === 'bigquery' ? 'bigquery.googleapis.com' : kind === 'athena' ? 'us-east-1' : 'localhost', port: info.port, database: info.database, user: '', password: '', workgroup: 'primary', output: '', table: '', sslmode: 'prefer' as DbSource['sslmode'], mode: 'extract' as DbSource['mode'], timeoutSec: settings.refreshTimeoutSec })
   const [tables, setTables] = useState<string[] | null>(null)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
@@ -105,7 +105,10 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
     setTables(null)
     setError('')
   }
-  const source = (): DbSource => ({ id, kind, name: f.name || `${f.database || info.label} on ${f.host}`, host: f.host.trim(), port: Number(f.port) || info.port, database: f.database.trim(), user: f.user.trim(), sslmode: f.sslmode, mode: f.mode, timeoutSec: f.timeoutSec, tables: [], refresh: { ...DEFAULT_REFRESH, watch: false } })
+  const odbc = kind === 'odbc'
+  // ODBC reaches a database through a driver's own settings: there is no host or port, and the "database" is a DSN or connection string.
+  const problem = odbc && f.database.trim() ? odbcProblem(f.database.trim()) : null
+  const source = (): DbSource => ({ id, kind, name: f.name || (odbc ? `ODBC ${f.database.trim().replace(/^DSN=/i, '').slice(0, 40)}` : `${f.database || info.label} on ${f.host}`), host: odbc ? '' : f.host.trim(), port: odbc ? undefined : Number(f.port) || info.port, ...(kind === 'athena' ? { workgroup: f.workgroup.trim() || undefined, output: f.output.trim() || undefined } : {}), database: f.database.trim(), user: f.user.trim(), sslmode: f.sslmode, mode: f.mode, timeoutSec: f.timeoutSec, tables: [], refresh: { ...DEFAULT_REFRESH, watch: false } })
   const test = async () => {
     setBusy(true)
     setError('')
@@ -149,7 +152,7 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
               Add {picked.size} table{picked.size === 1 ? '' : 's'}
             </Btn>
           ) : (
-            <Btn variant="primary" disabled={busy || !f.host || ((kind === 'postgres' || kind === 'trino' || kind === 'bigquery' || kind === 'snowflake' || kind === 'databricks') && !f.database)} onClick={test} data-testid="pg-test">
+            <Btn variant="primary" disabled={busy || (odbc ? !f.database.trim() || !!problem : !f.host) || ((kind === 'postgres' || kind === 'trino' || kind === 'bigquery' || kind === 'snowflake' || kind === 'databricks') && !f.database)} onClick={test} data-testid="pg-test">
               {busy && <Loader2 className="size-4 animate-spin" />} Connect
             </Btn>
           )}
@@ -166,13 +169,21 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
         </select>
       </div>
       <div className="grid grid-cols-[1fr_110px] gap-3">
-        <Field label={kind === 'snowflake' ? 'Account address' : kind === 'databricks' ? 'Workspace address' : 'Host'} hint={kind === 'snowflake' ? 'e.g. xy12345.eu-west-1.snowflakecomputing.com' : kind === 'databricks' ? 'e.g. adb-1234567890.12.azuredatabricks.net' : undefined}>
+        {odbc ? (
+          <div className="col-span-2">
+            <Field label="Data source name (DSN) or connection string" hint={problem ?? 'A data source set up in your computer’s ODBC manager, or for example Driver={PostgreSQL};Server=db.example.com;Database=sales — without the password.'}>
+              <input className={inputCls} value={f.database} onChange={(e) => upd({ database: e.target.value })} aria-label="Data source name or connection string" spellCheck={false} data-testid="pg-database" />
+            </Field>
+          </div>
+        ) : (
+          <>
+        <Field label={kind === 'snowflake' ? 'Account address' : kind === 'databricks' ? 'Workspace address' : kind === 'athena' ? 'Region (or endpoint)' : 'Host'} hint={kind === 'snowflake' ? 'e.g. xy12345.eu-west-1.snowflakecomputing.com' : kind === 'databricks' ? 'e.g. adb-1234567890.12.azuredatabricks.net' : kind === 'athena' ? 'e.g. eu-west-1' : kind === 'hana' || kind === 'teradata' ? `Needs ${kind === 'hana' ? 'SAP’s' : 'Teradata’s'} ODBC driver installed on this computer.` : undefined}>
           <input className={inputCls} value={f.host} onChange={(e) => upd({ host: e.target.value })} aria-label="Host" data-testid="pg-host" />
         </Field>
         <Field label="Port">
           <input className={inputCls} type="number" value={f.port} onChange={(e) => upd({ port: Number(e.target.value) })} aria-label="Port" data-testid="pg-port" />
         </Field>
-        <Field label={kind === 'mysql' ? 'Database (empty: all)' : kind === 'trino' || kind === 'databricks' ? 'Catalog (or catalog.schema)' : kind === 'bigquery' ? 'Project (or project.dataset)' : kind === 'snowflake' ? 'Database (or DATABASE.SCHEMA)' : kind === 'oracle' ? 'Service name' : 'Database'}>
+        <Field label={kind === 'mysql' ? 'Database (empty: all)' : kind === 'athena' ? 'Database (or catalog.database; empty: all)' : kind === 'hana' ? 'Tenant database (optional)' : kind === 'teradata' ? 'Default database (optional)' : kind === 'trino' || kind === 'databricks' ? 'Catalog (or catalog.schema)' : kind === 'bigquery' ? 'Project (or project.dataset)' : kind === 'snowflake' ? 'Database (or DATABASE.SCHEMA)' : kind === 'oracle' ? 'Service name' : 'Database'}>
           <input className={inputCls} value={f.database} onChange={(e) => upd({ database: e.target.value })} aria-label="Database" data-testid="pg-database" />
         </Field>
         <Field label="SSL">
@@ -183,6 +194,21 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
             <option value="verify-full">Verify</option>
           </select>
         </Field>
+          </>
+        )}
+        {kind === 'athena' && (
+          <>
+            <Field label="Workgroup">
+              <input className={inputCls} value={f.workgroup} onChange={(e) => upd({ workgroup: e.target.value })} aria-label="Workgroup" data-testid="athena-workgroup" />
+            </Field>
+            <div />
+            <div className="col-span-2">
+              <Field label="Query results location" hint="Athena writes each query’s results to S3. Empty: the workgroup’s own location.">
+                <input className={inputCls} value={f.output} placeholder="s3://my-bucket/athena-results/" onChange={(e) => upd({ output: e.target.value })} aria-label="Query results location" spellCheck={false} data-testid="athena-output" />
+              </Field>
+            </div>
+          </>
+        )}
         {kind === 'bigquery' || kind === 'snowflake' ? (
           <div className="col-span-2">
             {kind === 'snowflake' && (
@@ -196,11 +222,11 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
           </div>
         ) : (
           <>
-        <Field label={kind === 'databricks' ? 'SQL warehouse ID' : 'User'}>
+        <Field label={kind === 'databricks' ? 'SQL warehouse ID' : kind === 'athena' ? 'Access key ID' : odbc ? 'User (optional)' : 'User'}>
           <input className={inputCls} value={f.user} onChange={(e) => upd({ user: e.target.value })} aria-label="User" autoComplete="off" data-testid="pg-user" />
         </Field>
         <div />
-        <Field label={kind === 'databricks' ? 'Personal access token' : 'Password'} hint={keychain && !keychain.secure ? 'No system keychain was found: the password is kept until you quit.' : undefined}>
+        <Field label={kind === 'databricks' ? 'Personal access token' : kind === 'athena' ? 'Secret access key' : odbc ? 'Password (optional)' : 'Password'} hint={keychain && !keychain.secure ? 'No system keychain was found: the password is kept until you quit.' : undefined}>
           <input className={inputCls} type="password" value={f.password} onChange={(e) => upd({ password: e.target.value })} aria-label="Password" autoComplete="off" data-testid="pg-password" />
         </Field>
           </>
@@ -238,18 +264,39 @@ export function ConnectDialog({ kind = 'postgres' }: { kind?: ServerKind }) {
               </li>
             ))}
           </ul>
+          {(odbc || kind === 'hana' || kind === 'teradata') && (
+            // Not every database lists its tables over ODBC: a table can be named.
+            <form
+              className="mt-2 flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault()
+                const t = f.table.trim()
+                if (!t) return
+                if (!tables.includes(t)) setTables([...tables, t])
+                setPicked((s) => new Set([...s, t]))
+                setF((x) => ({ ...x, table: '' }))
+              }}
+            >
+              <input className={inputCls} value={f.table} placeholder="Or type a table: schema.table" onChange={(e) => setF((x) => ({ ...x, table: e.target.value }))} aria-label="Table name" spellCheck={false} data-testid="odbc-table" />
+              <Btn type="submit" disabled={!f.table.trim()} data-testid="odbc-table-add">
+                Add to list
+              </Btn>
+            </form>
+          )}
         </div>
       )}
     </Modal>
   )
 }
 
-const PLACEHOLDER = { http: 'https://example.com/data/sales.csv', s3: 's3://my-bucket/folder/sales.parquet', azure: 'az://container/folder/sales.csv' }
+const PLACEHOLDER = { http: 'https://example.com/data/sales.csv', s3: 's3://my-bucket/folder/sales.parquet', azure: 'az://container/folder/sales.csv', gsheets: 'https://docs.google.com/spreadsheets/d/…' }
+const SCHEME = { http: /^https?:\/\//i, s3: /^(s3|s3a|s3n|r2|gcs|gs):\/\//i, azure: /^(az|azure|abfss):\/\//i, gsheets: /^https:\/\/docs\.google\.com\/spreadsheets\/d\/[A-Za-z0-9_-]{20,}/ }
+const STARTS = { http: 'https://', s3: 's3://', azure: 'az://', gsheets: 'https://docs.google.com/spreadsheets/d/ (copy it from the browser)' }
 const FORMAT_LABELS: Record<FileFormat, string> = { csv: 'CSV', tsv: 'TSV', json: 'JSON', jsonl: 'JSON Lines', parquet: 'Parquet', arrow: 'Arrow / Feather', xlsx: 'Excel', xls: 'Excel 97–2003 (.xls)', xlsb: 'Excel binary (.xlsb)', ods: 'OpenDocument', xml2003: 'Excel XML 2003' }
 
 /** A file on the web, in S3 (or S3-compatible storage) or in Azure Blob storage. Secrets go to the keychain. */
-export function RemoteDialog() {
-  const [provider, setProvider] = useState<RemoteOptions['provider']>('http')
+export function RemoteDialog({ initial = 'http' }: { initial?: RemoteOptions['provider'] }) {
+  const [provider, setProvider] = useState<RemoteOptions['provider']>(initial)
   const [f, setF] = useState({ url: '', format: '' as FileFormat | '', region: '', endpoint: '', pathStyle: false, keyId: '', secret: '' })
   const [tables, setTables] = useState<string[] | null>(null)
   const [picked, setPicked] = useState<Set<string>>(new Set())
@@ -263,13 +310,14 @@ export function RemoteDialog() {
   }
   const url = f.url.trim()
   const ext = url.split(/[?#]/)[0].split('.').pop()?.toLowerCase() ?? ''
-  const format = f.format || FILE_FORMATS[ext] || ''
+  const gsheets = provider === 'gsheets'
+  // Google exports a spreadsheet as an Excel workbook.
+  const format = gsheets ? 'xlsx' : f.format || FILE_FORMATS[ext] || ''
   const sheets = isSheetFormat(format)
-  const scheme = provider === 'http' ? /^https?:\/\//i : provider === 's3' ? /^(s3|s3a|s3n|r2|gcs|gs):\/\//i : /^(az|azure|abfss):\/\//i
-  const urlProblem = !url ? '' : !isRemotePath(url) || !scheme.test(url) ? `The address should start with ${provider === 'http' ? 'https://' : provider === 's3' ? 's3://' : 'az://'}` : /[\s'"\\]/.test(url) ? 'The address can’t contain spaces or quotes.' : !format ? 'Choose the file format.' : ''
+  const urlProblem = !url ? '' : !isRemotePath(url) || !SCHEME[provider].test(url) ? `The address should start with ${STARTS[provider]}` : /[\s'"\\]/.test(url) ? 'The address can’t contain spaces or quotes.' : !format ? 'Choose the file format.' : ''
   const source = (): FileSource => {
     const remote: RemoteOptions = provider === 's3' ? { provider, region: f.region.trim() || undefined, endpoint: f.endpoint.trim() || undefined, urlStyle: f.pathStyle ? 'path' : undefined, keyId: f.keyId.trim() || undefined, hasSecret: !!f.secret } : { provider, hasSecret: !!f.secret }
-    const name = decodeURIComponent(url.split(/[?#]/)[0].split('/').filter(Boolean).pop() ?? 'data')
+    const name = gsheets ? 'Google Sheets spreadsheet' : decodeURIComponent(url.split(/[?#]/)[0].split('/').filter(Boolean).pop() ?? 'data')
     return { id, kind: 'file', name, format: format as FileFormat, path: url, remote, tables: [], refresh: { ...DEFAULT_REFRESH, watch: false } }
   }
   const test = async () => {
@@ -296,7 +344,7 @@ export function RemoteDialog() {
     P.addSource({ ...source(), tables: tablesOut })
     close()
   }
-  const secretLabel = provider === 's3' ? 'Secret access key' : provider === 'azure' ? 'Connection string' : 'Access token (optional)'
+  const secretLabel = provider === 's3' ? 'Secret access key' : provider === 'azure' ? 'Connection string' : gsheets ? 'Service account key (JSON) — only for a spreadsheet that isn’t shared by link' : 'Access token (optional)'
   return (
     <Modal
       open
@@ -323,13 +371,13 @@ export function RemoteDialog() {
         </>
       }
     >
-      <Segmented value={provider} onChange={(v) => (setProvider(v), setTables(null), setError(''))} label="Where the file is" options={[{ value: 'http', label: 'Web address' }, { value: 's3', label: 'Amazon S3 & compatible' }, { value: 'azure', label: 'Azure Blob' }]} />
+      <Segmented value={provider} onChange={(v) => (setProvider(v), setTables(null), setError(''))} label="Where the file is" options={[{ value: 'http', label: 'Web address' }, { value: 's3', label: 'Amazon S3 & compatible' }, { value: 'azure', label: 'Azure Blob' }, { value: 'gsheets', label: 'Google Sheets' }]} />
       <div className="mt-3 grid grid-cols-[1fr_150px] gap-3">
         <Field label="Address" hint={urlProblem || undefined}>
           <input className={inputCls} value={f.url} placeholder={PLACEHOLDER[provider]} onChange={(e) => upd({ url: e.target.value })} aria-label="Address" spellCheck={false} data-testid="remote-url" />
         </Field>
         <Field label="Format">
-          <select className={inputCls} value={f.format} onChange={(e) => upd({ format: e.target.value as FileFormat | '' })} aria-label="Format" data-testid="remote-format">
+          <select className={inputCls} value={gsheets ? 'xlsx' : f.format} disabled={gsheets} onChange={(e) => upd({ format: e.target.value as FileFormat | '' })} aria-label="Format" data-testid="remote-format">
             <option value="">{FILE_FORMATS[ext] ? `Automatic (${FORMAT_LABELS[FILE_FORMATS[ext]]})` : 'Choose…'}</option>
             {(Object.keys(FORMAT_LABELS) as FileFormat[]).map((k) => (
               <option key={k} value={k}>
@@ -356,7 +404,7 @@ export function RemoteDialog() {
         )}
       </div>
       <div className="mt-3">
-        <Field label={secretLabel} hint={provider === 'azure' ? 'From the storage account’s Access keys page.' : undefined}>
+        <Field label={secretLabel} hint={provider === 'azure' ? 'From the storage account’s Access keys page.' : gsheets ? 'Share the spreadsheet with the service account’s email address (Viewer). Read-only access is asked for.' : undefined}>
           <input className={inputCls} type="password" value={f.secret} onChange={(e) => upd({ secret: e.target.value })} aria-label={secretLabel} autoComplete="off" data-testid="remote-secret" />
         </Field>
       </div>

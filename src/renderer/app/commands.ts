@@ -143,6 +143,11 @@ def({ id: 'data.connect-bigquery', label: 'Connect to BigQuery…', keywords: 'd
 def({ id: 'data.connect-snowflake', label: 'Connect to Snowflake…', keywords: 'database warehouse cloud snowflake', run: () => set({ dialog: { kind: 'connect-db', kind2: 'snowflake' } }) })
 def({ id: 'data.connect-databricks', label: 'Connect to Databricks…', keywords: 'database warehouse lakehouse spark databricks', run: () => set({ dialog: { kind: 'connect-db', kind2: 'databricks' } }) })
 def({ id: 'data.connect-trino', label: 'Connect to Trino or Presto…', keywords: 'database query engine trino presto starburst athena', run: () => set({ dialog: { kind: 'connect-db', kind2: 'trino' } }) })
+def({ id: 'data.connect-athena', label: 'Connect to Amazon Athena…', keywords: 'database warehouse aws amazon athena s3 glue', run: () => set({ dialog: { kind: 'connect-db', kind2: 'athena' } }) })
+def({ id: 'data.connect-hana', label: 'Connect to SAP HANA…', keywords: 'database sap hana odbc', run: () => set({ dialog: { kind: 'connect-db', kind2: 'hana' } }) })
+def({ id: 'data.connect-teradata', label: 'Connect to Teradata…', keywords: 'database warehouse teradata vantage odbc', run: () => set({ dialog: { kind: 'connect-db', kind2: 'teradata' } }) })
+def({ id: 'data.connect-odbc', label: 'Connect through ODBC…', keywords: 'database other odbc dsn driver jdbc db2 access vertica', run: () => set({ dialog: { kind: 'connect-db', kind2: 'odbc' } }) })
+def({ id: 'data.gsheets', label: 'Add a Google Sheets spreadsheet…', keywords: 'google sheets spreadsheet drive gsheet', run: () => set({ dialog: { kind: 'connect-remote', provider: 'gsheets' } }) })
 def({ id: 'data.connect-mysql', label: 'Connect to MySQL or MariaDB…', keywords: 'database server mysql mariadb', run: () => set({ dialog: { kind: 'connect-db', kind2: 'mysql' } }) })
 def({ id: 'data.refresh', label: 'Refresh all data', needsProject: true, keywords: 'reload update', run: () => P.refreshSources(undefined, true) })
 

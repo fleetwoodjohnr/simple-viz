@@ -1,4 +1,5 @@
 // Shared setup for integration tests: a real engine on temp folders, and PostgreSQL (CI service or a podman container).
+import { sigv4 } from '../../src/engine/athena'
 import { mkdtempSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import os from 'node:os'
@@ -364,4 +365,59 @@ export async function startOracle(): Promise<Wh | null> {
     await c.close()
   }
   return ora
+}
+
+/**
+ * moto (the AWS emulator the AWS SDKs' users test against) in podman, checking every request's signature: an IAM user
+ * allowed to use Athena, whose access key the tests sign with. moto doesn't run SQL: `queue` sets the results of the
+ * next queries. Null without podman.
+ */
+export async function startMoto(): Promise<(Wh & { queue(results: { rows: (string | null)[][]; columns: [string, string][] }[]): Promise<void> }) | null> {
+  if (!hasPodman() || process.env.SV_NO_PODMAN) return null
+  const name = `sv-moto-${process.pid}-${Date.now()}`
+  const port = 20000 + Math.floor(Math.random() * 20000)
+  const base = `http://127.0.0.1:${port}`
+  // The three requests that create the user are let through; from then on a request needs a valid signature.
+  execFileSync('podman', ['run', '-d', '--name', name, '-p', `127.0.0.1:${port}:5000`, '-e', 'INITIAL_NO_AUTH_ACTION_COUNT=3', 'docker.io/motoserver/moto:5.1.4'], { stdio: 'ignore' })
+  const stop = () => void execFileSync('podman', ['rm', '-f', name], { stdio: 'ignore' })
+  try {
+    for (const t0 = Date.now(); ; await new Promise((r) => setTimeout(r, 500))) {
+      if (await fetch(`${base}/moto-api/`).then((r) => r.ok, () => false)) break
+      if (Date.now() - t0 > 120_000) throw new Error('moto did not start')
+    }
+    const iam = async (params: Record<string, string>) => {
+      const body = new URLSearchParams({ Version: '2010-05-08', ...params }).toString()
+      const amzDate = new Date().toISOString().replace(/[-:]|\.\d{3}/g, '')
+      const headers = { 'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8' }
+      const res = await fetch(`${base}/`, { method: 'POST', headers: { ...headers, 'X-Amz-Date': amzDate, Authorization: sigv4({ method: 'POST', host: `127.0.0.1:${port}`, path: '/', headers, body, region: 'us-east-1', service: 'iam', keyId: 'setup', secret: 'setup', amzDate }) }, body })
+      const text = await res.text()
+      if (!res.ok) throw new Error(`moto ${params.Action}: ${text.slice(0, 300)}`)
+      return text
+    }
+    await iam({ Action: 'CreateUser', UserName: 'sv' })
+    await iam({ Action: 'PutUserPolicy', UserName: 'sv', PolicyName: 'athena', PolicyDocument: JSON.stringify({ Version: '2012-10-17', Statement: [{ Effect: 'Allow', Action: 'athena:*', Resource: '*' }] }) })
+    const key = await iam({ Action: 'CreateAccessKey', UserName: 'sv' })
+    const cell = (v: string | null) => (v === null ? {} : { VarCharValue: v })
+    return {
+      name, host: '127.0.0.1', port, user: /<AccessKeyId>(.+?)</.exec(key)![1], password: /<SecretAccessKey>(.+?)</.exec(key)![1], database: 'sales', stop,
+      async queue(results) {
+        const body = { account_id: '123456789012', region: 'us-east-1', results: results.map((r) => ({ rows: [r.columns.map(([n]) => n), ...r.rows].map((row) => ({ Data: row.map(cell) })), column_info: r.columns.map(([Name, Type]) => ({ Name, Type })) })) }
+        const res = await fetch(`${base}/moto-api/static/athena/query-results`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        if (!res.ok) throw new Error(`moto: ${res.status}`)
+      }
+    }
+  } catch (e) {
+    stop()
+    throw e
+  }
+}
+
+/** The PostgreSQL ODBC driver's name on this computer (Fedora: "PostgreSQL"; Debian: "PostgreSQL Unicode"), if any. */
+export function odbcPgDriver(): string | null {
+  try {
+    const names = [...execFileSync('odbcinst', ['-q', '-d'], { encoding: 'utf8' }).matchAll(/^\[(.+)\]$/gm)].map((m) => m[1]).filter((n) => /postgres/i.test(n))
+    return names.find((n) => /unicode/i.test(n)) ?? names[0] ?? null
+  } catch {
+    return null
+  }
 }

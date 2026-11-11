@@ -69,10 +69,11 @@ jobs:
           node-version: 24
           cache: npm
 
-      # poppler checks exported PDFs; rpm builds the .rpm. PostgreSQL tests use podman on Linux (preinstalled).
+      # poppler checks exported PDFs; rpm builds the .rpm; unixODBC and the PostgreSQL ODBC driver run the ODBC tests.
+      # PostgreSQL tests use podman on Linux (preinstalled).
       - name: Test tools (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y xvfb poppler-utils rpm
+        run: sudo apt-get update && sudo apt-get install -y xvfb poppler-utils rpm unixodbc odbc-postgresql
       - name: Test tools (macOS)
         if: runner.os == 'macOS'
         run: brew install poppler

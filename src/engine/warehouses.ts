@@ -125,35 +125,36 @@ export function bigqueryType(t: string): Duck {
 
 const tokens = new Map<string, { token: string; until: number }>()
 /**
- * The Authorization header: a service-account key (JSON) is exchanged for a read-only access token (a JWT signed with
- * its key, sent to its https token address); any other password is used as an access token; none: no header (a local
- * emulator).
+ * Google's Authorization header (BigQuery, Google Sheets): a service-account key (JSON) is exchanged for an access
+ * token of one read-only scope (a JWT signed with its key, sent to its https token address); any other secret is used
+ * as an access token; none: no header (a local emulator, a public sheet).
  */
-async function bigqueryAuth(s: ResolvedSource): Promise<Record<string, string>> {
-  const secret = (s.password ?? '').trim()
+export async function googleAuth(secret: string, scope: string, label: string, signal: AbortSignal): Promise<Record<string, string>> {
+  secret = secret.trim()
   if (!secret) return {}
   if (!secret.startsWith('{')) return { Authorization: `Bearer ${secret}` }
-  const hit = tokens.get(secret)
+  const hit = tokens.get(`${scope}\n${secret}`)
   if (hit && hit.until > Date.now()) return { Authorization: `Bearer ${hit.token}` }
   let key: { client_email?: string; private_key?: string; token_uri?: string }
   try {
     key = JSON.parse(secret)
   } catch {
-    throw new Error('BigQuery: the key isn’t valid JSON. Paste the service account’s key file (or an access token).')
+    throw new Error(`${label}: the key isn’t valid JSON. Paste the service account’s key file (or an access token).`)
   }
   const aud = key.token_uri ?? 'https://oauth2.googleapis.com/token'
-  if (!key.client_email || !key.private_key || !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(aud)) throw new Error('BigQuery: the key needs client_email, private_key and an https token_uri.')
+  if (!key.client_email || !key.private_key || !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(aud)) throw new Error(`${label}: the key needs client_email, private_key and an https token_uri.`)
   const { createSign } = await import('node:crypto')
   const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url')
   const now = Math.floor(Date.now() / 1000)
-  const unsigned = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({ iss: key.client_email, scope: 'https://www.googleapis.com/auth/bigquery.readonly', aud, iat: now, exp: now + 3600 })}`
+  const unsigned = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({ iss: key.client_email, scope, aud, iat: now, exp: now + 3600 })}`
   const jwt = `${unsigned}.${createSign('RSA-SHA256').update(unsigned).sign(key.private_key).toString('base64url')}`
-  const res = await fetch(aud, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: jwt }), signal: timeout(s) })
+  const res = await fetch(aud, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: jwt }), signal })
   const body = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error_description?: string }
-  if (!res.ok || !body.access_token) throw new Error(`BigQuery: authentication failed (${body.error_description ?? res.status}).`)
-  tokens.set(secret, { token: body.access_token, until: Date.now() + Math.max(60, (body.expires_in ?? 3600) - 120) * 1000 })
+  if (!res.ok || !body.access_token) throw new Error(`${label}: authentication failed (${body.error_description ?? res.status}).`)
+  tokens.set(`${scope}\n${secret}`, { token: body.access_token, until: Date.now() + Math.max(60, (body.expires_in ?? 3600) - 120) * 1000 })
   return { Authorization: `Bearer ${body.access_token}` }
 }
+const bigqueryAuth = (s: ResolvedSource) => googleAuth(s.password ?? '', 'https://www.googleapis.com/auth/bigquery.readonly', 'BigQuery', timeout(s))
 
 async function bigquery<T>(s: ResolvedSource, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${base(s, 443)}/bigquery/v2/${path}`, { method: body ? 'POST' : 'GET', headers: { ...(await bigqueryAuth(s)), 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: timeout(s) })

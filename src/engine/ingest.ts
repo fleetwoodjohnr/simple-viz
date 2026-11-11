@@ -12,6 +12,9 @@ import { decryptWorkbook, isEncryptedWorkbook } from './decrypt'
 import { stageWarehouse } from './warehouses'
 import { stageRedshift } from './redshift'
 import { stageOracle } from './oracle'
+import { stageOdbc } from './odbc'
+import { stageAthena } from './athena'
+import { fetchGoogleSheet } from './gsheets'
 import { isSpreadsheetXml, xmlRecords, xmlTables } from '../core/xmlrows'
 import { listTables } from '../core/sheets/rows'
 import { readWorkbook, tableRows, type SheetFormat } from '../core/sheets/rows'
@@ -35,7 +38,8 @@ const MAX_SHEET_BYTES = 512 * 1024 * 1024
 let stageSeq = 0
 
 /** One refresh of one source: a workbook with several sheets is read once. */
-export type Memo = { book?: Promise<Workbook> }
+/** Shared by the tables of one source during a refresh: its workbook, read once; where ODBC reads are staged. */
+export type Memo = { book?: Promise<Workbook>; extensionsDir?: string | null; tmp?: string }
 
 export async function extractSelect(conn: DuckDBConnection, s: ResolvedSource, ref: string | undefined, memo: Memo = {}): Promise<{ select: string; cleanup: () => Promise<void> }> {
   const none = async () => {}
@@ -73,6 +77,11 @@ export async function extractSelect(conn: DuckDBConnection, s: ResolvedSource, r
   if (s.kind === 'sqlserver') return stageSqlServer(conn, s, ref ?? '')
   if (s.kind === 'redshift') return stageRedshift(conn, s, ref ?? '')
   if (s.kind === 'oracle') return stageOracle(conn, s, ref ?? '')
+  if (s.kind === 'athena') return stageAthena(conn, s, ref ?? '')
+  if (s.kind === 'odbc' || s.kind === 'hana' || s.kind === 'teradata') {
+    if (!memo.tmp) throw new Error('ODBC sources are read during a refresh.')
+    return stageOdbc(s, ref ?? '', memo.extensionsDir, memo.tmp)
+  }
   if (['clickhouse', 'trino', 'bigquery', 'snowflake', 'databricks'].includes(s.kind)) return stageWarehouse(conn, s, ref ?? '')
   const db = ident(`db_${s.id}`)
   const r = ref ?? ''
@@ -88,7 +97,7 @@ export async function extractSelect(conn: DuckDBConnection, s: ResolvedSource, r
 /** Loads one sheet table into a staging table with an appender; the caller copies it into the cache. */
 async function stageSheet(conn: DuckDBConnection, s: ResolvedSource, ref: string | undefined, memo: Memo) {
   memo.book ??= (async () => {
-    const bytes = isRemotePath(s.path) ? await readBytes(conn, s.path!) : await readLocal(s.path!)
+    const bytes = s.remote?.provider === 'gsheets' ? await fetchGoogleSheet(s) : isRemotePath(s.path) ? await readBytes(conn, s.path!) : await readLocal(s.path!)
     return readWorkbook(isEncryptedWorkbook(bytes) ? decryptWorkbook(bytes, s.password) : bytes, s.format as SheetFormat)
   })()
   const table = tableRows(await memo.book, ref, s.header !== false)

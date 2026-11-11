@@ -5,7 +5,7 @@ import path from 'node:path'
 import type { ConnectionDraft, OpenedFile, RecentFile, Settings } from '../shared/ipc-types'
 import type { EngineConfig, ResolvedSource } from '../shared/engine-protocol'
 import { packProject, migrate } from '../core/project/sviz'
-import { DATA_EXTENSIONS, FILE_FORMATS, PROJECT_EXTENSION, SERVER, extractOnly, isServer, isServerSource, isRemotePath, isSheetFormat, type Project, type Source } from '../shared/project'
+import { DATA_EXTENSIONS, FILE_FORMATS, PROJECT_EXTENSION, SERVER, extractOnly, isServer, isServerSource, isRemotePath, isSheetFormat, odbcProblem, type Project, type Source } from '../shared/project'
 import * as store from './store'
 import * as creds from './credentials'
 import { EngineHost } from './engine-host'
@@ -120,11 +120,19 @@ async function addTrust(keys: string[]) {
 }
 const sourceKey = (s: Source) =>
   isServerSource(s)
-    ? `${s.kind}:${s.user ?? ''}@${s.host ?? ''}:${s.port ?? SERVER[s.kind].port}/${s.database ?? ''}`
+    ? // Athena writes its results where the source says: that place is part of what was approved.
+      `${s.kind}:${s.user ?? ''}@${s.host ?? ''}:${s.port ?? SERVER[s.kind].port}/${s.database ?? ''}${s.kind === 'athena' ? `|${s.workgroup ?? ''}|${s.output ?? ''}` : ''}`
     : s.kind === 'file' && isRemotePath(s.path)
       ? `url:${s.remote?.provider ?? 'http'}:${s.remote?.endpoint ?? ''}:${s.remote?.keyId ?? ''}:${s.path}`
       : `file:${path.resolve(s.path ?? '')}`
 /** A storage address from a project file: plain characters only (it becomes an SQL literal and an allow-list entry). */
+/** A source as the approval dialog names it. */
+const sourceLabel = (s: Source) =>
+  !isServerSource(s)
+    ? `• ${s.path}${s.kind === 'file' && s.remote?.endpoint ? ` (through ${s.remote.endpoint})` : ''}`
+    : s.kind === 'odbc'
+      ? `• ODBC ${s.user ? `${s.user}@` : ''}${s.database ?? ''}`
+      : `• ${SERVER[s.kind].label} ${s.user ? `${s.user}@` : ''}${s.host}:${s.port ?? SERVER[s.kind].port}/${s.database ?? ''}${s.kind === 'athena' && s.output ? ` (query results are written to ${s.output})` : ''}`
 const safeAddress = (v: unknown, max = 2048) => typeof v === 'string' && v.length <= max && !/[\s'"\\\u0000-\u001f]/.test(v)
 
 function checkSource(x: unknown): Source {
@@ -135,10 +143,15 @@ function checkSource(x: unknown): Source {
   if (isServerSource(s)) {
     if (typeof s.host !== 'string' || s.host.length > 255 || /[\s'"\\]/.test(s.host)) throw new Error('Invalid host')
     if (s.port !== undefined && !(Number.isInteger(s.port) && s.port > 0 && s.port < 65536)) throw new Error('Invalid port')
+    if (s.kind === 'odbc') {
+      const problem = typeof s.database === 'string' ? odbcProblem(s.database) : 'Invalid connection string'
+      if (problem) throw new Error(problem)
+    }
+    if (s.kind === 'athena' && !([s.workgroup, s.output].every((v) => v === undefined || safeAddress(v, 512)) && (!s.output || s.output.startsWith('s3://')))) throw new Error('Invalid Athena settings')
   } else if (s.kind === 'file' && isRemotePath(s.path)) {
     if (!safeAddress(s.path)) throw new Error('Invalid address')
     const r = s.remote
-    if (r && (typeof r !== 'object' || !['http', 's3', 'azure'].includes(r.provider) || ![r.region, r.endpoint, r.keyId].every((v) => v === undefined || safeAddress(v, 512)) || (r.urlStyle !== undefined && !['vhost', 'path'].includes(r.urlStyle)))) throw new Error('Invalid storage settings')
+    if (r && (typeof r !== 'object' || !['http', 's3', 'azure', 'gsheets'].includes(r.provider) || ![r.region, r.endpoint, r.keyId].every((v) => v === undefined || safeAddress(v, 512)) || (r.urlStyle !== undefined && !['vhost', 'path'].includes(r.urlStyle)))) throw new Error('Invalid storage settings')
   } else if (!isAbs(s.path)) throw new Error('Invalid path')
   if (s.kind === 'file' && !Object.values(FILE_FORMATS).includes(s.format)) throw new Error('Invalid format')
   return s
@@ -171,6 +184,8 @@ async function resolveSource(s: Source, settings: Settings): Promise<ResolvedSou
     database: s.database,
     user: s.user,
     sslmode: s.sslmode,
+    workgroup: s.workgroup,
+    output: s.output,
     password: isServer(s.kind) ? await creds.getPassword(s.id) : undefined
   }
 }
@@ -189,7 +204,7 @@ async function configureEngine(p: Pick<Project, 'id' | 'sources' | 'datasets'>):
   const problems: string[] = []
   let allowed = sources
   if (unknown.length && mainWindow) {
-    const list = unknown.map((s) => (isServerSource(s) ? `• ${SERVER[s.kind].label} ${s.user ? `${s.user}@` : ''}${s.host}:${s.port ?? SERVER[s.kind].port}/${s.database ?? ''}` : `• ${s.path}${s.kind === 'file' && s.remote?.endpoint ? ` (through ${s.remote.endpoint})` : ''}`)).join('\n')
+    const list = unknown.map(sourceLabel).join('\n')
     const { response } = await dialog.showMessageBox(mainWindow, {
       type: 'question',
       message: 'Allow this project to read these data sources?',

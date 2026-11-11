@@ -1,24 +1,40 @@
 // ClickHouse (HTTP interface) and Trino (REST protocol), extract only: tables copied into the cache with their types,
 // joined with a file, refreshed, listed for the connection dialog; a wrong password is explained. Skipped without
-// podman (or SV_CH_HOST / SV_TRINO_HOST).
+// podman (or SV_CH_HOST / SV_TRINO_HOST). Also BigQuery against its emulator and Athena against moto, an AWS emulator
+// that checks the signature of every request.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { bootEngine, startClickHouse, startTrino, startBigQuery, chExec, whSource, fileSource, fixture, rows, expected, extensionsDir, type Wh } from './helpers'
+import { bootEngine, startClickHouse, startTrino, startBigQuery, startMoto, chExec, whSource, fileSource, fixture, rows, expected, extensionsDir, type Wh } from './helpers'
 import { Engine } from '../../src/engine/engine'
 import { bigqueryType, clickhouseType, trinoType } from '../../src/engine/warehouses'
 
 let ch: Wh | null = null
 let tr: Wh | null = null
 let bq: Wh | null = null
+let moto: Awaited<ReturnType<typeof startMoto>> = null
 // Small result pages, so BigQuery's paging is exercised.
 process.env.SV_BQ_PAGE = '1000'
 beforeAll(async () => {
-  ;[ch, tr, bq] = await Promise.all([startClickHouse(), startTrino(), startBigQuery()])
+  ;[ch, tr, bq, moto] = await Promise.all([startClickHouse(), startTrino(), startBigQuery(), startMoto()])
   if (!ch) console.warn('ClickHouse tests skipped: no podman and no SV_CH_HOST')
   if (!tr) console.warn('Trino tests skipped: no podman and no SV_TRINO_HOST')
 }, 300_000)
-afterAll(() => (ch?.stop(), tr?.stop(), bq?.stop()))
+afterAll(() => (ch?.stop(), tr?.stop(), bq?.stop(), moto?.stop()))
 
 describe('ClickHouse and Trino', () => {
+  it('Athena against moto: requests signed with the user’s key are accepted, tables listed, a table copied, a wrong secret refused', async (ctx) => {
+    if (!moto) return ctx.skip()
+    const s = { id: 'athena1', kind: 'athena' as const, host: moto.host, port: moto.port, sslmode: 'disable' as const, user: moto.user, password: moto.password, database: 'sales', output: 's3://bucket/results/', mode: 'extract' as const, timeoutSec: 30, tables: [{ alias: 'orders', ref: 'sales.orders' }] }
+    await moto.queue([{ columns: [['table_schema', 'varchar'], ['table_name', 'varchar']], rows: [['sales', 'orders']] }])
+    expect(await Engine.probe(s, extensionsDir)).toEqual({ tables: ['sales.orders'] })
+    await moto.queue([{ columns: [['id', 'integer'], ['amount', 'decimal'], ['day', 'date'], ['at', 'timestamp'], ['ok', 'boolean']], rows: [['1', '10.50', '2024-01-01', '2024-01-01 10:00:00.000', 'true'], ['2', null, null, null, null]] }])
+    const { engine } = await bootEngine([s])
+    expect(engine.statuses()[0].error ?? 'ok').toBe('ok')
+    expect(await rows(engine, 'SELECT id, amount, day::VARCHAR AS day, "at"::VARCHAR AS "at", ok FROM orders ORDER BY id')).toEqual([{ id: 1, amount: 10.5, day: '2024-01-01', at: '2024-01-01 10:00:00', ok: true }, { id: 2, amount: null, day: null, at: null, ok: null }])
+    await engine.close()
+    await expect(Engine.probe({ ...s, password: 'not the secret' }, extensionsDir)).rejects.toThrow('The server rejected the user name or password.')
+    await expect(Engine.probe({ ...s, workgroup: 'nope' }, extensionsDir)).rejects.toThrow('WorkGroup does not exist')
+  })
+
   it('BigQuery sign-in: a service-account key becomes a signed JWT for a read-only token, used as the bearer', async () => {
     const { generateKeyPairSync, createVerify } = await import('node:crypto')
     const { createServer } = await import('node:http')

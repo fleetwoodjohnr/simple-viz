@@ -8,9 +8,9 @@ import type { FeatureCollection } from '../core/charts/geo'
 export const PROJECT_SCHEMA_VERSION = 1
 
 export type FileFormat = 'csv' | 'tsv' | 'json' | 'jsonl' | 'parquet' | 'arrow' | 'xlsx' | 'xls' | 'xlsb' | 'ods' | 'xml2003'
-export type DbKind = 'postgres' | 'mysql' | 'sqlserver' | 'oracle' | 'redshift' | 'clickhouse' | 'trino' | 'bigquery' | 'snowflake' | 'databricks' | 'sqlite' | 'duckdb'
+export type DbKind = 'postgres' | 'mysql' | 'sqlserver' | 'oracle' | 'redshift' | 'clickhouse' | 'trino' | 'bigquery' | 'snowflake' | 'databricks' | 'athena' | 'odbc' | 'hana' | 'teradata' | 'sqlite' | 'duckdb'
 /** Database servers (host, port, user, password), as opposed to database files. */
-export type ServerKind = 'postgres' | 'mysql' | 'sqlserver' | 'oracle' | 'redshift' | 'clickhouse' | 'trino' | 'bigquery' | 'snowflake' | 'databricks'
+export type ServerKind = 'postgres' | 'mysql' | 'sqlserver' | 'oracle' | 'redshift' | 'clickhouse' | 'trino' | 'bigquery' | 'snowflake' | 'databricks' | 'athena' | 'odbc' | 'hana' | 'teradata'
 export const isServer = (k: string): k is ServerKind => Object.hasOwn(SERVER, k)
 export const SERVER: Record<ServerKind, { label: string; port: number; database: string }> = {
   postgres: { label: 'PostgreSQL', port: 5432, database: 'postgres' },
@@ -33,10 +33,40 @@ export const SERVER: Record<ServerKind, { label: string; port: number; database:
   snowflake: { label: 'Snowflake', port: 443, database: '' },
   /** Extract only, over the Databricks SQL Statement Execution API; user is the SQL warehouse ID, database
    *  catalog.schema, the password a personal access token. */
-  databricks: { label: 'Databricks', port: 443, database: '' }
+  databricks: { label: 'Databricks', port: 443, database: '' },
+  /** Extract only, over the Athena API; host is a region (or an endpoint), database a database (or catalog.database), user
+   *  the access key ID, the password the secret access key. */
+  athena: { label: 'Amazon Athena', port: 443, database: '' },
+  /** Extract only, through an ODBC driver installed on this computer; the database is a data source name (DSN) or a
+   *  connection string without its password. No host or port. */
+  odbc: { label: 'Other database (ODBC)', port: 0, database: '' },
+  /** Extract only, through SAP's ODBC driver (HDBODBC, part of the SAP HANA client); the database is the tenant. */
+  hana: { label: 'SAP HANA', port: 30015, database: '' },
+  /** Extract only, through Teradata's ODBC driver; the database is the default database. */
+  teradata: { label: 'Teradata', port: 1025, database: '' }
 }
 /** Servers read by their own drivers and copied into the cache (DuckDB can't attach them): no live mode. */
-export const extractOnly = (k: string) => ['sqlserver', 'oracle', 'redshift', 'clickhouse', 'trino', 'bigquery', 'snowflake', 'databricks'].includes(k)
+export const extractOnly = (k: string) => isServer(k) && k !== 'postgres' && k !== 'mysql'
+
+/**
+ * What is wrong with an ODBC connection string kept in a project (null when it may be used). It names a data source
+ * or an installed driver; it never holds a password (the keychain does) and never points at a file: a driver given
+ * by its path is a library the driver manager would load, so a project file could run code.
+ */
+export function odbcProblem(conn: string): string | null {
+  if (!conn.trim()) return 'Enter a data source name (DSN) or a connection string.'
+  if (conn.length > 2048 || /[\u0000-\u001f]/.test(conn)) return 'The connection string is too long or has line breaks.'
+  if (!conn.includes('=')) return /[;{}]/.test(conn) ? 'A data source name can’t contain ; { or }.' : null
+  for (const part of conn.split(';')) {
+    const [key, ...rest] = part.split('=')
+    const k = key.trim().toLowerCase()
+    const v = rest.join('=').trim()
+    if (k === 'pwd' || k === 'password') return 'Leave the password out of the connection string: type it in the password field (it is kept in your system keychain).'
+    if (k === 'filedsn' || k === 'savefile') return 'File data sources aren’t supported: use a data source name (DSN=…) or a driver name.'
+    if (k === 'driver' && /[\\/]/.test(v)) return 'Name an installed ODBC driver (Driver={Name}), not a driver file.'
+  }
+  return null
+}
 
 /** One relation a source exposes to SQL under `alias` (a sheet, named table, cell range, or database table). */
 export interface SourceTable {
@@ -67,7 +97,8 @@ interface SourceBase {
 
 /** A file on the web or in cloud storage, read by DuckDB's httpfs or azure extension. */
 export interface RemoteOptions {
-  provider: 'http' | 's3' | 'azure'
+  /** gsheets: a Google Sheets spreadsheet, read as a workbook (the secret, if any, is a service-account key). */
+  provider: 'http' | 's3' | 'azure' | 'gsheets'
   /** S3: region, and for S3-compatible services (MinIO, Cloudflare R2, Google Cloud Storage…) the endpoint host. */
   region?: string
   endpoint?: string
@@ -103,6 +134,9 @@ export interface DbSource extends SourceBase {
   database?: string
   user?: string
   sslmode?: 'disable' | 'prefer' | 'require' | 'verify-full'
+  /** Athena: the workgroup that runs the queries, and where their results go (s3://…; empty: the workgroup's own). */
+  workgroup?: string
+  output?: string
   /** extract: copy into the local cache (fast, offline). live: query the server each time (read-only). */
   mode: 'extract' | 'live'
   timeoutSec: number

@@ -67,6 +67,8 @@ export interface ResolvedSource {
   user?: string
   password?: string
   sslmode?: string
+  workgroup?: string
+  output?: string
   /** Files on the web or in cloud storage (the secret, if any, is in `password`). */
   remote?: RemoteOptions
 }

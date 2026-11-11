@@ -22,6 +22,9 @@ import { sqlServerTables } from './sqlserver'
 import { bigqueryTables, clickhouseTables, databricksTables, snowflakeTables, trinoTables } from './warehouses'
 import { redshiftTables } from './redshift'
 import { oracleTables } from './oracle'
+import { odbcTables } from './odbc'
+import { athenaTables } from './athena'
+import { fetchGoogleSheet } from './gsheets'
 
 type Value = string | number | boolean | null
 
@@ -181,7 +184,7 @@ export class Engine {
     // 4. Lock down: user SQL may touch only the project's files and the cache directory, and can change no setting.
     // A DuckDB database file is opened together with its write-ahead log.
     // A remote file is allowed by its exact URL: no other address can be read.
-    const files = config.sources.filter((s) => s.path).flatMap((s) => (isRemotePath(s.path) ? [s.path!] : s.kind === 'duckdb' ? [path.resolve(s.path!), `${path.resolve(s.path!)}.wal`] : [path.resolve(s.path!)]))
+    const files = config.sources.filter((s) => s.path).flatMap((s) => (s.remote?.provider === 'gsheets' ? [] : isRemotePath(s.path) ? [s.path!] : s.kind === 'duckdb' ? [path.resolve(s.path!), `${path.resolve(s.path!)}.wal`] : [path.resolve(s.path!)]))
     await c.run(`SET allowed_directories = [${[cacheDir + path.sep].map(lit).join(', ')}]`)
     if (files.length) await c.run(`SET allowed_paths = [${files.map(lit).join(', ')}]`)
     await c.run('SET enable_external_access = false')
@@ -607,7 +610,7 @@ export class Engine {
           cleanup.push(`DETACH ${ident(`db_${s.id}`)}`)
         }
         try {
-          const memo: Memo = {}
+          const memo: Memo = { extensionsDir: this.config!.extensionsDir, tmp: path.join(path.resolve(this.config!.cacheDir), 'tmp') }
           for (const t of s.tables) {
             const r = await this.extractTable(conn, s, t.ref, stat, memo)
             changed ||= r.changed
@@ -680,6 +683,12 @@ export class Engine {
         return { tables: await snowflakeTables(s) }
       } else if (s.kind === 'databricks') {
         return { tables: await databricksTables(s) }
+      } else if (s.kind === 'athena') {
+        return { tables: await athenaTables(s) }
+      } else if (s.kind === 'odbc' || s.kind === 'hana' || s.kind === 'teradata') {
+        return { tables: await odbcTables(s, extensionsDir) }
+      } else if (s.remote?.provider === 'gsheets') {
+        return { tables: (await fileTables(await fetchGoogleSheet(s), 'xlsx')).map((t) => t.ref) }
       } else if (isServer(s.kind)) {
         const ext = s.kind === 'mysql' ? 'mysql_scanner' : 'postgres_scanner'
         if (!extensionsDir) throw new Error(`The ${SERVER[s.kind].label} extension is not bundled with this build.`)
@@ -723,7 +732,7 @@ function castExpr(col: string, ty: string): string | null {
   return isSafeType(t) ? `TRY_CAST(${ident(col)} AS ${t})` : null
 }
 
-const isAuthError = (e: unknown) => /password authentication failed|no password supplied|authentication failed|password is required|Access denied for user|Login failed for user|ORA-01017|Invalid access token|JWT token is invalid|protected with a password|password is wrong/i.test(String((e as Error)?.message ?? e))
+const isAuthError = (e: unknown) => /password authentication failed|no password supplied|authentication failed|password is required|Access denied for user|Login failed for user|ORA-01017|Invalid access token|JWT token is invalid|UserId, Password or Account is invalid|protected with a password|password is wrong/i.test(String((e as Error)?.message ?? e))
 
 function splitRef(ref: string | undefined, s: ResolvedSource): [string | null, string] {
   const r = ref ?? ''
@@ -770,7 +779,7 @@ export function toPage(reader: DuckDBResultReader, offset: number, limit: number
 
 /** Extensions remote files need: httpfs (web, S3 and compatible), azure (Azure Blob / Data Lake). */
 function remoteExtensions(sources: ResolvedSource[]): string[] {
-  const remote = sources.filter((s) => isRemotePath(s.path))
+  const remote = sources.filter((s) => isRemotePath(s.path) && s.remote?.provider !== 'gsheets')
   return [...(remote.some((s) => !/^(az|azure|abfss):/i.test(s.path!)) ? ['httpfs'] : []), ...(remote.some((s) => /^(az|azure|abfss):/i.test(s.path!)) ? ['azure'] : [])]
 }
 

@@ -71,6 +71,9 @@ export function DataView() {
                 <MenuItem icon={<Globe2 />} onSelect={() => runCommand('data.remote')} data-testid="add-remote">
                   File on the web or in cloud storage (S3, Azure)
                 </MenuItem>
+                <MenuItem icon={<Globe2 />} onSelect={() => runCommand('data.gsheets')} data-testid="add-gsheets">
+                  Google Sheets spreadsheet
+                </MenuItem>
                 <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect')} data-testid="add-postgres">
                   PostgreSQL database
                 </MenuItem>
@@ -100,6 +103,18 @@ export function DataView() {
                 </MenuItem>
                 <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-databricks')} data-testid="add-databricks">
                   Databricks
+                </MenuItem>
+                <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-athena')} data-testid="add-athena">
+                  Amazon Athena
+                </MenuItem>
+                <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-hana')} data-testid="add-hana">
+                  SAP HANA
+                </MenuItem>
+                <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-teradata')} data-testid="add-teradata">
+                  Teradata
+                </MenuItem>
+                <MenuItem icon={<Server />} onSelect={() => runCommand('data.connect-odbc')} data-testid="add-odbc">
+                  Other database (ODBC)
                 </MenuItem>
                 <MenuSep />
                 <MenuItem icon={<SquareTerminal />} onSelect={() => openInSql('', { asDataset: true })}>
@@ -136,7 +151,7 @@ export function DataView() {
                       {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
                     </button>
                     <span className={cx('text-text-3', st?.state === 'error' && 'text-danger')}>{sourceIcon(s)}</span>
-                    <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium" title={isServerSource(s) ? `${s.user}@${s.host}:${s.port}/${s.database ?? ''}` : s.path}>
+                    <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium" title={isServerSource(s) ? (s.kind === 'odbc' ? `ODBC ${s.database ?? ''}` : `${s.user}@${s.host}:${s.port}/${s.database ?? ''}`) : s.path}>
                       {s.name}
                     </span>
                     {st?.state === 'checking' ? <RefreshCw className="size-3.5 animate-spin text-text-3" /> : st?.state === 'error' ? <AlertTriangle className="size-3.5 text-danger" aria-label="Refresh failed" /> : null}
